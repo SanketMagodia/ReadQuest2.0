@@ -1,26 +1,665 @@
 @import "tailwindcss";
 
+/* Make `dark:` utilities follow the .dark class on <html> (set by next-themes),
+   instead of the OS prefers-color-scheme. Required for our theme toggle. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #fafaf9;
+  --bg-subtle: #f4f4f5;
+  --fg: #0b0b0f;
+  --muted: #57534e;
+  --border: #e7e5e4;
+  --card: #ffffff;
+  --accent: #e0f2fe;
+  --accent-2: #ede9fe;
+  --ring: #38bdf8;
+  --pill: #f4f4f5;
+  --hover: #ececec;
+
+  /* Brand palette */
+  --brand-1: #38bdf8;
+  --brand-2: #8b5cf6;
+  --brand-3: #ec4899;
+  --brand-coral: #f97373;
+  --brand-amber: #fbbf24;
+  --brand-mint: #34d399;
+
+  --gradient-brand: linear-gradient(135deg, #38bdf8 0%, #8b5cf6 55%, #ec4899 100%);
+  --gradient-warm: linear-gradient(135deg, #fbbf24 0%, #f97373 100%);
+  --gradient-cool: linear-gradient(135deg, #34d399 0%, #38bdf8 100%);
+
+  --shadow-soft: 0 10px 30px -10px rgba(15, 23, 42, 0.18);
+  --shadow-pop: 0 12px 40px -8px rgba(56, 189, 248, 0.35);
+}
+
+.dark {
+  --bg: #07070b;
+  --bg-subtle: #0c0c11;
+  --fg: #f5f5f4;
+  --muted: #a1a1aa;
+  --border: #232329;
+  --card: #0f0f14;
+  --accent: rgba(56, 189, 248, 0.12);
+  --accent-2: rgba(167, 139, 250, 0.14);
+  --ring: #7dd3fc;
+  --pill: #15151b;
+  --hover: #1d1d24;
+
+  --shadow-soft: 0 12px 36px -16px rgba(0, 0, 0, 0.7);
+  --shadow-pop: 0 14px 46px -10px rgba(125, 211, 252, 0.35);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background: var(--bg);
+  --color-background-subtle: var(--bg-subtle);
+  --color-foreground: var(--fg);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-card: var(--card);
+  --color-accent-soft: var(--accent);
+  --color-accent-2: var(--accent-2);
+  --color-ring: var(--ring);
+  --color-pill: var(--pill);
+  --color-hover: var(--hover);
+  --color-brand-1: var(--brand-1);
+  --color-brand-2: var(--brand-2);
+  --color-brand-3: var(--brand-3);
+  --color-brand-coral: var(--brand-coral);
+  --color-brand-amber: var(--brand-amber);
+  --color-brand-mint: var(--brand-mint);
+  --font-sans: var(--font-geist-sans), system-ui;
+  --font-mono: var(--font-geist-mono), ui-monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  background: var(--bg);
+  color: var(--fg);
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  min-height: 100vh;
+  text-rendering: optimizeLegibility;
+  background:
+    radial-gradient(1200px 600px at -10% -20%, color-mix(in srgb, var(--brand-1) 8%, transparent), transparent 60%),
+    radial-gradient(900px 500px at 110% 0%, color-mix(in srgb, var(--brand-2) 8%, transparent), transparent 55%),
+    var(--bg);
+}
+
+.dark body {
+  background:
+    radial-gradient(1200px 600px at -10% -20%, color-mix(in srgb, var(--brand-1) 14%, transparent), transparent 55%),
+    radial-gradient(900px 500px at 110% 0%, color-mix(in srgb, var(--brand-3) 10%, transparent), transparent 55%),
+    var(--bg);
+}
+
+a {
+  color: inherit;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--brand-2) 35%, transparent);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--muted) 30%, transparent);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--muted) 55%, transparent);
+  background-clip: content-box;
+}
+
+.focus-ring {
+  outline: none;
+}
+.focus-ring:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.gradient-brand-text {
+  background: var(--gradient-brand);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+.gradient-brand-bg {
+  background: var(--gradient-brand);
+}
+
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--muted) 14%, transparent);
+}
+.skeleton-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--card) 50%, transparent),
+    transparent
+  );
+  transform: translateX(-100%);
+  animation: rq-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes rq-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-fade {
+  animation: rq-fade 420ms ease forwards;
+}
+
+.animate-slide {
+  animation: rq-slide 560ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
+}
+
+@keyframes rq-fade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes rq-slide {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-marquee {
+  animation-name: rq-marquee;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+@keyframes rq-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    /* shelf has its items duplicated, so -50% completes one logical loop */
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Medium-style long-form reading typography (used by the book summary view).
+   The serif comes from next/font (--font-reading-serif). We fall back through
+   a high-quality system serif stack on devices/browsers that haven't loaded
+   the webfont yet, so first paint already feels right.
+   ─────────────────────────────────────────────────────────────────────────── */
+.prose-reader {
+  font-family:
+    var(--font-reading-serif), "Charter", "Iowan Old Style",
+    "Apple Garamond", "Baskerville", "Source Serif Pro", Georgia,
+    "Times New Roman", serif;
+  font-size: 1.1875rem; /* 19px */
+  line-height: 1.78;
+  letter-spacing: -0.003em;
+  color: color-mix(in oklch, var(--fg) 92%, transparent);
+  font-feature-settings: "kern", "liga", "calt", "onum";
+}
+
+@media (min-width: 640px) {
+  .prose-reader {
+    font-size: 1.25rem; /* 20px */
+    line-height: 1.8;
+  }
+}
+
+.prose-reader p {
+  margin-bottom: 1.6em;
+  hanging-punctuation: first last;
+  /* Optical hint for browsers that support it; falls back gracefully. */
+  text-wrap: pretty;
+}
+
+/* Headings switch BACK to the app sans for strong rhythm against the serif body. */
+.prose-reader h1,
+.prose-reader h2,
+.prose-reader h3,
+.prose-reader strong {
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.018em;
+  color: var(--fg);
+}
+
+.prose-reader h2 {
+  font-size: 1.5rem;
+  line-height: 1.25;
+  font-weight: 800;
+  margin: 2.4em 0 0.85em;
+}
+
+.prose-reader h3 {
+  font-size: 0.86rem;
+  line-height: 1.25;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 1.8em 0 0.7em;
+}
+
+.prose-reader em {
+  font-style: italic;
+  /* Source Serif's italic is gorgeous — give it slightly warmer tone. */
+  color: color-mix(in oklch, var(--fg) 88%, var(--brand-2) 12%);
+}
+
+.prose-reader a {
+  color: var(--brand-1);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+/* Drop cap on the first paragraph of the article — magazine feel. */
+.prose-reader > p:first-of-type::first-letter,
+.prose-reader > section:first-of-type > p:first-of-type::first-letter {
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-weight: 800;
+  float: left;
+  font-size: 3.6em;
+  line-height: 0.86;
+  padding: 0.06em 0.12em 0 0;
+  margin-right: 0.04em;
+  background: var(--gradient-brand);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Ornamental section break, rendered when the source markdown contains a
+   `---` or `***` line on its own. */
+.prose-reader .ornament {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.6em;
+  margin: 2.8em 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  letter-spacing: 0.4em;
+  user-select: none;
+}
+.prose-reader .ornament::before,
+.prose-reader .ornament::after {
+  content: "";
+  flex: 0 0 36px;
+  height: 1px;
+  background: color-mix(in oklch, var(--muted) 35%, transparent);
+}
+
+.prose-reader blockquote {
+  font-family:
+    var(--font-reading-serif), "Charter", "Iowan Old Style", Georgia, serif;
+  font-style: italic;
+  font-size: 1.15em;
+  line-height: 1.55;
+  color: color-mix(in oklch, var(--fg) 80%, transparent);
+  padding: 0.4em 1.1em;
+  margin: 1.8em 0;
+  border-left: 3px solid;
+  border-image: var(--gradient-brand) 1;
+}
+
+::selection {
+  background: color-mix(in oklch, var(--brand-1) 28%, transparent);
+  color: var(--fg);
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Flipbook reader — used by the /daily page. Real 3D page turns.
+   ─────────────────────────────────────────────────────────────────────────── */
+.rq-flipbook {
+  --rq-book-paper: #fbf7ef;
+  --rq-book-paper-edge: #ece5d4;
+  --rq-book-ink: #2a2620;
+  --rq-flip-duration: 720ms;
+  --rq-flip-ease: cubic-bezier(0.65, 0.05, 0.35, 1);
+
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.dark .rq-flipbook {
+  --rq-book-paper: #1f1c18;
+  --rq-book-paper-edge: #2a2620;
+  --rq-book-ink: #f3eee4;
+}
+
+.rq-book {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  aspect-ratio: 5 / 7;
+  perspective: 2000px;
+  perspective-origin: 50% 50%;
+}
+
+@media (min-width: 640px) {
+  .rq-book {
+    max-width: 520px;
+    aspect-ratio: 5 / 7;
+  }
+}
+
+/* Soft binding shadow on the left edge — the "spine". */
+.rq-book-gutter {
+  position: absolute;
+  top: 2%;
+  bottom: 2%;
+  left: -2px;
+  width: 18px;
+  background: linear-gradient(
+    to right,
+    rgba(0, 0, 0, 0.18),
+    rgba(0, 0, 0, 0)
+  );
+  border-radius: 6px 0 0 6px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.rq-page {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transform-origin: left center;
+  border-radius: 2px 14px 14px 2px;
+}
+
+.rq-page--static {
+  z-index: 1;
+  box-shadow:
+    0 26px 60px -28px rgba(15, 23, 42, 0.45),
+    0 8px 22px -10px rgba(15, 23, 42, 0.22);
+}
+
+.rq-page--flip {
+  z-index: 5;
+  pointer-events: none;
+  box-shadow:
+    0 32px 70px -22px rgba(15, 23, 42, 0.55),
+    0 12px 28px -12px rgba(15, 23, 42, 0.3);
+}
+
+.rq-page--next {
+  animation: rq-flip-next var(--rq-flip-duration) var(--rq-flip-ease) forwards;
+}
+
+.rq-page--prev {
+  animation: rq-flip-prev var(--rq-flip-duration) var(--rq-flip-ease) forwards;
+}
+
+@keyframes rq-flip-next {
+  from {
+    transform: rotateY(0deg);
+  }
+  to {
+    transform: rotateY(-180deg);
+  }
+}
+
+@keyframes rq-flip-prev {
+  from {
+    transform: rotateY(-180deg);
+  }
+  to {
+    transform: rotateY(0deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rq-page--next,
+  .rq-page--prev {
+    animation-duration: 0.001ms !important;
+  }
+}
+
+.rq-page-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  background:
+    radial-gradient(
+      ellipse at right center,
+      rgba(0, 0, 0, 0.06),
+      transparent 50%
+    ),
+    linear-gradient(180deg, var(--rq-book-paper), var(--rq-book-paper-edge));
+  color: var(--rq-book-ink);
+  border-radius: 2px 14px 14px 2px;
+  padding: 32px 26px 36px;
+  overflow: hidden;
+  /* Faint paper texture without an external image. */
+  background-blend-mode: multiply;
+}
+
+@media (min-width: 640px) {
+  .rq-page-face {
+    padding: 44px 40px 48px;
+  }
+}
+
+.rq-page-face--back {
+  transform: rotateY(180deg);
+}
+
+/* Slight inner spine shadow on each face. */
+.rq-page-face::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 18px;
+  background: linear-gradient(
+    to right,
+    rgba(0, 0, 0, 0.12),
+    rgba(0, 0, 0, 0)
+  );
+  pointer-events: none;
+}
+
+/* Page typography inside the book. */
+.rq-page-body {
+  font-family:
+    var(--font-reading-serif), "Charter", "Iowan Old Style", Georgia, serif;
+  font-size: 16.5px;
+  line-height: 1.68;
+  letter-spacing: -0.002em;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (min-width: 640px) {
+  .rq-page-body {
+    font-size: 17.5px;
+    line-height: 1.72;
+  }
+}
+
+.rq-page-body h2 {
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-size: 1.18rem;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  margin: 0 0 0.55em;
+}
+.rq-page-body p {
+  margin: 0 0 0.85em;
+  text-wrap: pretty;
+}
+.rq-page-body p:last-child {
+  margin-bottom: 0;
+}
+.rq-page-body em {
+  font-style: italic;
+}
+.rq-page-body strong {
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700;
+}
+
+.rq-page-eyebrow {
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  font-weight: 600;
+  opacity: 0.55;
+  margin-bottom: 18px;
+}
+
+.rq-page-footer {
+  margin-top: auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-size: 11px;
+  opacity: 0.55;
+  padding-top: 14px;
+}
+
+/* Tap / click zones overlaid on the book. */
+.rq-tap-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 38%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  z-index: 10;
+}
+.rq-tap-zone:disabled {
+  cursor: default;
+}
+.rq-tap-zone--left {
+  left: 0;
+  justify-content: flex-start;
+  padding-left: 10px;
+}
+.rq-tap-zone--right {
+  right: 0;
+  justify-content: flex-end;
+  padding-right: 10px;
+}
+.rq-tap-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  color: #2a2620;
+  box-shadow: var(--shadow-soft);
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+.rq-tap-zone:hover .rq-tap-hint,
+.rq-tap-zone:focus-visible .rq-tap-hint {
+  opacity: 1;
+}
+.rq-tap-zone:disabled .rq-tap-hint {
+  opacity: 0;
+}
+
+/* Bottom progress + buttons */
+.rq-book-controls {
+  width: 100%;
+  max-width: 520px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.rq-ctrl {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg);
+  transition: background 160ms ease;
+}
+.rq-ctrl:hover:not(:disabled) {
+  background: var(--hover);
+}
+.rq-ctrl:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.rq-progress {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+}
+.rq-progress-bar {
+  width: 100%;
+  height: 3px;
+  background: color-mix(in oklch, var(--muted) 30%, transparent);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.rq-progress-fill {
+  height: 100%;
+  transition: width 280ms ease;
 }

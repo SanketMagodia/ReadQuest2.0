@@ -1,0 +1,231 @@
+"use client";
+
+import Link from "next/link";
+import {
+  Compass,
+  PenSquare,
+  Library,
+  UserRound,
+  Shield,
+  LogIn,
+  LogOut,
+} from "lucide-react";
+import { usePathname } from "next/navigation";
+import { useSession, signOut } from "next-auth/react";
+import { cn } from "@/lib/utils";
+import { ThemeToggle } from "./theme-toggle";
+import { ReadquestLogo } from "@/components/brand/ReadquestLogo";
+import { InstallPrompt } from "@/components/pwa/InstallPrompt";
+import { RightRail } from "./RightRail";
+import { MobileAccountMenu } from "./MobileAccountMenu";
+import { NotificationsBell } from "./NotificationsBell";
+
+const navMain = [
+  { href: "/", label: "Feed", icon: Library },
+  { href: "/explore", label: "Explore", icon: Compass },
+  { href: "/compose", label: "Compose", icon: PenSquare },
+];
+
+export function AppShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const { data: session } = useSession();
+  const username = session?.user?.username;
+  const role = session?.user?.role;
+
+  return (
+    <div className="mx-auto flex min-h-full w-full max-w-7xl gap-0 px-3 sm:px-5 lg:gap-10">
+      {/* Desktop sidebar */}
+      <aside className="sticky top-0 z-20 hidden h-[100dvh] shrink-0 flex-col border-r border-border/70 bg-background/75 py-8 backdrop-blur sm:flex lg:w-56 xl:w-64">
+        <div className="mb-8 flex items-center justify-between gap-2 px-4">
+          <ReadquestLogo height={32} priority />
+          <ThemeToggle />
+        </div>
+
+        <nav className="flex flex-1 flex-col gap-1 px-2" aria-label="Primary">
+          {navMain.map((item) => {
+            const Icon = item.icon;
+            const active =
+              pathname === item.href ||
+              (item.href !== "/" && pathname.startsWith(item.href));
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "group relative flex items-center gap-4 rounded-full px-4 py-3 text-[16px] font-semibold transition",
+                  active
+                    ? "bg-pill text-foreground"
+                    : "text-muted hover:bg-hover hover:text-foreground"
+                )}
+              >
+                {active ? (
+                  <span
+                    aria-hidden
+                    className="absolute left-0 top-1/2 h-7 w-1 -translate-y-1/2 rounded-r-full"
+                    style={{ background: "var(--gradient-brand)" }}
+                  />
+                ) : null}
+                <Icon
+                  size={20}
+                  aria-hidden
+                  strokeWidth={active ? 2.4 : 1.9}
+                  className={active ? "text-foreground" : ""}
+                />
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+
+          {username ? (
+            <div className="mt-2 space-y-1 border-t border-border/70 pt-4">
+              <NotificationsBell variant="sidebar" />
+              <Link
+                href={`/profile/${username}`}
+                className={cn(
+                  "flex items-center gap-4 rounded-full px-4 py-3 text-[15px] font-semibold transition",
+                  pathname.startsWith("/profile")
+                    ? "bg-pill text-foreground"
+                    : "text-muted hover:bg-hover hover:text-foreground"
+                )}
+              >
+                <UserRound size={20} aria-hidden />
+                Profile
+              </Link>
+              {role === "admin" ? (
+                <Link
+                  href="/admin"
+                  className="flex items-center gap-4 rounded-full px-4 py-3 text-[15px] font-semibold text-fuchsia-600 transition hover:bg-hover dark:text-fuchsia-300"
+                >
+                  <Shield size={20} aria-hidden />
+                  Admin
+                </Link>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => void signOut({ callbackUrl: "/" })}
+                className="flex w-full items-center gap-4 rounded-full px-4 py-3 text-[14px] font-medium text-muted transition hover:bg-hover"
+              >
+                <LogOut size={18} aria-hidden />
+                Sign out
+              </button>
+            </div>
+          ) : (
+            <div className="mt-2 border-t border-border/70 pt-4">
+              <Link
+                href="/login"
+                className="flex items-center gap-4 rounded-full px-4 py-3 text-[15px] font-semibold text-sky-700 hover:bg-hover dark:text-sky-300"
+              >
+                <LogIn size={20} aria-hidden />
+                Sign in
+              </Link>
+            </div>
+          )}
+        </nav>
+
+        {!username ? (
+          <div
+            className="mx-3 mt-3 rounded-2xl p-px"
+            style={{ background: "var(--gradient-brand)" }}
+          >
+            <div className="rounded-[14px] bg-card p-4">
+              <p className="text-[13px] font-semibold leading-tight">
+                Join Readquest
+              </p>
+              <p className="mt-1 text-[12px] leading-relaxed text-muted">
+                Save books, post quotes, follow threads.
+              </p>
+              <Link
+                href="/register"
+                className="mt-3 block w-full rounded-full px-4 py-2 text-center text-xs font-semibold text-white shadow-[var(--shadow-pop)]"
+                style={{ background: "var(--gradient-brand)" }}
+              >
+                Get started
+              </Link>
+            </div>
+          </div>
+        ) : null}
+      </aside>
+
+      {/* Main column */}
+      <main className="min-h-[100dvh] flex-1 pb-28 sm:pb-12">
+        {/* Mobile top bar */}
+        <div className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-border/70 bg-background/85 px-3 py-2.5 backdrop-blur sm:hidden">
+          <ReadquestLogo height={24} />
+          <div className="flex items-center gap-2">
+            <InstallPrompt />
+            <NotificationsBell variant="topbar" />
+            <ThemeToggle />
+            <MobileAccountMenu />
+          </div>
+        </div>
+        {children}
+      </main>
+
+      {/* Right rail (lg+) — content adapts per route. */}
+      <RightRail />
+
+      {/* Mobile bottom nav */}
+      <nav
+        aria-label="Bottom"
+        className="fixed bottom-3 left-1/2 z-40 flex w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 items-stretch justify-between rounded-2xl border border-border bg-background/90 p-1.5 shadow-[var(--shadow-soft)] backdrop-blur sm:hidden"
+      >
+        {navMain.map((item) => {
+          const Icon = item.icon;
+          const active =
+            pathname === item.href ||
+            (item.href !== "/" && pathname.startsWith(item.href));
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              aria-label={item.label}
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "flex flex-1 flex-col items-center justify-center gap-0.5 rounded-xl py-2 text-[10px] font-semibold transition",
+                active ? "text-foreground" : "text-muted"
+              )}
+            >
+              <span
+                className={cn(
+                  "flex h-9 w-9 items-center justify-center rounded-full",
+                  active ? "bg-pill" : ""
+                )}
+                style={
+                  active
+                    ? {
+                        background:
+                          "color-mix(in srgb, var(--brand-1) 14%, transparent)",
+                      }
+                    : undefined
+                }
+              >
+                <Icon size={20} aria-hidden strokeWidth={active ? 2.4 : 1.9} />
+              </span>
+              {item.label}
+            </Link>
+          );
+        })}
+        <Link
+          href={username ? `/profile/${username}` : "/login"}
+          aria-label="Profile"
+          aria-current={pathname.startsWith("/profile") ? "page" : undefined}
+          className={cn(
+            "flex flex-1 flex-col items-center justify-center gap-0.5 rounded-xl py-2 text-[10px] font-semibold transition",
+            pathname.startsWith("/profile") ? "text-foreground" : "text-muted"
+          )}
+        >
+          <span
+            className={cn(
+              "flex h-9 w-9 items-center justify-center rounded-full",
+              pathname.startsWith("/profile") ? "bg-pill" : ""
+            )}
+          >
+            <UserRound size={20} aria-hidden />
+          </span>
+          You
+        </Link>
+      </nav>
+    </div>
+  );
+}
