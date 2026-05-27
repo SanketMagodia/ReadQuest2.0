@@ -227,6 +227,38 @@ export async function notifyCommentReply(args: {
   });
 }
 
+export async function notifyFriendRequest(args: {
+  recipientId: ID;
+  actorId: ID;
+  actorName: string;
+  actorUsername: string;
+}) {
+  return createNotification({
+    recipient: args.recipientId,
+    actor: args.actorId,
+    type: "friend_request",
+    link: "/friends?tab=requests",
+    message: `${args.actorName} sent you a friend request`,
+    preview: `@${args.actorUsername}`,
+  });
+}
+
+export async function notifyFriendAccepted(args: {
+  recipientId: ID;
+  actorId: ID;
+  actorName: string;
+  actorUsername: string;
+}) {
+  return createNotification({
+    recipient: args.recipientId,
+    actor: args.actorId,
+    type: "friend_accept",
+    link: `/profile/${args.actorUsername}`,
+    message: `${args.actorName} accepted your friend request`,
+    preview: `@${args.actorUsername}`,
+  });
+}
+
 export async function notifyFollowedBookPost(args: {
   postId: ID;
   bookId: ID;

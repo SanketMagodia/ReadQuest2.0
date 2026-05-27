@@ -6,6 +6,7 @@ import {
   PenSquare,
   Library,
   UserRound,
+  Users,
   Shield,
   LogIn,
   LogOut,
@@ -24,6 +25,7 @@ const navMain = [
   { href: "/", label: "Feed", icon: Library },
   { href: "/explore", label: "Explore", icon: Compass },
   { href: "/compose", label: "Compose", icon: PenSquare },
+  { href: "/friends", label: "Friends", icon: Users },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {

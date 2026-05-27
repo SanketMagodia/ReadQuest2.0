@@ -16,6 +16,7 @@ import {
   Sparkles,
   Sprout,
   UserRound,
+  Users,
 } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
@@ -321,6 +322,23 @@ function AdminTile() {
   );
 }
 
+function FriendsHowToTile() {
+  return (
+    <TileShell>
+      <Eyebrow label="Friends" tone="brand" icon={Users} />
+      <p className="mt-2 text-[13px] leading-relaxed text-foreground/85">
+        Search a username, send a request, and see what they&apos;re reading
+        the moment they post.
+      </p>
+      <ul className="mt-3 space-y-1.5 text-[12px] leading-relaxed text-muted">
+        <li>· Requests show up here and in your notifications.</li>
+        <li>· Friends only sees public posts — nothing private.</li>
+        <li>· Remove anyone from the list anytime.</li>
+      </ul>
+    </TileShell>
+  );
+}
+
 function FeedGrowTile() {
   return (
     <TileShell variant="dashed">
@@ -388,6 +406,13 @@ function tilesFor(pathname: string, authenticated: boolean): ReactNode[] {
   if (pathname.startsWith("/profile/")) {
     return [
       <ProfileTipTile key="profile" ownProfile />,
+      <GeneralTipTile key="tip" />,
+    ];
+  }
+
+  if (pathname.startsWith("/friends")) {
+    return [
+      <FriendsHowToTile key="friends" />,
       <GeneralTipTile key="tip" />,
     ];
   }
