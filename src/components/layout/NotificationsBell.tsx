@@ -245,10 +245,16 @@ export function NotificationsBell({
           role="dialog"
           aria-label="Notifications"
           className={cn(
-            "absolute z-50 mt-2 w-[22rem] max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-2xl border border-border bg-background shadow-[var(--shadow-pop)]",
+            "z-50 overflow-hidden rounded-2xl border border-border bg-background shadow-[var(--shadow-pop)]",
+            // Desktop / sidebar: float beneath the bell, capped width.
             variant === "sidebar"
-              ? "left-0 sm:left-2"
-              : "right-0"
+              ? "absolute left-0 mt-2 w-[22rem] max-w-[calc(100vw-1.5rem)] sm:left-2"
+              // Mobile / topbar: the bell isn't at the screen edge (theme
+              // toggle + account menu sit to its right), so anchoring with
+              // `right-0` pushed the popup off the left of the viewport.
+              // Pin to the viewport with fixed positioning + symmetric
+              // gutters instead.
+              : "fixed left-3 right-3 top-[3.25rem]"
           )}
         >
           <header className="flex items-center justify-between gap-3 border-b border-border/70 px-4 py-3">
