@@ -74,12 +74,15 @@ export function PostCard({ post }: { post: PostDTO }) {
             </span>
           </div>
 
-          <Link href={`/book/${post.book.slug || post.book.id}`} className="mt-2 inline-flex">
-            <span className="inline-flex max-w-full items-center gap-2 rounded-full border border-border/80 bg-pill px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-muted transition hover:border-sky-400/50 hover:text-foreground">
-              <BookOpen size={12} aria-hidden />
-              <span className="truncate text-foreground">{post.book.title}</span>
+          <Link
+            href={`/book/${post.book.slug || post.book.id}`}
+            className="mt-2 inline-flex max-w-full"
+          >
+            <span className="inline-flex min-w-0 max-w-full items-center gap-2 rounded-full border border-border/80 bg-pill px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-muted transition hover:border-sky-400/50 hover:text-foreground">
+              <BookOpen size={12} aria-hidden className="shrink-0" />
+              <span className="min-w-0 truncate text-foreground">{post.book.title}</span>
               {post.book.authors ? (
-                <span className="text-muted">
+                <span className="hidden shrink-0 text-muted sm:inline">
                   · {post.book.authors.split(";")[0].slice(0, 40)}
                 </span>
               ) : null}
