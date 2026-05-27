@@ -9,6 +9,8 @@ import {
   CheckCircle2,
   Flame,
   Sparkles,
+  Trophy,
+  Users,
 } from "lucide-react";
 
 type DailyResponse = {
@@ -36,7 +38,19 @@ type DailyResponse = {
     completedToday: boolean;
   };
   summaryReady: boolean;
+  stats?: {
+    completedToday: number;
+    bookReaders: number;
+  };
 };
+
+/** "1.2k" style compact formatter. */
+function compact(n: number): string {
+  if (n < 1_000) return String(n);
+  if (n < 10_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, "")}k`;
+  if (n < 1_000_000) return `${Math.round(n / 1_000)}k`;
+  return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+}
 
 export function DailyBookCard() {
   const { status } = useSession();
@@ -69,6 +83,7 @@ export function DailyBookCard() {
   if (!data?.pick) return null;
 
   const { pick, streak } = data;
+  const stats = data.stats ?? { completedToday: 0, bookReaders: 0 };
   const firstCategory = pick.book.categories.split(/[,;]/)[0]?.trim() || "";
 
   return (
@@ -186,6 +201,36 @@ export function DailyBookCard() {
                 Visit book room
               </Link>
             </div>
+
+            {/* Community stats — social proof for the quest. */}
+            {stats.completedToday > 0 || stats.bookReaders > 0 ? (
+              <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[12px] text-muted">
+                {stats.completedToday > 0 ? (
+                  <CommunityStat
+                    icon={Trophy}
+                    accent="amber"
+                    value={compact(stats.completedToday)}
+                    label={
+                      stats.completedToday === 1
+                        ? "reader finished today"
+                        : "readers finished today"
+                    }
+                  />
+                ) : null}
+                {stats.bookReaders > 0 ? (
+                  <CommunityStat
+                    icon={Users}
+                    accent="sky"
+                    value={compact(stats.bookReaders)}
+                    label={
+                      stats.bookReaders === 1
+                        ? "has read this book"
+                        : "have read this book"
+                    }
+                  />
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -240,6 +285,30 @@ function StreakBadge({
       <Flame size={12} aria-hidden className={alive ? "" : "text-amber-500"} />
       {alive ? `${current}-day streak` : "Start your streak"}
     </div>
+  );
+}
+
+function CommunityStat({
+  icon: Icon,
+  value,
+  label,
+  accent,
+}: {
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  value: string;
+  label: string;
+  accent: "amber" | "sky";
+}) {
+  const accentClass =
+    accent === "amber"
+      ? "text-amber-600 dark:text-amber-300"
+      : "text-sky-600 dark:text-sky-300";
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <Icon size={13} className={accentClass} />
+      <span className="font-semibold text-foreground">{value}</span>
+      <span>{label}</span>
+    </span>
   );
 }
 

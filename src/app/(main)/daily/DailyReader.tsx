@@ -4,6 +4,7 @@ import {
   Fragment,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -147,24 +148,98 @@ export function DailyReader() {
   }, [data?.pick]);
 
   // ─── pagination ────────────────────────────────────────────────────────────
-  const contentPages = useMemo(() => {
+  //
+  // We don't trust a word-count heuristic — the actual page height depends on
+  // viewport width, typography, and which blocks live where. Instead we render
+  // every block once into an off-screen mirror page that's CSS-identical to a
+  // real page, then bin-pack by actual `offsetTop`/`offsetHeight`. The mirror
+  // re-measures on resize so the same content reflows for tiny phones, wide
+  // tablets, and everything in between.
+  const rawBlocks = useMemo<MdBlock[] | null>(() => {
     if (!summary) return null;
-    return paginateMarkdown(summary, 130);
+    return prepareBlocksForPagination(parseMarkdown(summary));
   }, [summary]);
 
+  const [measuredPages, setMeasuredPages] = useState<MdBlock[][] | null>(null);
+  const measurerContentRef = useRef<HTMLDivElement | null>(null);
+
+  const recomputePages = useCallback(() => {
+    const blocks = rawBlocks;
+    if (!blocks?.length) {
+      setMeasuredPages(null);
+      return;
+    }
+    const content = measurerContentRef.current;
+    if (!content) return;
+    const pageHeight = content.clientHeight;
+    if (pageHeight <= 0) return;
+
+    const children = Array.from(content.children) as HTMLElement[];
+    if (children.length !== blocks.length) return;
+
+    const contentOffsetTop = content.offsetTop;
+    const out: MdBlock[][] = [[]];
+    let pageStart = 0;
+
+    for (let i = 0; i < children.length; i++) {
+      const el = children[i];
+      const top = el.offsetTop - contentOffsetTop;
+      const bottom = top + el.offsetHeight;
+      const fitsCurrent = bottom <= pageStart + pageHeight;
+      if (!fitsCurrent && out[out.length - 1].length > 0) {
+        out.push([]);
+        pageStart = top;
+      }
+      out[out.length - 1].push(blocks[i]);
+    }
+
+    setMeasuredPages((prev) => {
+      if (
+        prev &&
+        prev.length === out.length &&
+        prev.every((p, i) => p.length === out[i].length)
+      ) {
+        return prev;
+      }
+      return out;
+    });
+  }, [rawBlocks]);
+
+  // Measure after layout (and again on resize). Two RAFs let fonts settle.
+  useLayoutEffect(() => {
+    if (!rawBlocks?.length) {
+      setMeasuredPages(null);
+      return;
+    }
+    let raf1 = 0;
+    let raf2 = 0;
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(recomputePages);
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
+  }, [rawBlocks, recomputePages]);
+
+  useEffect(() => {
+    if (!rawBlocks?.length) return;
+    const handler = () => recomputePages();
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, [rawBlocks, recomputePages]);
+
   const pages = useMemo<ReactNode[] | null>(() => {
-    if (!data?.pick || !contentPages) return null;
+    if (!data?.pick || !measuredPages) return null;
     const { book } = data.pick;
-    const total = contentPages.length;
+    const total = measuredPages.length;
     const list: ReactNode[] = [];
 
-    // Cover (page 1)
     list.push(
       <CoverPage key="cover" book={book} pages={total + 2} streak={streak} />
     );
 
-    // Content pages
-    contentPages.forEach((blocks, i) => {
+    measuredPages.forEach((blocks, i) => {
       list.push(
         <ContentPage
           key={`p-${i}`}
@@ -176,7 +251,6 @@ export function DailyReader() {
       );
     });
 
-    // Finish page (last)
     list.push(
       <FinishPage
         key="finish"
@@ -187,7 +261,7 @@ export function DailyReader() {
     );
 
     return list;
-  }, [data?.pick, contentPages, completed, streak]);
+  }, [data?.pick, measuredPages, completed, streak]);
 
   // ─── completion ───────────────────────────────────────────────────────────
   const completeToday = useCallback(async () => {
@@ -249,26 +323,9 @@ export function DailyReader() {
     );
   }
 
-  if (generating || !pages) {
-    return (
-      <Centered>
-        <div className="flex flex-col items-center gap-3 text-center">
-          <RefreshCw size={22} className="animate-spin text-sky-500" />
-          <p className="text-sm font-semibold">
-            Preparing today&apos;s read…
-          </p>
-          <p className="text-xs text-muted">
-            Writing a fresh summary just for this quest. Takes a few seconds.
-          </p>
-        </div>
-      </Centered>
-    );
-  }
-
-  const initialPage = Math.min(
-    data.pick.farthestPage || 0,
-    pages.length - 1
-  );
+  const initialPage = pages
+    ? Math.min(data.pick.farthestPage || 0, pages.length - 1)
+    : 0;
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-3 py-6 sm:px-6 sm:py-10">
@@ -289,16 +346,63 @@ export function DailyReader() {
         <StreakChip streak={streak} completed={completed} />
       </header>
 
-      <Flipbook
-        pages={pages}
-        initialPage={initialPage}
-        onPageChange={(i) => {
-          void reportProgress(i);
-        }}
-        onLastPageReached={() => {
-          void completeToday();
-        }}
-      />
+      {/* The book + its invisible measurement twin share this relative host so
+          they always have identical width/height. */}
+      <div className="relative">
+        {pages ? (
+          <Flipbook
+            pages={pages}
+            initialPage={initialPage}
+            onPageChange={(i) => {
+              void reportProgress(i);
+            }}
+            onLastPageReached={() => {
+              void completeToday();
+            }}
+          />
+        ) : (
+          <FlipbookSkeleton
+            message={
+              generating
+                ? "Writing today's read…"
+                : "Measuring the page…"
+            }
+          />
+        )}
+
+        {rawBlocks && data.pick ? (
+          <div
+            aria-hidden
+            className="rq-flipbook"
+            style={{
+              position: "absolute",
+              inset: 0,
+              pointerEvents: "none",
+              visibility: "hidden",
+            }}
+          >
+            <div className="rq-book">
+              <div className="rq-page rq-page--static">
+                <div className="rq-page-face rq-page-face--front">
+                  <div className="rq-page-body">
+                    <p className="rq-page-eyebrow">{data.pick.book.title}</p>
+                    <div
+                      ref={measurerContentRef}
+                      className="flex-1 overflow-hidden"
+                    >
+                      {rawBlocks.map((b, i) => renderBlock(b, `m-${i}`))}
+                    </div>
+                    <div className="rq-page-footer">
+                      <span>·</span>
+                      <span>99 / 99</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </div>
 
       {completed ? (
         <p className="mx-auto inline-flex items-center gap-1.5 rounded-full bg-pill px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
@@ -311,6 +415,40 @@ export function DailyReader() {
           page to add a day to your streak.
         </p>
       )}
+    </div>
+  );
+}
+
+function FlipbookSkeleton({ message }: { message: string }) {
+  return (
+    <div className="rq-flipbook">
+      <div className="rq-book">
+        <div className="rq-page rq-page--static">
+          <div className="rq-page-face rq-page-face--front">
+            <div className="rq-page-body">
+              <p className="rq-page-eyebrow" style={{ opacity: 0.3 }}>
+                ·
+              </p>
+              <div className="flex flex-1 items-center justify-center text-center">
+                <div>
+                  <RefreshCw
+                    size={20}
+                    className="mx-auto animate-spin opacity-60"
+                    aria-hidden
+                  />
+                  <p className="mt-3 text-sm opacity-75">{message}</p>
+                </div>
+              </div>
+              <div className="rq-page-footer" style={{ opacity: 0.3 }}>
+                <span>·</span>
+                <span>·</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      {/* Reserve the same vertical footprint as Flipbook's bottom controls. */}
+      <div aria-hidden style={{ height: 36 }} />
     </div>
   );
 }
@@ -597,48 +735,44 @@ function wordCount(s: string) {
   return (s.match(/\S+/g) || []).length;
 }
 
-function paginateMarkdown(md: string, wordsPerPage: number): MdBlock[][] {
-  const blocks = parseMarkdown(md);
-  const pages: MdBlock[][] = [];
-  let cur: MdBlock[] = [];
-  let words = 0;
+/**
+ * Splits long paragraphs/blockquotes into ~28-word sentence-aligned chunks so
+ * the measurement-based bin packer always has fine-grained atoms to pack.
+ * Short blocks are untouched — typical reads will look unchanged.
+ */
+function prepareBlocksForPagination(blocks: MdBlock[]): MdBlock[] {
+  const MAX_BLOCK_WORDS = 45;
+  const TARGET_CHUNK_WORDS = 28;
+  const out: MdBlock[] = [];
 
   for (const b of blocks) {
-    const w =
-      b.type === "rule" ? 0 : wordCount("text" in b ? b.text : "");
-
-    // Headings prefer to start a new page when the current page is not nearly empty.
-    if (b.type === "heading" && cur.length && words > 40) {
-      pages.push(cur);
-      cur = [];
-      words = 0;
+    const canSplit = b.type === "paragraph" || b.type === "blockquote";
+    if (!canSplit) {
+      out.push(b);
+      continue;
     }
-
-    if (words + w > wordsPerPage && cur.length) {
-      // If the block is a long paragraph, try to split it on sentences.
-      if (b.type === "paragraph" && w > 60) {
-        const sentences = splitSentences(b.text);
-        for (const s of sentences) {
-          const sw = wordCount(s);
-          if (words + sw > wordsPerPage && cur.length) {
-            pages.push(cur);
-            cur = [];
-            words = 0;
-          }
-          cur.push({ type: "paragraph", text: s });
-          words += sw;
-        }
-        continue;
-      }
-      pages.push(cur);
-      cur = [];
-      words = 0;
+    if (wordCount(b.text) <= MAX_BLOCK_WORDS) {
+      out.push(b);
+      continue;
     }
-    cur.push(b);
-    words += w;
+    const sentences = splitSentences(b.text);
+    let buf: string[] = [];
+    let bufW = 0;
+    const flush = () => {
+      if (!buf.length) return;
+      out.push({ type: b.type, text: buf.join(" ") });
+      buf = [];
+      bufW = 0;
+    };
+    for (const s of sentences) {
+      const sw = wordCount(s);
+      if (bufW > 0 && bufW + sw > TARGET_CHUNK_WORDS) flush();
+      buf.push(s);
+      bufW += sw;
+    }
+    flush();
   }
-  if (cur.length) pages.push(cur);
-  return pages.length ? pages : [[{ type: "paragraph", text: md }]];
+  return out;
 }
 
 function splitSentences(text: string): string[] {

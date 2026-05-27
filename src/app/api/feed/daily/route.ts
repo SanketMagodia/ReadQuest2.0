@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Types } from "mongoose";
 import { z } from "zod";
 import { getAppSession } from "@/lib/session";
 import {
@@ -32,15 +33,25 @@ export async function GET() {
   ]);
 
   let summaryReady = false;
+  let stats = { completedToday: 0, bookReaders: 0 };
+
   if (pick) {
     await connectDB();
-    const existing = await BookSummary.findOne({ book: pick.book.id })
-      .select("_id")
-      .lean();
+    const bookObjId = new Types.ObjectId(pick.book.id);
+    const today = utcDay();
+    const [existing, completedToday, bookReaders] = await Promise.all([
+      BookSummary.findOne({ book: bookObjId }).select("_id").lean(),
+      DailyBookPick.countDocuments({ day: today, completed: true }),
+      DailyBookPick.distinct("user", {
+        book: bookObjId,
+        completed: true,
+      }).then((arr) => arr.length),
+    ]);
     summaryReady = !!existing;
+    stats = { completedToday, bookReaders };
   }
 
-  return NextResponse.json({ pick, streak, summaryReady });
+  return NextResponse.json({ pick, streak, summaryReady, stats });
 }
 
 /**
