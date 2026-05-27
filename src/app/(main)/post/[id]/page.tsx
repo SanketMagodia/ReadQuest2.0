@@ -160,7 +160,7 @@ export default function ThreadPage() {
                 {fmtRelative(post.createdAt)}
               </span>
             </div>
-            <p className="mt-4 whitespace-pre-wrap text-[17px] leading-relaxed sm:text-[18px]">
+            <p className="post-content mt-4 whitespace-pre-wrap text-[17px] leading-relaxed sm:text-[18px]">
               {post.content}
             </p>
 
@@ -363,7 +363,7 @@ function CommentBranch({
                 {fmtRelative(node.createdAt)}
               </span>
             </div>
-            <p className="mt-1.5 whitespace-pre-wrap text-[14.5px] leading-relaxed text-foreground/95">
+            <p className="comment-content mt-1.5 whitespace-pre-wrap text-[14.5px] leading-relaxed text-foreground/95">
               {node.content}
             </p>
           </div>

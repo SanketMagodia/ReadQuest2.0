@@ -416,7 +416,7 @@ export function RightRail() {
   if (!tiles.length) return null;
 
   return (
-    <aside className="sticky top-10 hidden h-fit max-w-[280px] shrink-0 space-y-4 py-10 lg:block">
+    <aside className="sticky top-10 hidden h-fit w-[240px] shrink-0 space-y-4 py-10 lg:block xl:w-[260px]">
       {tiles}
     </aside>
   );

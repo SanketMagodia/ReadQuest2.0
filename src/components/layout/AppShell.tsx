@@ -33,9 +33,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const role = session?.user?.role;
 
   return (
-    <div className="mx-auto flex min-h-full w-full max-w-7xl gap-0 px-3 sm:px-5 lg:gap-10">
+    <div className="mx-auto flex min-h-full w-full max-w-7xl gap-0 px-3 sm:px-5 lg:gap-5 xl:gap-0">
       {/* Desktop sidebar */}
-      <aside className="sticky top-0 z-20 hidden h-[100dvh] shrink-0 flex-col border-r border-border/70 bg-background/75 py-8 backdrop-blur sm:flex lg:w-56 xl:w-64">
+      <aside className="sticky top-0 z-20 hidden h-[100dvh] shrink-0 flex-col border-r border-border/70 bg-background/75 py-8 backdrop-blur sm:flex lg:w-52 xl:w-60">
         <div className="mb-8 flex items-center justify-between gap-2 px-4">
           <ReadquestLogo height={32} priority />
           <ThemeToggle />
@@ -147,12 +147,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         ) : null}
       </aside>
 
-      {/* Main column */}
-      <main className="min-h-[100dvh] flex-1 pb-28 sm:pb-12">
+      {/* Main column. `min-w-0` is critical: without it, any unbreakable long
+          string (URLs, code) in children would force this flex item wider
+          than its share and overflow the whole shell on narrow phones. */}
+      <main className="min-w-0 min-h-[100dvh] flex-1 pb-28 sm:pb-12">
         {/* Mobile top bar */}
-        <div className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-border/70 bg-background/85 px-3 py-2.5 backdrop-blur sm:hidden">
+        <div className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-border/70 bg-background/85 px-3 py-2.5 backdrop-blur sm:hidden">
           <ReadquestLogo height={24} />
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <InstallPrompt />
             <NotificationsBell variant="topbar" />
             <ThemeToggle />

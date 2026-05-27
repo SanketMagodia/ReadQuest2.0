@@ -76,16 +76,36 @@ html {
   background: var(--bg);
   color: var(--fg);
   -webkit-text-size-adjust: 100%;
+  /* Hard cap to prevent any rogue element from forcing horizontal scroll on
+     phones (the symptom is "I have to pinch-zoom to read"). We use `clip`
+     instead of `hidden` so it does NOT establish a scroll container —
+     `position: sticky` on the sidebar / right rail keeps anchoring to the
+     real viewport instead of getting trapped inside this element. Real
+     horizontal scrollers (e.g. community carousels) use their own
+     overflow-x containers and remain unaffected either way. */
+  overflow-x: clip;
 }
 
 body {
   font-family: var(--font-sans);
   min-height: 100vh;
   text-rendering: optimizeLegibility;
+  /* Same `clip` (not `hidden`) — see html rule above. */
+  overflow-x: clip;
   background:
     radial-gradient(1200px 600px at -10% -20%, color-mix(in srgb, var(--brand-1) 8%, transparent), transparent 60%),
     radial-gradient(900px 500px at 110% 0%, color-mix(in srgb, var(--brand-2) 8%, transparent), transparent 55%),
     var(--bg);
+}
+
+/* Post / comment / summary prose: a single very long word or pasted URL must
+   wrap instead of pushing the parent wider on small viewports. */
+.post-content,
+.comment-content,
+.prose-reader p,
+.rq-page-body p {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .dark body {

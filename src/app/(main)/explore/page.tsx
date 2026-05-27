@@ -231,6 +231,89 @@ export default function ExplorePage() {
   );
 
   const featuredCategories = categories.slice(0, 12);
+  const isSearching = q.trim().length > 0 || category.trim().length > 0;
+
+  // The "results" block — books grid, OL fallback, and the section header.
+  // We render it conditionally at one of two positions depending on whether
+  // the user is actively searching, without duplicating the JSX.
+  const resultsSection = (
+    <>
+      <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+        <p className="text-sm font-semibold text-foreground">
+          {category
+            ? `Books in ${category}`
+            : q
+              ? `Results for “${q}”`
+              : "Everything"}
+        </p>
+        <button
+          type="button"
+          onClick={() => setOpenCreate((v) => !v)}
+          className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-xs font-semibold shadow-[var(--shadow-soft)] hover:bg-hover"
+        >
+          <Plus size={14} aria-hidden />
+          Add a book
+        </button>
+      </div>
+
+      {openCreate ? (
+        <NewBookInline onDone={() => setOpenCreate(false)} />
+      ) : null}
+
+      <div>
+        {initialLoading ? (
+          <BookGridSkeleton />
+        ) : books.length === 0 && olResults.length === 0 ? (
+          <div className="rounded-3xl border border-dashed border-border p-10 text-center">
+            <Sparkles size={20} aria-hidden className="mx-auto text-muted" />
+            <p className="mt-3 text-base font-semibold">No matches</p>
+            <p className="mt-1 text-sm text-muted">
+              Try a different word — or be the first to add it.
+            </p>
+            <button
+              type="button"
+              onClick={() => setOpenCreate(true)}
+              className="mt-4 inline-flex rounded-full px-4 py-2 text-sm font-semibold text-white shadow-[var(--shadow-pop)]"
+              style={{ background: "var(--gradient-brand)" }}
+            >
+              Add a book
+            </button>
+          </div>
+        ) : (
+          <>
+            {books.length > 0 ? (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
+                {books.map((b, i) => (
+                  <div
+                    key={b.id}
+                    ref={i === triggerIndex ? sentinelRef : undefined}
+                    className="animate-fade"
+                    style={{ animationDelay: `${Math.min(i * 25, 200)}ms` }}
+                  >
+                    <BookCard
+                      book={b}
+                      onOpen={() => router.push(`/book/${b.slug || b.id}`)}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {nextCursor ? <BookGridSkeleton small /> : null}
+          </>
+        )}
+      </div>
+
+      {olResults.length > 0 ? (
+        <OpenLibrarySection
+          q={q}
+          results={olResults}
+          adoptingKey={adoptingKey}
+          hasLocal={books.length > 0}
+          onAdopt={(r) => void adoptAndOpen(r)}
+        />
+      ) : null}
+    </>
+  );
 
   return (
     <section className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-2 pb-12 sm:px-4">
@@ -300,6 +383,11 @@ export default function ExplorePage() {
         ) : null}
       </header>
 
+      {/* When the user is searching or has a category active, results jump
+          to the top — communities + shelves slide below so the user doesn't
+          have to scroll past discovery content to see what they asked for. */}
+      {isSearching ? resultsSection : null}
+
       <CommunitiesPanel
         communities={communities}
         loading={communitiesLoading}
@@ -368,78 +456,7 @@ export default function ExplorePage() {
         </section>
       ) : null}
 
-      <div className="flex flex-wrap items-center justify-between gap-3 px-1">
-        <p className="text-sm font-semibold text-foreground">
-          {category ? `Books in ${category}` : q ? `Results for “${q}”` : "Everything"}
-        </p>
-        <button
-          type="button"
-          onClick={() => setOpenCreate((v) => !v)}
-          className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-xs font-semibold shadow-[var(--shadow-soft)] hover:bg-hover"
-        >
-          <Plus size={14} aria-hidden />
-          Add a book
-        </button>
-      </div>
-
-      {openCreate ? (
-        <NewBookInline onDone={() => setOpenCreate(false)} />
-      ) : null}
-
-      <div>
-        {initialLoading ? (
-          <BookGridSkeleton />
-        ) : books.length === 0 && olResults.length === 0 ? (
-          <div className="rounded-3xl border border-dashed border-border p-10 text-center">
-            <Sparkles size={20} aria-hidden className="mx-auto text-muted" />
-            <p className="mt-3 text-base font-semibold">No matches</p>
-            <p className="mt-1 text-sm text-muted">
-              Try a different word — or be the first to add it.
-            </p>
-            <button
-              type="button"
-              onClick={() => setOpenCreate(true)}
-              className="mt-4 inline-flex rounded-full px-4 py-2 text-sm font-semibold text-white shadow-[var(--shadow-pop)]"
-              style={{ background: "var(--gradient-brand)" }}
-            >
-              Add a book
-            </button>
-          </div>
-        ) : (
-          <>
-            {books.length > 0 ? (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
-                {books.map((b, i) => (
-                  <div
-                    key={b.id}
-                    ref={i === triggerIndex ? sentinelRef : undefined}
-                    className="animate-fade"
-                    style={{ animationDelay: `${Math.min(i * 25, 200)}ms` }}
-                  >
-                    <BookCard
-                      book={b}
-                      onOpen={() =>
-                        router.push(`/book/${b.slug || b.id}`)
-                      }
-                    />
-                  </div>
-                ))}
-              </div>
-            ) : null}
-            {nextCursor ? <BookGridSkeleton small /> : null}
-          </>
-        )}
-      </div>
-
-      {olResults.length > 0 ? (
-        <OpenLibrarySection
-          q={q}
-          results={olResults}
-          adoptingKey={adoptingKey}
-          hasLocal={books.length > 0}
-          onAdopt={(r) => void adoptAndOpen(r)}
-        />
-      ) : null}
+      {!isSearching ? resultsSection : null}
     </section>
   );
 }

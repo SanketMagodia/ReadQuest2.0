@@ -91,7 +91,7 @@ export function PostCard({ post }: { post: PostDTO }) {
             prefetch={false}
             className="mt-3 block"
           >
-            <p className="whitespace-pre-wrap text-[16px] leading-relaxed text-foreground/95 sm:text-[17px]">
+            <p className="post-content whitespace-pre-wrap text-[16px] leading-relaxed text-foreground/95 sm:text-[17px]">
               {post.content}
             </p>
           </Link>
