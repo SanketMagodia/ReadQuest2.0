@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
+import { AnnouncementRailStrip } from "@/components/announcements/AnnouncementStrips";
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Tile primitives
@@ -441,7 +442,8 @@ export function RightRail() {
   if (!tiles.length) return null;
 
   return (
-    <aside className="sticky top-10 hidden h-fit w-[240px] shrink-0 space-y-4 py-10 lg:block xl:w-[260px]">
+    <aside className="sticky top-10 hidden h-fit w-[240px] shrink-0 space-y-4 py-10 layout-wide:block xl:w-[260px]">
+      <AnnouncementRailStrip />
       {tiles}
     </aside>
   );

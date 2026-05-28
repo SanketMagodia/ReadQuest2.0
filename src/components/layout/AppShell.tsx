@@ -35,9 +35,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const role = session?.user?.role;
 
   return (
-    <div className="mx-auto flex min-h-full w-full max-w-7xl gap-0 px-3 sm:px-5 lg:gap-5 xl:gap-0">
-      {/* Desktop sidebar */}
-      <aside className="sticky top-0 z-20 hidden h-[100dvh] shrink-0 flex-col border-r border-border/70 bg-background/75 py-8 backdrop-blur sm:flex lg:w-52 xl:w-60">
+    <div className="mx-auto flex min-h-full w-full max-w-7xl gap-0 px-3 layout-wide:px-5 layout-wide:gap-5 xl:gap-0">
+      {/* Wide layout sidebar (landscape tablets / desktops) */}
+      <aside className="sticky top-0 z-20 hidden h-[100dvh] shrink-0 flex-col border-r border-border/70 bg-background/75 py-8 backdrop-blur layout-wide:flex lg:w-52 xl:w-60">
         <div className="mb-8 flex items-center justify-between gap-2 px-4">
           <ReadquestLogo height={32} priority />
           <ThemeToggle />
@@ -152,9 +152,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Main column. `min-w-0` is critical: without it, any unbreakable long
           string (URLs, code) in children would force this flex item wider
           than its share and overflow the whole shell on narrow phones. */}
-      <main className="min-w-0 min-h-[100dvh] flex-1 pb-28 sm:pb-12">
-        {/* Mobile top bar */}
-        <div className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-border/70 bg-background/85 px-3 py-2.5 backdrop-blur sm:hidden">
+      <main className="min-w-0 min-h-[100dvh] flex-1 pb-28 layout-wide:pb-12">
+        {/* Compact layout top bar (phones + portrait tablets) */}
+        <div className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-border/70 bg-background/85 px-3 py-2.5 backdrop-blur layout-wide:hidden">
           <ReadquestLogo height={24} />
           <div className="flex items-center gap-1.5">
             <InstallPrompt />
@@ -169,10 +169,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Right rail (lg+) — content adapts per route. */}
       <RightRail />
 
-      {/* Mobile bottom nav */}
+      {/* Compact layout bottom nav */}
       <nav
         aria-label="Bottom"
-        className="fixed bottom-3 left-1/2 z-40 flex w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 items-stretch justify-between rounded-2xl border border-border bg-background/90 p-1.5 shadow-[var(--shadow-soft)] backdrop-blur sm:hidden"
+        className="fixed bottom-3 left-1/2 z-40 flex w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 items-stretch justify-between rounded-2xl border border-border bg-background/90 p-1.5 shadow-[var(--shadow-soft)] backdrop-blur layout-wide:hidden"
       >
         {navMain.map((item) => {
           const Icon = item.icon;

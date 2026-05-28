@@ -7,6 +7,7 @@ import type { PostDTO } from "@/lib/serialize";
 import { PostCard } from "@/components/posts/PostCard";
 import { PostSkeletonList } from "@/components/feed/PostSkeleton";
 import { DailyBookCard } from "@/components/feed/DailyBookCard";
+import { AnnouncementFeedStrip } from "@/components/announcements/AnnouncementStrips";
 import { useInfiniteScroll } from "@/lib/hooks/useInfiniteScroll";
 
 type FeedMode = "for-you" | "latest";
@@ -97,7 +98,7 @@ export default function HomePage() {
 
   return (
     <section className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-1 sm:px-3">
-      <header className="sticky top-12 z-20 -mx-1 border-b border-border/70 bg-background/85 px-5 py-5 backdrop-blur sm:top-0 sm:-mx-3 sm:px-6">
+      <header className="sticky top-12 z-20 -mx-1 border-b border-border/70 bg-background/85 px-5 py-5 backdrop-blur layout-wide:top-0 layout-wide:-mx-3 layout-wide:px-6">
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted">
@@ -139,7 +140,10 @@ export default function HomePage() {
         ) : null}
       </header>
 
-      <div className="flex flex-col gap-3 px-2 sm:px-5">
+      <div className="flex flex-col gap-3 px-2 layout-wide:px-5">
+        <div className="layout-compact:block hidden">
+          <AnnouncementFeedStrip />
+        </div>
         <DailyBookCard />
 
         {initialLoading ? (

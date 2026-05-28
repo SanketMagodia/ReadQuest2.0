@@ -1,0 +1,40 @@
+import { NextResponse } from "next/server";
+import connectDB from "@/lib/db";
+import Announcement from "@/models/Announcement";
+
+/** Active admin broadcasts for the right rail (wide) or feed (compact). */
+export async function GET() {
+  await connectDB();
+  const now = new Date();
+  const rows = await Announcement.find({
+    active: true,
+    $or: [
+      { expiresAt: { $exists: false } },
+      { expiresAt: null },
+      { expiresAt: { $gt: now } },
+    ],
+  })
+    .sort({ createdAt: -1 })
+    .limit(5)
+    .lean<
+      {
+        _id: import("mongoose").Types.ObjectId;
+        title: string;
+        body: string;
+        link?: string;
+        linkLabel?: string;
+        createdAt: Date;
+      }[]
+    >();
+
+  return NextResponse.json({
+    items: rows.map((r) => ({
+      id: r._id.toString(),
+      title: r.title,
+      body: r.body,
+      link: r.link ?? "",
+      linkLabel: r.linkLabel ?? "",
+      createdAt: r.createdAt.toISOString(),
+    })),
+  });
+}
