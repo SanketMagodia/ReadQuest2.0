@@ -9,6 +9,8 @@ import type { PostDTO } from "@/lib/serialize";
 import Image from "next/image";
 import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
 import { PostReactions } from "@/components/posts/PostReactions";
+import { DeleteContentButton } from "@/components/posts/DeleteContentButton";
+import { canDeleteContent } from "@/lib/content-permissions";
 
 type CommentDTO = {
   id: string;
@@ -63,7 +65,7 @@ export default function ThreadPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const pid = typeof params?.id === "string" ? params.id : "";
-  const { status } = useSession();
+  const { data: session, status } = useSession();
   const [post, setPost] = useState<PostDTO | null>(null);
   const [comments, setComments] = useState<CommentDTO[]>([]);
   const [body, setBody] = useState("");
@@ -114,6 +116,8 @@ export default function ThreadPage() {
   if (!post) {
     return <LoadingIndicator fullPage label="Loading thread…" />;
   }
+
+  const canDeletePost = canDeleteContent(session?.user, post.author.id);
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-3 py-8 sm:gap-8">
@@ -184,6 +188,16 @@ export default function ThreadPage() {
                 <span className="tabular-nums">{post.commentCount}</span>
                 <span className="hidden sm:inline">replies</span>
               </button>
+              {canDeletePost ? (
+                <>
+                  <span aria-hidden className="h-4 w-px bg-border/80" />
+                  <DeleteContentButton
+                    kind="post"
+                    id={post.id}
+                    onDeleted={() => router.push("/")}
+                  />
+                </>
+              ) : null}
             </div>
           </div>
         </div>
@@ -265,10 +279,12 @@ export default function ThreadPage() {
               key={n.id}
               node={n}
               depth={0}
+              viewer={session?.user}
               onReply={(id, username) => {
                 setReplyTo({ id, username });
                 composerRef.current?.focus();
               }}
+              onDeleted={() => void reload()}
             />
           ))}
           {!tree.length ? (
@@ -321,13 +337,18 @@ function Avatar({
 function CommentBranch({
   node,
   depth,
+  viewer,
   onReply,
+  onDeleted,
 }: {
   node: Node;
   depth: number;
+  viewer?: { id: string; role?: string };
   onReply: (id: string, username: string) => void;
+  onDeleted: () => void;
 }) {
   const hasChildren = node.children.length > 0;
+  const showDelete = canDeleteContent(viewer, node.author.id);
 
   return (
     <div className="relative">
@@ -384,6 +405,13 @@ function CommentBranch({
               <CornerDownRight size={12} aria-hidden />
               Reply
             </button>
+            {showDelete ? (
+              <DeleteContentButton
+                kind="comment"
+                id={node.id}
+                onDeleted={onDeleted}
+              />
+            ) : null}
           </div>
         </div>
       </div>
@@ -395,7 +423,9 @@ function CommentBranch({
               key={c.id}
               node={c}
               depth={depth + 1}
+              viewer={viewer}
               onReply={onReply}
+              onDeleted={onDeleted}
             />
           ))}
         </div>

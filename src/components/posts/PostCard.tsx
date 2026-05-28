@@ -2,9 +2,12 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { MessageSquare, BookOpen } from "lucide-react";
 import type { PostDTO } from "@/lib/serialize";
 import { PostReactions } from "@/components/posts/PostReactions";
+import { DeleteContentButton } from "@/components/posts/DeleteContentButton";
+import { canDeleteContent } from "@/lib/content-permissions";
 
 function fmtRelative(iso: string) {
   try {
@@ -26,9 +29,17 @@ function fmtRelative(iso: string) {
   }
 }
 
-export function PostCard({ post }: { post: PostDTO }) {
+export function PostCard({
+  post,
+  onDeleted,
+}: {
+  post: PostDTO;
+  onDeleted?: (postId: string) => void;
+}) {
+  const { data: session } = useSession();
   const author = post.author.name || post.author.username;
   const initials = author.slice(0, 2).toUpperCase();
+  const showDelete = canDeleteContent(session?.user, post.author.id);
 
   return (
     <article className="group rounded-[22px] border border-border/80 bg-card p-5 shadow-[var(--shadow-soft)] transition hover:-translate-y-0.5 hover:border-border hover:shadow-lg">
@@ -116,6 +127,16 @@ export function PostCard({ post }: { post: PostDTO }) {
               <span className="tabular-nums">{post.commentCount}</span>
               <span className="hidden sm:inline">replies</span>
             </Link>
+            {showDelete ? (
+              <>
+                <span aria-hidden className="h-4 w-px bg-border/80" />
+                <DeleteContentButton
+                  kind="post"
+                  id={post.id}
+                  onDeleted={() => onDeleted?.(post.id)}
+                />
+              </>
+            ) : null}
           </div>
         </div>
       </div>

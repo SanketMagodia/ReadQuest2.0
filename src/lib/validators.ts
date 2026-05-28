@@ -1,11 +1,34 @@
 import { z } from "zod";
 
+/** @handle — lowercase letters, numbers, underscores (spaces/symbols stripped). */
+export function sanitizeUsername(raw: string) {
+  return (
+    raw
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 24) || "reader"
+  );
+}
+
+const usernameSchema = z
+  .string()
+  .trim()
+  .transform(sanitizeUsername)
+  .pipe(
+    z
+      .string()
+      .min(3, "Username must be at least 3 characters")
+      .max(24)
+      .regex(
+        /^[a-z0-9_]+$/,
+        "Use a handle like sameer_singh — not a display name with spaces"
+      )
+  );
+
 export const registerSchema = z.object({
-  username: z
-    .string()
-    .trim()
-    .transform((u) => u.toLowerCase())
-    .pipe(z.string().min(3).max(24).regex(/^[a-z0-9_]+$/)),
+  username: usernameSchema,
   password: z.string().min(8).max(128),
   email: z.string().email().optional().or(z.literal("")),
   name: z.string().max(80).optional(),
@@ -52,12 +75,6 @@ export const profileUpdateSchema = z.object({
   bio: z.string().trim().max(280).optional(),
   image: imageStringSchema,
 });
-
-const usernameSchema = z
-  .string()
-  .trim()
-  .transform((u) => u.toLowerCase())
-  .pipe(z.string().min(3).max(24).regex(/^[a-z0-9_]+$/));
 
 const categoryListSchema = z.array(z.string().trim().min(1).max(60)).max(10);
 

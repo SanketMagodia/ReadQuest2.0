@@ -164,7 +164,12 @@ export default function HomePage() {
                 className="animate-fade"
                 style={{ animationDelay: `${Math.min(i * 35, 240)}ms` }}
               >
-                <PostCard post={p} />
+                <PostCard
+                  post={p}
+                  onDeleted={(postId) =>
+                    setPosts((prev) => prev.filter((row) => row.id !== postId))
+                  }
+                />
               </div>
             ))}
 

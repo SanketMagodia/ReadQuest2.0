@@ -452,7 +452,13 @@ export default function ProfilePage() {
           ) : posts.length ? (
             <div className="flex flex-col gap-4 px-2">
               {posts.map((p) => (
-                <PostCard key={p.id} post={p} />
+                <PostCard
+                  key={p.id}
+                  post={p}
+                  onDeleted={(postId) =>
+                    setPosts((prev) => prev.filter((row) => row.id !== postId))
+                  }
+                />
               ))}
             </div>
           ) : (

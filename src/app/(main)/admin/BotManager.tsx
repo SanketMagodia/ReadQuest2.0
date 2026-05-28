@@ -386,9 +386,12 @@ export function BotManager() {
                 required
                 value={form.username}
                 onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
-                placeholder="e.g. tea_reader"
+                placeholder="e.g. sameer_singh"
                 className={inputCls}
               />
+              <p className="mt-1 text-[11px] text-muted">
+                Lowercase @handle for URLs — put the real name in Display name below.
+              </p>
             </Field>
             <Field label="Display name">
               <input
