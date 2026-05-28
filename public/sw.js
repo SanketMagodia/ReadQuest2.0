@@ -1,15 +1,12 @@
-/* Readquest service worker — minimal app-shell + runtime cache.
-   Strategy:
-   - Precache the app shell + offline fallback on install.
-   - HTML/Document requests → network first, fall back to cache, then offline page.
-   - Static assets (CSS/JS/fonts/images) → stale-while-revalidate.
-   - Never cache API requests (`/api/*`); always go to the network. */
+/* Readquest service worker — minimal offline support only.
+   IMPORTANT: never cache HTML navigations on success — auth routes redirect
+   (307) and must always hit the network or middleware will look "stuck". */
 
-const VERSION = "rq-v1";
+const VERSION = "rq-v2";
 const APP_SHELL_CACHE = `rq-shell-${VERSION}`;
 const RUNTIME_CACHE = `rq-runtime-${VERSION}`;
 
-const APP_SHELL = ["/", "/offline", "/logo192.png", "/loading.gif"];
+const APP_SHELL = ["/offline", "/logo192.png", "/loading.gif"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -17,7 +14,7 @@ self.addEventListener("install", (event) => {
       .open(APP_SHELL_CACHE)
       .then((cache) =>
         cache.addAll(APP_SHELL).catch(() => {
-          /* best-effort: ignore failures so install still succeeds */
+          /* best-effort */
         })
       )
       .then(() => self.skipWaiting())
@@ -56,28 +53,22 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.startsWith("/api/")) return;
   if (url.pathname.startsWith("/_next/data/")) return;
 
+  // HTML: network only — do not cache redirects or authenticated pages.
   if (isHtmlRequest(request)) {
     event.respondWith(
-      fetch(request)
-        .then((res) => {
-          const copy = res.clone();
-          caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, copy));
-          return res;
-        })
-        .catch(async () => {
-          const cached = await caches.match(request);
-          if (cached) return cached;
-          const offline = await caches.match("/offline");
-          if (offline) return offline;
-          return new Response("Offline", {
-            status: 503,
-            headers: { "Content-Type": "text/plain" },
-          });
-        })
+      fetch(request).catch(async () => {
+        const offline = await caches.match("/offline");
+        if (offline) return offline;
+        return new Response("Offline", {
+          status: 503,
+          headers: { "Content-Type": "text/plain" },
+        });
+      })
     );
     return;
   }
 
+  // Static assets: stale-while-revalidate (200 only).
   event.respondWith(
     caches.match(request).then((cached) => {
       const network = fetch(request)

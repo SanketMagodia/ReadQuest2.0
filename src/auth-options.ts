@@ -72,6 +72,10 @@ export const authOptions: NextAuthOptions = {
         );
       } else if (account?.provider === "credentials" && user?.id) {
         await hydrateUserFromId(token as JWT, user.id as string);
+      } else if (typeof token.uid === "string" && token.uid) {
+        if (typeof token.role !== "string" || typeof token.username !== "string") {
+          await hydrateUserFromId(token as JWT, token.uid);
+        }
       }
       return token;
     },
