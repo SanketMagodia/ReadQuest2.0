@@ -6,9 +6,10 @@
  */
 export function getAuthSecret() {
   return (
-    process.env.NEXTAUTH_SECRET ||
+    process.env.NEXTAUTH_SECRET ??
+    process.env.AUTH_SECRET ??
     (process.env.NODE_ENV !== "production" ?
       "readquest-dev-secret-do-not-deploy-please-32-characters"
-      : undefined)
+    : undefined)
   );
 }

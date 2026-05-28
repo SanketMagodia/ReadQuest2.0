@@ -25,7 +25,9 @@ export async function middleware(req: NextRequest) {
   const token = await getToken({
     req,
     secret,
-    secureCookie: (process.env.NEXTAUTH_URL ?? "").startsWith("https://"),
+    // Do not override `secureCookie` — next-auth defaults to HTTPS cookies on
+    // Vercel even when NEXTAUTH_URL is unset. Forcing false here made /admin
+    // middleware think guests were logged out while the rest of the app worked.
   });
 
   if (!token) {

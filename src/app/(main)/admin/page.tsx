@@ -9,7 +9,7 @@ export const metadata = {
 export default async function AdminPage() {
   const session = await getAppSession();
   if (!session?.user?.id) {
-    redirect("/login?next=/admin");
+    redirect("/login?callbackUrl=/admin");
   }
   if (session.user.role !== "admin") {
     redirect("/");
