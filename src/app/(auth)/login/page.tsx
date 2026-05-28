@@ -4,9 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { signIn } from "next-auth/react";
-import { motion } from "framer-motion";
 import { AtSign, KeyRound, Eye, EyeOff } from "lucide-react";
 import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
+import { AuthFormShell } from "@/components/auth/AuthFormShell";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -36,27 +36,14 @@ export default function LoginPage() {
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-      className="w-full"
-    >
-      <div className="relative overflow-hidden rounded-[26px] border border-border bg-card p-6 shadow-[var(--shadow-soft)] sm:p-9">
-        {/* gradient accent bar */}
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 h-1"
-          style={{ background: "var(--gradient-brand)" }}
-        />
-
-        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted">
+    <AuthFormShell>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted max-sm:text-center">
           Welcome back
         </p>
-        <h1 className="mt-1.5 text-[26px] font-black leading-tight tracking-tight sm:text-[30px]">
+        <h1 className="mt-1.5 text-[26px] font-black leading-tight tracking-tight max-sm:text-center sm:text-[30px]">
           Sign in to Readquest
         </h1>
-        <p className="mt-2 text-sm text-muted">
+        <p className="mt-2 text-sm text-muted max-sm:text-center">
           New here?{" "}
           <Link
             className="font-semibold text-foreground underline-offset-4 hover:underline"
@@ -72,7 +59,7 @@ export default function LoginPage() {
 
         <form
           onSubmit={(e) => void submit(e)}
-          className={`mt-7 space-y-3 ${submitting ? "pointer-events-none opacity-40" : ""}`}
+          className={`mt-6 space-y-3 max-sm:mt-5 max-sm:space-y-2.5 ${submitting ? "pointer-events-none opacity-40" : ""}`}
         >
           <Field
             icon={<AtSign size={16} aria-hidden />}
@@ -108,14 +95,14 @@ export default function LoginPage() {
           ) : null}
           <button
             type="submit"
-            className="mt-1 w-full rounded-full px-5 py-3 text-sm font-semibold text-white shadow-[var(--shadow-pop)] transition active:translate-y-px"
+            className="mt-1 w-full rounded-full px-5 py-3 text-sm font-semibold text-white shadow-[var(--shadow-pop)] transition active:translate-y-px max-sm:py-3.5 max-sm:text-[15px]"
             style={{ background: "var(--gradient-brand)" }}
           >
             Sign in
           </button>
         </form>
 
-        <div className="my-5 flex items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-muted">
+        <div className="my-4 flex items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-muted max-sm:my-3.5 sm:my-5">
           <span className="h-px flex-1 bg-border" />
           or
           <span className="h-px flex-1 bg-border" />
@@ -124,18 +111,17 @@ export default function LoginPage() {
         <button
           type="button"
           onClick={() => void signIn("google", { callbackUrl: "/" })}
-          className="inline-flex w-full items-center justify-center gap-3 rounded-full border border-border bg-background px-5 py-3 text-sm font-semibold transition hover:bg-hover"
+          className="inline-flex w-full items-center justify-center gap-3 rounded-full border border-border bg-background px-5 py-3 text-sm font-semibold transition hover:bg-hover max-sm:py-3.5"
         >
           <GoogleMark />
           Continue with Google
         </button>
 
-        <p className="mt-5 text-[11px] leading-relaxed text-muted">
+        <p className="mt-4 text-[11px] leading-relaxed text-muted max-sm:hidden sm:mt-5">
           By signing in you agree to play nice — thoughtful threads, no
           spoilers without warnings.
         </p>
-      </div>
-    </motion.div>
+    </AuthFormShell>
   );
 }
 
@@ -165,7 +151,7 @@ function Field({
           {label}
         </label>
       ) : null}
-      <div className="flex items-center gap-3 rounded-2xl border border-border bg-background px-4 py-3 transition focus-within:border-transparent focus-within:ring-2 focus-within:ring-sky-400/70">
+      <div className="flex items-center gap-3 rounded-2xl border border-border bg-background px-4 py-3 transition focus-within:border-transparent focus-within:ring-2 focus-within:ring-sky-400/70 max-sm:rounded-[18px] max-sm:py-2.5">
         <span className="shrink-0 text-muted">{icon}</span>
         <input
           type={type}

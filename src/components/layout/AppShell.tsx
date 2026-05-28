@@ -20,6 +20,7 @@ import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import { RightRail } from "./RightRail";
 import { MobileAccountMenu } from "./MobileAccountMenu";
 import { NotificationsBell } from "./NotificationsBell";
+import { JoinReadquestSidebarCard } from "@/components/auth/UnlockFeatures";
 
 const navMain = [
   { href: "/", label: "Feed", icon: Library },
@@ -37,13 +38,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="mx-auto flex min-h-full w-full max-w-7xl gap-0 px-3 layout-wide:px-5 layout-wide:gap-5 xl:gap-0">
       {/* Wide layout sidebar (landscape tablets / desktops) */}
-      <aside className="sticky top-0 z-20 hidden h-[100dvh] shrink-0 flex-col border-r border-border/70 bg-background/75 py-8 backdrop-blur layout-wide:flex lg:w-52 xl:w-60">
-        <div className="mb-8 flex items-center justify-between gap-2 px-4">
+      <aside className="sticky top-0 z-20 hidden h-[100dvh] min-h-0 shrink-0 flex-col overflow-hidden border-r border-border/70 bg-background/75 py-6 backdrop-blur layout-wide:flex lg:w-52 xl:w-60">
+        <div className="mb-6 shrink-0 flex items-center justify-between gap-2 px-4">
           <ReadquestLogo height={32} priority />
           <ThemeToggle />
         </div>
 
-        <nav className="flex flex-1 flex-col gap-1 px-2" aria-label="Primary">
+        <nav
+          className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain px-2"
+          aria-label="Primary"
+        >
           {navMain.map((item) => {
             const Icon = item.icon;
             const active =
@@ -125,28 +129,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           )}
         </nav>
 
-        {!username ? (
-          <div
-            className="mx-3 mt-3 rounded-2xl p-px"
-            style={{ background: "var(--gradient-brand)" }}
-          >
-            <div className="rounded-[14px] bg-card p-4">
-              <p className="text-[13px] font-semibold leading-tight">
-                Join Readquest
-              </p>
-              <p className="mt-1 text-[12px] leading-relaxed text-muted">
-                Save books, post quotes, follow threads.
-              </p>
-              <Link
-                href="/register"
-                className="mt-3 block w-full rounded-full px-4 py-2 text-center text-xs font-semibold text-white shadow-[var(--shadow-pop)]"
-                style={{ background: "var(--gradient-brand)" }}
-              >
-                Get started
-              </Link>
-            </div>
-          </div>
-        ) : null}
+        {!username ? <JoinReadquestSidebarCard /> : null}
       </aside>
 
       {/* Main column. `min-w-0` is critical: without it, any unbreakable long

@@ -1,18 +1,13 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import {
-  Sparkles,
-  Quote,
-  Users,
-  BookmarkCheck,
-  ArrowLeft,
-} from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { ReadquestLogo } from "@/components/brand/ReadquestLogo";
 import { BookCarousel } from "@/components/auth/BookCarousel";
+import { UnlockFeaturesAuthStrip } from "@/components/auth/UnlockFeatures";
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="relative min-h-dvh overflow-x-hidden bg-background text-foreground">
+    <div className="relative flex min-h-dvh flex-col overflow-x-hidden bg-background text-foreground">
       {/* Theme-aware ambient brand wash */}
       <div
         aria-hidden
@@ -23,81 +18,77 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
         }}
       />
 
+      {/* Phone-only playful blobs */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 hidden max-sm:block">
+        <div
+          className="absolute -left-16 top-[18%] h-40 w-40 rounded-full opacity-25 blur-3xl"
+          style={{ background: "var(--brand-1)" }}
+        />
+        <div
+          className="absolute -right-12 top-[42%] h-36 w-36 rounded-full opacity-20 blur-3xl"
+          style={{ background: "var(--brand-3)" }}
+        />
+        <div
+          className="absolute bottom-[12%] left-1/3 h-32 w-32 rounded-full opacity-15 blur-3xl"
+          style={{ background: "var(--brand-2)" }}
+        />
+      </div>
+
       {/* Top bar */}
-      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-5 pt-6 sm:px-8 sm:pt-8">
+      <header className="mx-auto flex w-full max-w-6xl shrink-0 items-center justify-between px-4 pt-4 sm:px-8 sm:pt-8 lg:pt-8">
         <ReadquestLogo height={30} priority />
         <Link
           href="/"
-          className="hidden items-center gap-1.5 rounded-full border border-border bg-card/70 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted backdrop-blur transition hover:text-foreground sm:inline-flex"
+          aria-label="Back home"
+          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card/80 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted backdrop-blur transition hover:text-foreground sm:px-3 sm:text-[11px] sm:tracking-[0.18em]"
         >
-          <ArrowLeft size={12} aria-hidden /> Back home
+          <ArrowLeft size={12} aria-hidden />
+          <span className="hidden sm:inline">Back home</span>
         </Link>
       </header>
 
-      {/* Body — flex layout: form column is hard-pinned to 440px on lg+. */}
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-4 pb-20 pt-8 sm:px-8 sm:pt-10 lg:flex-row lg:items-start lg:gap-14 lg:pb-24 lg:pt-14">
-        {/* === Marketing column === */}
-        <section className="order-2 flex min-w-0 flex-1 flex-col gap-6 lg:order-1 lg:gap-8 lg:pt-4">
-          <div className="space-y-3 lg:space-y-4">
-            <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/80 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-muted backdrop-blur">
-              <Sparkles size={11} aria-hidden /> Readquest
-            </span>
-            <h2 className="text-[26px] font-black leading-[1.08] tracking-tight sm:text-[34px] lg:text-[42px]">
+      {/*
+        Phone: intro top → form centered → carousel bottom.
+        Desktop: classic two-column — marketing left, form right.
+      */}
+      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-4 px-4 pb-5 pt-3 sm:gap-6 sm:px-8 sm:pb-8 sm:pt-5 lg:flex-row lg:items-start lg:gap-14 lg:pb-24 lg:pt-14">
+        <div className="contents lg:flex lg:min-w-0 lg:flex-1 lg:flex-col lg:gap-8 lg:pt-4">
+          <section className="order-1 min-w-0 space-y-2.5 max-sm:text-center sm:space-y-3 lg:space-y-4">
+            <h2 className="text-[24px] font-black leading-[1.05] tracking-tight sm:text-[34px] lg:text-[42px]">
               Where readers meet{" "}
-              <span className="gradient-brand-text">between the lines.</span>
+              <span className="gradient-brand-text max-sm:mt-0.5 max-sm:block sm:inline">
+                between the lines.
+              </span>
             </h2>
-            <p className="max-w-xl text-[14px] leading-relaxed text-muted sm:text-[15px]">
+            <p className="hidden max-w-xl text-[13px] font-medium leading-relaxed text-muted max-sm:block">
+              Quote the good lines. Find your people. Keep the streak alive.
+            </p>
+            <p className="max-w-xl text-[13px] leading-relaxed text-muted max-sm:hidden sm:text-[15px]">
               Quote the lines that moved you, build a readlist that reflects
               you, and follow books and people who think hard about what they
               read.
             </p>
-          </div>
+            <UnlockFeaturesAuthStrip />
+          </section>
 
-          {/* Carousel — small on mobile, medium on tablet, large on desktop */}
-          <BookCarousel size="sm" className="sm:hidden" />
-          <BookCarousel size="md" className="hidden sm:block lg:hidden" />
-          <BookCarousel size="lg" className="hidden lg:block" />
+          <section className="order-3 mt-auto shrink-0 lg:mt-0">
+            <p className="mb-1 hidden text-center text-[10px] font-semibold uppercase tracking-[0.22em] text-muted max-sm:block">
+              Now on shelves
+            </p>
+            <BookCarousel
+              size="sm"
+              durationSec={55}
+              className="sm:hidden max-sm:-mx-4"
+            />
+            <BookCarousel size="md" className="hidden sm:block lg:hidden" />
+            <BookCarousel size="lg" className="hidden lg:block" />
+          </section>
+        </div>
 
-          <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-            <FeatureChip
-              icon={<Quote size={14} aria-hidden />}
-              label="Threaded quotes"
-            />
-            <FeatureChip
-              icon={<Sparkles size={14} aria-hidden />}
-              label="Personalized feed"
-            />
-            <FeatureChip
-              icon={<BookmarkCheck size={14} aria-hidden />}
-              label="Travel-friendly readlists"
-            />
-            <FeatureChip
-              icon={<Users size={14} aria-hidden />}
-              label="Made for readers"
-            />
-          </ul>
-        </section>
-
-        {/* === Form column — first on mobile, right side on desktop === */}
-        <section className="order-1 w-full min-w-0 lg:order-2 lg:w-[440px] lg:shrink-0">
-          <div className="lg:sticky lg:top-10">{children}</div>
+        <section className="order-2 flex min-h-0 w-full min-w-0 flex-1 items-center justify-center max-sm:px-0.5 sm:py-1 lg:w-[440px] lg:flex-none lg:items-start lg:justify-start lg:py-0">
+          <div className="w-full lg:sticky lg:top-10">{children}</div>
         </section>
       </div>
     </div>
-  );
-}
-
-function FeatureChip({
-  icon,
-  label,
-}: {
-  icon: ReactNode;
-  label: string;
-}) {
-  return (
-    <li className="flex items-center gap-2 rounded-2xl border border-border bg-card/70 px-3 py-2 text-[12px] font-semibold text-foreground/85 backdrop-blur">
-      <span className="text-muted">{icon}</span>
-      {label}
-    </li>
   );
 }

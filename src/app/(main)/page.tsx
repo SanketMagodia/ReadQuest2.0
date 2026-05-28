@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { Sparkles, Clock3 } from "lucide-react";
 import type { PostDTO } from "@/lib/serialize";
 import { PostCard } from "@/components/posts/PostCard";
 import { PostSkeletonList } from "@/components/feed/PostSkeleton";
 import { DailyBookCard } from "@/components/feed/DailyBookCard";
 import { AnnouncementFeedStrip } from "@/components/announcements/AnnouncementStrips";
+import { JoinReadquestFeedCard } from "@/components/auth/UnlockFeatures";
 import { useInfiniteScroll } from "@/lib/hooks/useInfiniteScroll";
 
 type FeedMode = "for-you" | "latest";
@@ -22,6 +24,8 @@ type FeedResponse = {
 const PAGE_SIZE = 10;
 
 export default function HomePage() {
+  const { status } = useSession();
+  const isGuest = status === "unauthenticated";
   const [mode, setMode] = useState<FeedMode>("for-you");
   const [posts, setPosts] = useState<PostDTO[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -141,6 +145,7 @@ export default function HomePage() {
       </header>
 
       <div className="flex flex-col gap-3 px-2 layout-wide:px-5">
+        {isGuest ? <JoinReadquestFeedCard /> : null}
         <div className="layout-compact:block hidden">
           <AnnouncementFeedStrip />
         </div>

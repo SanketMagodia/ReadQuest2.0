@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
+import { JoinReadquestRailPitch } from "@/components/auth/UnlockFeatures";
 import { AnnouncementRailStrip } from "@/components/announcements/AnnouncementStrips";
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -146,6 +147,9 @@ function todaysPrompt() {
 }
 
 function BrandTile({ authenticated }: { authenticated: boolean }) {
+  if (!authenticated) {
+    return <JoinReadquestRailPitch />;
+  }
   return (
     <TileShell variant="gradient-frame">
       <Eyebrow label="Readquest" tone="brand" icon={Sparkles} />
@@ -155,11 +159,7 @@ function BrandTile({ authenticated }: { authenticated: boolean }) {
       <p className="mt-2 text-[13px] leading-relaxed text-muted">
         Follow books. Save a readlist. Thread the lines that moved you.
       </p>
-      {authenticated ? (
-        <TileCTA href="/compose">Share a quote</TileCTA>
-      ) : (
-        <TileCTA href="/register">Create an account</TileCTA>
-      )}
+      <TileCTA href="/compose">Share a quote</TileCTA>
     </TileShell>
   );
 }
