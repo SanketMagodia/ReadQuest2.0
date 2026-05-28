@@ -1,13 +1,31 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
-import { getAuthSecret } from "@/lib/auth-secret";
+
+/** Must match `getAuthSecret()` — inlined here because Next.js only bundles
+ *  env vars into middleware when they are referenced directly in this file. */
+function middlewareAuthSecret() {
+  return (
+    process.env.NEXTAUTH_SECRET ??
+    process.env.AUTH_SECRET ??
+    (process.env.NODE_ENV !== "production" ?
+      "readquest-dev-secret-do-not-deploy-please-32-characters"
+    : undefined)
+  );
+}
 
 export async function middleware(req: NextRequest) {
   if (!req.nextUrl.pathname.startsWith("/admin")) return NextResponse.next();
 
+  const secret = middlewareAuthSecret();
+  if (!secret) {
+    console.error("[middleware] NEXTAUTH_SECRET is not configured");
+    return NextResponse.redirect(new URL("/login", req.url));
+  }
+
   const token = await getToken({
     req,
-    secret: getAuthSecret(),
+    secret,
+    secureCookie: (process.env.NEXTAUTH_URL ?? "").startsWith("https://"),
   });
 
   if (!token) {

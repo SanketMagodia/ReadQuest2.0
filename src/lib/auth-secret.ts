@@ -1,5 +1,8 @@
 /**
  * Prefer setting NEXTAUTH_SECRET in production — this helper only fills a fixed dev fallback.
+ *
+ * Note: middleware.ts must reference `process.env.NEXTAUTH_SECRET` directly
+ * (not via this helper alone) so Next.js inlines it into the edge bundle.
  */
 export function getAuthSecret() {
   return (
