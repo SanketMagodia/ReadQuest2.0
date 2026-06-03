@@ -1,6 +1,6 @@
 export function PostSkeleton() {
   return (
-    <article className="rounded-[22px] border border-border bg-card p-5 shadow-[var(--shadow-soft)]">
+    <article className="rounded-xl border border-border bg-card p-5 shadow-[var(--shadow-soft)]">
       <div className="flex gap-4">
         <div className="h-12 w-12 shrink-0 rounded-2xl skeleton-shimmer" />
         <div className="min-w-0 flex-1 space-y-3">

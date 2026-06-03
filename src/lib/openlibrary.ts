@@ -14,6 +14,20 @@ const SEARCH_URL = "https://openlibrary.org/search.json";
 const WORK_BASE = "https://openlibrary.org";
 const COVER_BASE = "https://covers.openlibrary.org/b/id";
 const UA = { "User-Agent": "Readquest/1.0 (+https://readquest)" };
+const FETCH_TIMEOUT_MS = 4_000;
+
+function isNetworkTimeout(err: unknown) {
+  if (!(err instanceof Error)) return false;
+  const name = err.name || "";
+  const msg = err.message || "";
+  const cause = (err as Error & { cause?: { code?: string } }).cause;
+  return (
+    name === "AbortError" ||
+    /timeout/i.test(name) ||
+    /timeout/i.test(msg) ||
+    cause?.code === "UND_ERR_CONNECT_TIMEOUT"
+  );
+}
 
 type OLSearchDoc = {
   key: string;
@@ -74,6 +88,7 @@ export async function searchOpenLibrary(
       // Next.js will cache identical search URLs for 5 minutes — typical typing
       // produces lots of redundant queries.
       next: { revalidate: 300 },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     if (!res.ok) return [];
     const data = (await res.json()) as { docs?: OLSearchDoc[] };
@@ -81,7 +96,9 @@ export async function searchOpenLibrary(
       .filter((d) => d.title && d.key)
       .map(toResult);
   } catch (err) {
-    console.warn("[openlibrary] search failed", err);
+    if (!isNetworkTimeout(err)) {
+      console.warn("[openlibrary] search failed");
+    }
     return [];
   }
 }
@@ -123,6 +140,7 @@ export async function fetchOpenLibraryWork(
     const res = await fetch(`${WORK_BASE}${normalized}.json`, {
       headers: UA,
       next: { revalidate: 86400 },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     if (!res.ok) return { description: "", categories: "" };
     const data = (await res.json()) as OLWorkDoc;
@@ -135,7 +153,9 @@ export async function fetchOpenLibraryWork(
       categories: (data.subjects ?? []).slice(0, 6).join(", "),
     };
   } catch (err) {
-    console.warn("[openlibrary] work fetch failed", err);
+    if (!isNetworkTimeout(err)) {
+      console.warn("[openlibrary] work fetch failed");
+    }
     return { description: "", categories: "" };
   }
 }

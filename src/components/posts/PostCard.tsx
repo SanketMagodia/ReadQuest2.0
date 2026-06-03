@@ -2,11 +2,14 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { MessageSquare, BookOpen } from "lucide-react";
 import type { PostDTO } from "@/lib/serialize";
 import { PostReactions } from "@/components/posts/PostReactions";
+import { PostImage } from "@/components/posts/PostImage";
 import { DeleteContentButton } from "@/components/posts/DeleteContentButton";
+import { PostActionsMenu } from "@/components/posts/PostActionsMenu";
 import { canDeleteContent } from "@/lib/content-permissions";
 
 function fmtRelative(iso: string) {
@@ -37,12 +40,15 @@ export function PostCard({
   onDeleted?: (postId: string) => void;
 }) {
   const { data: session } = useSession();
+  const [captionExpanded, setCaptionExpanded] = useState(false);
   const author = post.author.name || post.author.username;
   const initials = author.slice(0, 2).toUpperCase();
   const showDelete = canDeleteContent(session?.user, post.author.id);
+  const hasImage = Boolean(post.image);
+  const hasCaption = Boolean(post.content?.trim());
 
   return (
-    <article className="group rounded-[22px] border border-border/80 bg-card p-5 shadow-[var(--shadow-soft)] transition hover:-translate-y-0.5 hover:border-border hover:shadow-lg">
+    <article className="group rounded-xl border border-border/80 bg-card p-5 shadow-[var(--shadow-soft)] transition hover:-translate-y-0.5 hover:border-border hover:shadow-lg">
       <div className="flex gap-4">
         <Link
           href={`/profile/${post.author.username}`}
@@ -69,20 +75,23 @@ export function PostCard({
         </Link>
 
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <Link
-              href={`/profile/${post.author.username}`}
-              className="font-semibold hover:underline hover:underline-offset-4"
-            >
-              {author}
-            </Link>
-            <span className="truncate text-[13px] text-muted">
-              @{post.author.username}
-            </span>
-            <span aria-hidden className="text-muted">·</span>
-            <span className="text-[13px] text-muted" title={post.createdAt}>
-              {fmtRelative(post.createdAt)}
-            </span>
+          <div className="flex items-start gap-2">
+            <div className="min-w-0 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              <Link
+                href={`/profile/${post.author.username}`}
+                className="font-semibold hover:underline hover:underline-offset-4"
+              >
+                {author}
+              </Link>
+              <span className="truncate text-[13px] text-muted">
+                @{post.author.username}
+              </span>
+              <span aria-hidden className="text-muted">·</span>
+              <span className="text-[13px] text-muted" title={post.createdAt}>
+                {fmtRelative(post.createdAt)}
+              </span>
+            </div>
+            <PostActionsMenu postId={post.id} />
           </div>
 
           <Link
@@ -100,15 +109,43 @@ export function PostCard({
             </span>
           </Link>
 
-          <Link
-            href={`/post/${post.id}`}
-            prefetch={false}
-            className="mt-3 block"
-          >
-            <p className="post-content whitespace-pre-wrap text-[16px] leading-relaxed text-foreground/95 sm:text-[17px]">
-              {post.content}
-            </p>
-          </Link>
+          {hasImage ? (
+            <>
+              {hasCaption ? (
+                <div className="mt-3">
+                  <Link href={`/post/${post.id}`} prefetch={false} className="block">
+                    <p
+                      className={`post-content text-[15px] leading-relaxed text-foreground/95 ${captionExpanded ? "whitespace-pre-wrap" : "truncate"}`}
+                    >
+                      {post.content}
+                    </p>
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => setCaptionExpanded((v) => !v)}
+                    className="mt-1 text-[11px] font-semibold text-sky-700 hover:underline dark:text-sky-300"
+                  >
+                    {captionExpanded ? "Show less" : "Read more"}
+                  </button>
+                </div>
+              ) : null}
+              <Link href={`/post/${post.id}`} prefetch={false} className="block">
+                <PostImage src={post.image!} className={hasCaption ? "mt-2" : "mt-3"} />
+              </Link>
+            </>
+          ) : (
+            <Link
+              href={`/post/${post.id}`}
+              prefetch={false}
+              className="mt-3 block"
+            >
+              {post.content ? (
+                <p className="post-content whitespace-pre-wrap text-[16px] leading-relaxed text-foreground/95 sm:text-[17px]">
+                  {post.content}
+                </p>
+              ) : null}
+            </Link>
+          )}
 
           <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-[13px] text-muted">
             <PostReactions

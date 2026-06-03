@@ -6,6 +6,7 @@ import "@/models/Book";
 export type PostDTO = {
   id: string;
   content: string;
+  image?: string;
   createdAt: string;
   author: {
     id: string;
@@ -104,6 +105,11 @@ export async function serializePosts(
     return {
       id: pid,
       content: p.content,
+      image:
+        typeof (p as { image?: string }).image === "string" &&
+        (p as { image?: string }).image
+          ? (p as { image: string }).image
+          : undefined,
       createdAt: (p as { createdAt?: Date }).createdAt?.toISOString() ?? "",
       author: {
         id: author._id.toString(),

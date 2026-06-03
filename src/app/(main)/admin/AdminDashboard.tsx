@@ -5,6 +5,7 @@ import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
 import { BotManager } from "./BotManager";
 import { AdminUsers } from "./AdminUsers";
 import { AdminBroadcasts } from "./AdminBroadcasts";
+import { AdminReports } from "./AdminReports";
 
 type Stats = {
   counts: {
@@ -44,7 +45,7 @@ type Stats = {
   }[];
 };
 
-type AdminTab = "overview" | "users" | "broadcasts" | "bots";
+type AdminTab = "overview" | "users" | "reports" | "broadcasts" | "bots";
 
 export function AdminDashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
@@ -61,6 +62,7 @@ export function AdminDashboard() {
   const tabs: { id: AdminTab; label: string }[] = [
     { id: "overview", label: "Overview" },
     { id: "users", label: "Users" },
+    { id: "reports", label: "Reports" },
     { id: "broadcasts", label: "Broadcasts" },
     { id: "bots", label: "Bots" },
   ];
@@ -99,6 +101,7 @@ export function AdminDashboard() {
       : null}
 
       {tab === "users" ? <AdminUsers /> : null}
+      {tab === "reports" ? <AdminReports /> : null}
       {tab === "broadcasts" ? <AdminBroadcasts /> : null}
       {tab === "bots" ? <BotManager /> : null}
     </div>

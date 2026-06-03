@@ -6,7 +6,8 @@ import { useSession } from "next-auth/react";
 import Image from "next/image";
 import type { ChangeEvent } from "react";
 import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
-import { RefreshCw, Sparkles, X } from "lucide-react";
+import { RefreshCw, Sparkles, X, ImagePlus } from "lucide-react";
+import { fileToPostImageDataUrl } from "@/lib/post-image";
 
 type BookRow = {
   id: string;
@@ -22,6 +23,8 @@ export default function ComposePage() {
   const [results, setResults] = useState<BookRow[]>([]);
   const [book, setBook] = useState<BookRow | null>(null);
   const [content, setContent] = useState("");
+  const [postImage, setPostImage] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -62,7 +65,23 @@ export default function ComposePage() {
     }
   }
 
-  const ready = useMemo(() => book && content.trim().length > 0, [book, content]);
+  const ready = useMemo(
+    () => Boolean(book && (content.trim().length > 0 || postImage)),
+    [book, content, postImage]
+  );
+
+  async function onPickImage(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setImageError(null);
+    try {
+      const dataUrl = await fileToPostImageDataUrl(file);
+      setPostImage(dataUrl);
+    } catch (err) {
+      setImageError(err instanceof Error ? err.message : "Could not add image.");
+    }
+  }
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -104,10 +123,22 @@ export default function ComposePage() {
       const res = await fetch("/api/posts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bookId: book.id, content }),
+        body: JSON.stringify({
+          bookId: book.id,
+          content: content.trim(),
+          ...(postImage ? { image: postImage } : {}),
+        }),
       });
       if (!res.ok) {
-        setError((await res.text()) || "Publish failed");
+        const data = (await res.json().catch(() => null)) as
+          | { error?: string; content?: string[]; image?: string[] }
+          | null;
+        const friendly =
+          data?.error ||
+          data?.content?.[0] ||
+          data?.image?.[0] ||
+          "Publish failed";
+        setError(friendly);
         return;
       }
       const data = (await res.json()) as { post: { id: string } };
@@ -283,12 +314,54 @@ export default function ComposePage() {
             maxLength={2000}
             value={content}
             onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setContent(e.target.value)}
-            className="mt-3 w-full rounded-[24px] border border-border bg-card px-5 py-5 text-[17px] leading-relaxed outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70"
+            className="mt-3 w-full rounded-[24px] border border-border bg-card px-5 py-5 text-[17px] leading-relaxed outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70"
             placeholder="“It is a truth universally acknowledged…”"
           />
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold transition hover:bg-hover">
+              <ImagePlus size={14} aria-hidden />
+              Add photo
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                className="sr-only"
+                onChange={(e) => void onPickImage(e)}
+              />
+            </label>
+            {postImage ? (
+              <button
+                type="button"
+                onClick={() => setPostImage(null)}
+                className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-500/10 dark:text-red-300"
+              >
+                <X size={12} aria-hidden />
+                Remove photo
+              </button>
+            ) : null}
+            <span className="text-[11px] text-muted">
+              PNG, JPG, WebP, GIF · auto-compressed · final under 1 MB
+            </span>
+          </div>
+
+          {imageError ? (
+            <p className="mt-2 text-xs text-red-600 dark:text-red-400">{imageError}</p>
+          ) : null}
+
+          {postImage ? (
+            <div className="relative mt-3 overflow-hidden rounded-xl border border-border bg-pill">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={postImage}
+                alt="Preview"
+                className="max-h-64 w-full object-contain"
+              />
+            </div>
+          ) : null}
+
           <div className="mt-2 flex justify-between text-xs text-muted">
             <span>{content.length}/2000</span>
-            <span>{ready ? "Looks good" : "Needs book + words"}</span>
+            <span>{ready ? "Looks good" : "Needs book + text or photo"}</span>
           </div>
         </div>
 
@@ -301,7 +374,8 @@ export default function ComposePage() {
         : <button
             type="submit"
             disabled={!ready}
-            className="rounded-full bg-gradient-to-r from-sky-400 to-violet-500 px-8 py-4 text-sm font-semibold text-white shadow-xl disabled:opacity-40"
+            className="rounded-full px-8 py-4 text-sm font-semibold text-white shadow-xl disabled:opacity-40"
+            style={{ background: "var(--gradient-brand)" }}
           >
             Launch into the feed
           </button>

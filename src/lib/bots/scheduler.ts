@@ -11,6 +11,11 @@ declare global {
 
 export function ensureBotScheduler() {
   if (typeof window !== "undefined") return;
+  // The in-process interval is unreliable on serverless (instances sleep/recycle)
+  // and would also fire posts the operator didn't ask for. Ticking is driven by
+  // the daily Vercel cron + manual "Run tick" instead. Opt back in for local dev
+  // by setting BOT_INPROCESS_SCHEDULER=1.
+  if (process.env.BOT_INPROCESS_SCHEDULER !== "1") return;
   if (global.__readquestBotScheduler) return;
 
   const state: { timer: NodeJS.Timeout; running: boolean } = {

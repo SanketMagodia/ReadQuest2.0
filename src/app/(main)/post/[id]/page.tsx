@@ -9,7 +9,9 @@ import type { PostDTO } from "@/lib/serialize";
 import Image from "next/image";
 import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
 import { PostReactions } from "@/components/posts/PostReactions";
+import { PostImage } from "@/components/posts/PostImage";
 import { DeleteContentButton } from "@/components/posts/DeleteContentButton";
+import { PostActionsMenu } from "@/components/posts/PostActionsMenu";
 import { canDeleteContent } from "@/lib/content-permissions";
 
 type CommentDTO = {
@@ -143,30 +145,36 @@ export default function ThreadPage() {
       </div>
 
       {/* Root post */}
-      <article className="rounded-[28px] border border-border bg-card p-6 shadow-[var(--shadow-soft)] sm:p-7">
+      <article className="rounded-xl border border-border bg-card p-6 shadow-[var(--shadow-soft)] sm:p-7">
         <div className="flex gap-4">
           <Avatar author={post.author} size={48} />
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-baseline gap-2">
-              <Link
-                href={`/profile/${post.author.username}`}
-                className="font-semibold hover:underline hover:underline-offset-4"
-              >
-                {post.author.name || post.author.username}
-              </Link>
-              <span className="truncate text-[13px] text-muted">
-                @{post.author.username}
-              </span>
-              <span aria-hidden className="text-muted">
-                ·
-              </span>
-              <span className="text-[13px] text-muted" title={post.createdAt}>
-                {fmtRelative(post.createdAt)}
-              </span>
+            <div className="flex items-start gap-2">
+              <div className="min-w-0 flex flex-wrap items-baseline gap-2">
+                <Link
+                  href={`/profile/${post.author.username}`}
+                  className="font-semibold hover:underline hover:underline-offset-4"
+                >
+                  {post.author.name || post.author.username}
+                </Link>
+                <span className="truncate text-[13px] text-muted">
+                  @{post.author.username}
+                </span>
+                <span aria-hidden className="text-muted">
+                  ·
+                </span>
+                <span className="text-[13px] text-muted" title={post.createdAt}>
+                  {fmtRelative(post.createdAt)}
+                </span>
+              </div>
+              <PostActionsMenu postId={post.id} />
             </div>
-            <p className="post-content mt-4 whitespace-pre-wrap text-[17px] leading-relaxed sm:text-[18px]">
-              {post.content}
-            </p>
+            {post.content ? (
+              <p className="post-content mt-4 whitespace-pre-wrap text-[17px] leading-relaxed sm:text-[18px]">
+                {post.content}
+              </p>
+            ) : null}
+            {post.image ? <PostImage src={post.image} className="mt-4" /> : null}
 
             <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-border/60 pt-4">
               <PostReactions

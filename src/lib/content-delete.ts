@@ -3,6 +3,7 @@ import Comment from "@/models/Comment";
 import CommentReaction from "@/models/CommentReaction";
 import Notification from "@/models/Notification";
 import Post from "@/models/Post";
+import PostReport from "@/models/PostReport";
 import PostReaction from "@/models/PostReaction";
 
 function commentDescendantIds(
@@ -42,6 +43,7 @@ export async function deletePostById(postId: string) {
     : Promise.resolve(),
     Comment.deleteMany({ post: postObjectId }),
     Post.deleteOne({ _id: postObjectId }),
+    PostReport.deleteMany({ post: postObjectId }),
     Notification.deleteMany({
       $or: [
         { link: `/post/${postId}` },

@@ -36,10 +36,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const role = session?.user?.role;
 
   return (
-    <div className="mx-auto flex min-h-full w-full max-w-7xl gap-0 px-3 layout-wide:px-5 layout-wide:gap-5 xl:gap-0">
+    <div className="mx-auto flex min-h-full w-full max-w-7xl gap-0 px-3 layout-wide:gap-2 layout-wide:px-2 xl:gap-3 xl:px-3">
       {/* Wide layout sidebar (landscape tablets / desktops) */}
-      <aside className="sticky top-0 z-20 hidden h-[100dvh] min-h-0 shrink-0 flex-col overflow-hidden border-r border-border/70 bg-background/75 py-6 backdrop-blur layout-wide:flex lg:w-52 xl:w-60">
-        <div className="mb-6 shrink-0 flex items-center justify-between gap-2 px-4">
+      <aside className="sticky top-0 z-20 hidden h-[100dvh] min-h-0 shrink-0 flex-col overflow-hidden border-r border-border/50 bg-background/75 py-4 backdrop-blur layout-wide:flex lg:w-48 xl:w-52">
+        <div className="mb-4 shrink-0 flex items-center justify-between gap-2 px-3">
           <ReadquestLogo height={32} priority />
           <ThemeToggle />
         </div>
@@ -135,10 +135,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Main column. `min-w-0` is critical: without it, any unbreakable long
           string (URLs, code) in children would force this flex item wider
           than its share and overflow the whole shell on narrow phones. */}
-      <main className="min-w-0 min-h-[100dvh] flex-1 pb-28 layout-wide:pb-12">
+      <main className="min-h-[100dvh] min-w-0 flex-1 pb-28 layout-wide:pb-8 layout-wide:px-1">
         {/* Compact layout top bar (phones + portrait tablets) */}
-        <div className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-border/70 bg-background/85 px-3 py-2.5 backdrop-blur layout-wide:hidden">
-          <ReadquestLogo height={24} />
+        <div className="sticky top-0 z-30 -mx-3 flex items-center justify-between gap-2 border-b border-border/70 bg-background/85 px-3 py-2.5 backdrop-blur layout-wide:hidden">
+          <ReadquestLogo height={28} />
           <div className="flex items-center gap-1.5">
             <InstallPrompt />
             <NotificationsBell variant="topbar" />
@@ -155,7 +155,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Compact layout bottom nav */}
       <nav
         aria-label="Bottom"
-        className="fixed bottom-3 left-1/2 z-40 flex w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 items-stretch justify-between rounded-2xl border border-border bg-background/90 p-1.5 shadow-[var(--shadow-soft)] backdrop-blur layout-wide:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 flex w-full items-stretch justify-between border-t border-border bg-background/95 px-1 pt-1 pb-[calc(0.5rem+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_-18px_rgba(15,23,42,0.5)] backdrop-blur layout-wide:hidden"
       >
         {navMain.map((item) => {
           const Icon = item.icon;
@@ -169,13 +169,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               aria-label={item.label}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex flex-1 flex-col items-center justify-center gap-0.5 rounded-xl py-2 text-[10px] font-semibold transition",
+                "flex flex-1 flex-col items-center justify-center gap-0.5 rounded-lg py-1.5 text-[10px] font-semibold transition",
                 active ? "text-foreground" : "text-muted"
               )}
             >
               <span
                 className={cn(
-                  "flex h-9 w-9 items-center justify-center rounded-full",
+                  "flex h-8 w-8 items-center justify-center rounded-full",
                   active ? "bg-pill" : ""
                 )}
                 style={
@@ -198,13 +198,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           aria-label="Profile"
           aria-current={pathname.startsWith("/profile") ? "page" : undefined}
           className={cn(
-            "flex flex-1 flex-col items-center justify-center gap-0.5 rounded-xl py-2 text-[10px] font-semibold transition",
+            "flex flex-1 flex-col items-center justify-center gap-0.5 rounded-lg py-1.5 text-[10px] font-semibold transition",
             pathname.startsWith("/profile") ? "text-foreground" : "text-muted"
           )}
         >
           <span
             className={cn(
-              "flex h-9 w-9 items-center justify-center rounded-full",
+              "flex h-8 w-8 items-center justify-center rounded-full",
               pathname.startsWith("/profile") ? "bg-pill" : ""
             )}
           >

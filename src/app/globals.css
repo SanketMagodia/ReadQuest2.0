@@ -18,25 +18,25 @@
   --border: #e7e5e4;
   --card: #ffffff;
   --accent: #e0f2fe;
-  --accent-2: #ede9fe;
-  --ring: #38bdf8;
+  --accent-2: #bae6fd;
+  --ring: #0ea5e9;
   --pill: #f4f4f5;
   --hover: #ececec;
 
-  /* Brand palette */
-  --brand-1: #38bdf8;
-  --brand-2: #8b5cf6;
-  --brand-3: #ec4899;
+  /* Brand — sky-forward, subtle (primary: #0ea5e9) */
+  --brand-1: #0ea5e9;
+  --brand-2: #0284c7;
+  --brand-3: #38bdf8;
   --brand-coral: #f97373;
   --brand-amber: #fbbf24;
   --brand-mint: #34d399;
 
-  --gradient-brand: linear-gradient(135deg, #38bdf8 0%, #8b5cf6 55%, #ec4899 100%);
+  --gradient-brand: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 52%, #0284c7 100%);
   --gradient-warm: linear-gradient(135deg, #fbbf24 0%, #f97373 100%);
-  --gradient-cool: linear-gradient(135deg, #34d399 0%, #38bdf8 100%);
+  --gradient-cool: linear-gradient(135deg, #34d399 0%, #0ea5e9 100%);
 
   --shadow-soft: 0 10px 30px -10px rgba(15, 23, 42, 0.18);
-  --shadow-pop: 0 12px 40px -8px rgba(56, 189, 248, 0.35);
+  --shadow-pop: 0 12px 40px -8px rgba(14, 165, 233, 0.28);
 }
 
 .dark {
@@ -46,14 +46,18 @@
   --muted: #a1a1aa;
   --border: #232329;
   --card: #0f0f14;
-  --accent: rgba(56, 189, 248, 0.12);
-  --accent-2: rgba(167, 139, 250, 0.14);
-  --ring: #7dd3fc;
+  --accent: rgba(14, 165, 233, 0.12);
+  --accent-2: rgba(56, 189, 248, 0.1);
+  --ring: #38bdf8;
   --pill: #15151b;
   --hover: #1d1d24;
 
+  --brand-1: #38bdf8;
+  --brand-2: #0ea5e9;
+  --brand-3: #0284c7;
+
   --shadow-soft: 0 12px 36px -16px rgba(0, 0, 0, 0.7);
-  --shadow-pop: 0 14px 46px -10px rgba(125, 211, 252, 0.35);
+  --shadow-pop: 0 14px 46px -10px rgba(14, 165, 233, 0.22);
 }
 
 @theme inline {
@@ -99,8 +103,8 @@ body {
   /* Same `clip` (not `hidden`) — see html rule above. */
   overflow-x: clip;
   background:
-    radial-gradient(1200px 600px at -10% -20%, color-mix(in srgb, var(--brand-1) 8%, transparent), transparent 60%),
-    radial-gradient(900px 500px at 110% 0%, color-mix(in srgb, var(--brand-2) 8%, transparent), transparent 55%),
+    radial-gradient(1200px 600px at -10% -20%, color-mix(in srgb, var(--brand-1) 7%, transparent), transparent 60%),
+    radial-gradient(900px 500px at 110% 0%, color-mix(in srgb, var(--brand-3) 6%, transparent), transparent 55%),
     var(--bg);
 }
 
@@ -116,17 +120,13 @@ body {
 
 .dark body {
   background:
-    radial-gradient(1200px 600px at -10% -20%, color-mix(in srgb, var(--brand-1) 14%, transparent), transparent 55%),
-    radial-gradient(900px 500px at 110% 0%, color-mix(in srgb, var(--brand-3) 10%, transparent), transparent 55%),
+    radial-gradient(1200px 600px at -10% -20%, color-mix(in srgb, var(--brand-1) 10%, transparent), transparent 55%),
+    radial-gradient(900px 500px at 110% 0%, color-mix(in srgb, var(--brand-2) 8%, transparent), transparent 55%),
     var(--bg);
 }
 
 a {
   color: inherit;
-}
-
-::selection {
-  background: color-mix(in srgb, var(--brand-2) 35%, transparent);
 }
 
 ::-webkit-scrollbar {

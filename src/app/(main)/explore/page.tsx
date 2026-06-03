@@ -85,6 +85,8 @@ export default function ExplorePage() {
   const [communitiesLoading, setCommunitiesLoading] = useState(true);
   const seqRef = useRef(0);
   const seenRef = useRef<Set<string>>(new Set());
+  const prevQRef = useRef(q);
+  const prevCategoryRef = useRef(category);
 
   const fetchBooks = useCallback(
     async ({
@@ -161,6 +163,24 @@ export default function ExplorePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Search as the user types (debounced).
+  useEffect(() => {
+    if (prevQRef.current === q) return;
+    prevQRef.current = q;
+    if (q.trim()) setInitialLoading(true);
+    const t = setTimeout(() => {
+      void fetchBooks({ reset: true });
+    }, 280);
+    return () => clearTimeout(t);
+  }, [q, fetchBooks]);
+
+  // Category chips apply immediately.
+  useEffect(() => {
+    if (prevCategoryRef.current === category) return;
+    prevCategoryRef.current = category;
+    void fetchBooks({ reset: true });
+  }, [category, fetchBooks]);
+
   function submitSearch(e?: FormEvent) {
     e?.preventDefault();
     void fetchBooks({ reset: true });
@@ -169,6 +189,8 @@ export default function ExplorePage() {
   function clearFilters() {
     setQ("");
     setCategory("");
+    prevQRef.current = "";
+    prevCategoryRef.current = "";
     void fetchBooks({ reset: true, qOverride: "", categoryOverride: "" });
   }
 
@@ -352,15 +374,16 @@ export default function ExplorePage() {
             onChange={(e: ChangeEvent<HTMLInputElement>) => setQ(e.target.value)}
             placeholder="Search titles, authors, themes…"
             aria-label="Search"
-            className="w-full rounded-full border border-border bg-background py-3.5 pl-12 pr-28 text-[15px] shadow-inner outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70"
+            className="w-full rounded-full border border-border bg-background py-3.5 pl-12 pr-10 text-[15px] shadow-inner outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70"
           />
-          <button
-            type="submit"
-            className="absolute right-1.5 top-1/2 inline-flex -translate-y-1/2 rounded-full px-5 py-2 text-sm font-semibold text-white shadow-[var(--shadow-pop)]"
-            style={{ background: "var(--gradient-brand)" }}
-          >
-            Search
-          </button>
+          {initialLoading && q.trim() ? (
+            <span
+              aria-hidden
+              className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2"
+            >
+              <RefreshCw size={16} className="animate-spin text-muted" />
+            </span>
+          ) : null}
         </form>
 
         {category ? (
@@ -429,7 +452,6 @@ export default function ExplorePage() {
                   onClick={() => {
                     const next = active ? "" : c.label;
                     setCategory(next);
-                    void fetchBooks({ reset: true, categoryOverride: next });
                   }}
                   className={`group inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
                     active

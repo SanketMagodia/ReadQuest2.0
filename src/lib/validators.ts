@@ -37,10 +37,22 @@ export const registerSchema = z.object({
   email: d.email ? d.email : undefined,
 }));
 
-export const postCreateSchema = z.object({
-  bookId: z.string().regex(/^[a-f0-9]{24}$/i),
-  content: z.string().trim().min(1).max(2000),
-});
+/** Base64 data URL stored on posts (not remote URLs). */
+export const postImageSchema = z
+  .string()
+  .max(3_000_000)
+  .regex(/^data:image\/(png|jpe?g|webp|gif);base64,/i);
+
+export const postCreateSchema = z
+  .object({
+    bookId: z.string().regex(/^[a-f0-9]{24}$/i),
+    content: z.string().trim().max(2000).default(""),
+    image: postImageSchema.optional(),
+  })
+  .refine((d) => d.content.length > 0 || d.image, {
+    message: "Add text or an image",
+    path: ["content"],
+  });
 
 export const commentCreateSchema = z.object({
   content: z.string().trim().min(1).max(1500),

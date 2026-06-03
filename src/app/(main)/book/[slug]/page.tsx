@@ -322,7 +322,7 @@ export default async function BookPage({
             <Link
               key={p.id}
               href={`/post/${p.id}`}
-              className="rounded-3xl border border-border bg-card p-5 transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-soft)]"
+              className="rounded-xl border border-border bg-card p-5 transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-soft)]"
             >
               <div className="flex items-center justify-between gap-3 text-xs text-muted">
                 <span className="font-semibold text-foreground/85">

@@ -101,40 +101,34 @@ export default function HomePage() {
   const isPersonalized = mode === "for-you" && (signals?.following ?? 0) + (signals?.readlist ?? 0) > 0;
 
   return (
-    <section className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-1 sm:px-3">
-      <header className="sticky top-12 z-20 -mx-1 border-b border-border/70 bg-background/85 px-5 py-5 backdrop-blur layout-wide:top-0 layout-wide:-mx-3 layout-wide:px-6">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted">
-              timeline
-            </p>
-            <h1 className="mt-1 text-[26px] font-bold tracking-tight sm:text-[28px]">
-              Feed
-            </h1>
+    <section className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-1 sm:px-3 layout-wide:max-w-none layout-wide:px-0">
+      <header className="sticky top-12 z-20 -mx-1 border-b border-border/70 bg-background/85 px-5 py-3 backdrop-blur layout-wide:top-0 layout-wide:-mx-0 layout-wide:px-3 layout-wide:py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted">
+            Timeline
+          </p>
+          <div
+            className="inline-flex rounded-full border border-border bg-card p-1 shadow-[var(--shadow-soft)]"
+            role="tablist"
+            aria-label="Feed mode"
+          >
+            <TabButton
+              active={mode === "for-you"}
+              onClick={() => setMode("for-you")}
+              icon={<Sparkles size={14} aria-hidden />}
+              label="For you"
+            />
+            <TabButton
+              active={mode === "latest"}
+              onClick={() => setMode("latest")}
+              icon={<Clock3 size={14} aria-hidden />}
+              label="Latest"
+            />
           </div>
         </div>
 
-        <div
-          className="mt-4 inline-flex rounded-full border border-border bg-card p-1 shadow-[var(--shadow-soft)]"
-          role="tablist"
-          aria-label="Feed mode"
-        >
-          <TabButton
-            active={mode === "for-you"}
-            onClick={() => setMode("for-you")}
-            icon={<Sparkles size={14} aria-hidden />}
-            label="For you"
-          />
-          <TabButton
-            active={mode === "latest"}
-            onClick={() => setMode("latest")}
-            icon={<Clock3 size={14} aria-hidden />}
-            label="Latest"
-          />
-        </div>
-
         {mode === "for-you" && !isPersonalized && !initialLoading ? (
-          <p className="mt-3 text-xs text-muted">
+          <p className="mt-2 text-xs text-muted">
             Follow books from{" "}
             <Link href="/explore" className="font-semibold text-foreground underline">
               Explore
@@ -144,7 +138,7 @@ export default function HomePage() {
         ) : null}
       </header>
 
-      <div className="flex flex-col gap-3 px-2 layout-wide:px-5">
+      <div className="flex flex-col gap-3 px-2 layout-wide:px-3">
         {isGuest ? <JoinReadquestFeedCard /> : null}
         <div className="layout-compact:block hidden">
           <AnnouncementFeedStrip />

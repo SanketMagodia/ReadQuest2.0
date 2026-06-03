@@ -6,16 +6,40 @@ import Post from "@/models/Post";
 import Comment from "@/models/Comment";
 import PostReaction from "@/models/PostReaction";
 import CommentReaction from "@/models/CommentReaction";
+import BotTickLock from "@/models/BotTickLock";
 import "@/models/User";
 import { groqChat } from "@/lib/groq";
 
 const MIN_GAP_MS = 60 * 1000;
+// Lock TTL: only a fallback for a crashed tick (the lock is normally released in
+// `finally`). Must comfortably exceed TICK_BUDGET_MS so a slow tick never has its
+// lock expire underneath it.
+const TICK_LOCK_MS = 5 * 60 * 1000;
+// Soft wall-clock budget per tick. We stop starting new work past this so a single
+// (possibly browser-triggered) tick stays within Vercel's function maxDuration.
+const TICK_BUDGET_MS = 50 * 1000;
+// When catching up after a long gap, cap how many posts a single bot may backfill
+// in one tick (bounds LLM calls / time). Remaining slots are handled next tick.
+const MAX_BACKFILL_POSTS_PER_BOT = 8;
+const MAX_POSTS_PER_TICK = 40;
+const MAX_REPLIES_PER_BOT_PER_TICK = 4;
+// Cap how much we scale reply volume by elapsed time (in "virtual" 1-minute ticks).
+const MAX_VIRTUAL_TICKS = 90;
+// Fallback look-back window when we have no record of the previous tick.
+const DEFAULT_WINDOW_MS = 24 * 60 * 60 * 1000;
 const REPLY_LOOKBACK_DAYS = 7;
 const AUTO_RESPOND_LOOKBACK_MS = 48 * 60 * 60 * 1000;
 const AUTO_RESPOND_BATCH = 50;
 
 function escapeRegex(s: string) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Uniform random Date in [a, max(a, b)]. */
+function randomTimeBetween(a: Date, b: Date) {
+  const lo = a.getTime();
+  const hi = Math.max(lo, b.getTime());
+  return new Date(lo + Math.random() * (hi - lo));
 }
 
 function randomMinutes(min: number, max: number) {
@@ -180,7 +204,18 @@ async function applyBotCommentReaction(
   }
 }
 
-export async function generatePostForBot(botId: string) {
+/**
+ * Generate one post for a bot.
+ *
+ * When `opts.postedAt` is supplied, the post's `createdAt` is backdated to that
+ * time and the bot's `nextPostAt` is rolled forward FROM that time. This lets a
+ * single tick "catch up" by placing missed posts at their natural scheduled
+ * moments instead of flooding the feed with everything at `now`.
+ */
+export async function generatePostForBot(
+  botId: string,
+  opts?: { postedAt?: Date }
+) {
   await connectDB();
   const bot = await Bot.findById(botId);
   if (!bot) throw new Error("Bot not found");
@@ -208,9 +243,20 @@ export async function generatePostForBot(botId: string) {
     content,
   });
 
-  bot.lastPostAt = new Date();
+  const postedAt = opts?.postedAt;
+  if (postedAt) {
+    // Use the native driver so the write isn't overridden by Mongoose's
+    // timestamps plugin (which would otherwise stamp createdAt = now).
+    await Post.collection.updateOne(
+      { _id: post._id },
+      { $set: { createdAt: postedAt, updatedAt: postedAt } }
+    );
+  }
+
+  const baseTime = postedAt ?? new Date();
+  bot.lastPostAt = baseTime;
   bot.postsCount = (bot.postsCount || 0) + 1;
-  bot.nextPostAt = rollNextPostAt(bot as unknown as BotDoc);
+  bot.nextPostAt = rollNextPostAt(bot as unknown as BotDoc, baseTime);
   bot.lastError = "";
   await bot.save();
 
@@ -321,7 +367,10 @@ function buildReplyPrompt(bot: BotDoc, book: BookContext, post: CandidatePost) {
   return { system, user };
 }
 
-export async function generateReplyForBot(botId: string) {
+export async function generateReplyForBot(
+  botId: string,
+  opts?: { spreadSince?: Date }
+) {
   await connectDB();
   const bot = await Bot.findById(botId);
   if (!bot) throw new Error("Bot not found");
@@ -356,6 +405,19 @@ export async function generateReplyForBot(botId: string) {
     parent: null,
     content,
   });
+
+  // Backdate to a natural moment after the post (and after the previous tick)
+  // so catch-up replies don't all cluster at `now`.
+  const spreadSince = opts?.spreadSince;
+  if (spreadSince) {
+    const postAt = post.createdAt ? new Date(post.createdAt) : spreadSince;
+    const after = postAt > spreadSince ? postAt : spreadSince;
+    const when = randomTimeBetween(after, new Date());
+    await Comment.collection.updateOne(
+      { _id: comment._id },
+      { $set: { createdAt: when, updatedAt: when } }
+    );
+  }
 
   // Bot also reacts on the post it just replied to.
   await applyBotPostReaction(
@@ -557,7 +619,11 @@ function buildAutoResponsePrompt(
   return { system, user };
 }
 
-export async function generateAutoResponse(botId: string, commentId: string) {
+export async function generateAutoResponse(
+  botId: string,
+  commentId: string,
+  opts?: { spreadSince?: Date }
+) {
   await connectDB();
   const bot = await Bot.findById(botId);
   if (!bot) throw new Error("Bot not found");
@@ -612,6 +678,21 @@ export async function generateAutoResponse(botId: string, commentId: string) {
     content,
   });
 
+  // Backdate to a natural moment after the comment it replies to (and after the
+  // previous tick) so catch-up responses don't all land at `now`.
+  const spreadSince = opts?.spreadSince;
+  if (spreadSince) {
+    const targetAt = target.createdAt
+      ? new Date(target.createdAt)
+      : spreadSince;
+    const after = targetAt > spreadSince ? targetAt : spreadSince;
+    const when = randomTimeBetween(after, new Date());
+    await Comment.collection.updateOne(
+      { _id: reply._id },
+      { $set: { createdAt: when, updatedAt: when } }
+    );
+  }
+
   // Bot reacts to the COMMENT it just responded to (more specific than the
   // post in this thread). Skip if somehow the target is the bot itself.
   const botUserId = bot.user as unknown as Types.ObjectId;
@@ -642,113 +723,206 @@ export async function runBotTick(): Promise<{
   replyErrors: { botId: string; message: string }[];
   responses: number;
   responseErrors: { botId: string; message: string }[];
+  skippedDueToLock?: boolean;
 }> {
   await connectDB();
   const now = new Date();
 
-  // 1) Posting pass — unchanged behavior.
-  const due = await Bot.find({
-    enabled: true,
-    $or: [{ nextPostAt: { $exists: false } }, { nextPostAt: { $lte: now } }],
-  })
-    .limit(10)
-    .lean();
-
-  const errors: { botId: string; message: string }[] = [];
-  let processed = 0;
-
-  for (const doc of due) {
-    const id = (doc._id as Types.ObjectId).toString();
-    try {
-      await generatePostForBot(id);
-      processed += 1;
-    } catch (e) {
-      const message = e instanceof Error ? e.message : "Unknown error";
-      errors.push({ botId: id, message });
-      await Bot.findByIdAndUpdate(id, {
-        lastError: message.slice(0, 500),
-        nextPostAt: new Date(Date.now() + 15 * 60 * 1000),
-      });
-    }
+  // Acquire a distributed lock so concurrent invocations (manual click + cron
+  // + retries) don't process the same due bots in parallel.
+  await BotTickLock.updateOne(
+    { _id: "global" },
+    { $setOnInsert: { lockedUntil: new Date(0) } },
+    { upsert: true }
+  );
+  const lock = await BotTickLock.findOneAndUpdate(
+    { _id: "global", lockedUntil: { $lte: now } },
+    {
+      $set: {
+        lockedUntil: new Date(now.getTime() + TICK_LOCK_MS),
+        lastStartedAt: now,
+      },
+    },
+    { new: true }
+  ).lean();
+  if (!lock) {
+    return {
+      processed: 0,
+      errors: [],
+      replies: 0,
+      replyErrors: [],
+      responses: 0,
+      responseErrors: [],
+      skippedDueToLock: true,
+    };
   }
 
-  // 2) Replying pass — independent of post cadence.
-  const replyErrors: { botId: string; message: string }[] = [];
-  let replies = 0;
-  const replyBots = (await Bot.find({
-    enabled: true,
-    replyEnabled: true,
-  }).lean()) as unknown as BotDoc[];
+  // How long since the previous completed tick — used to spread/scale catch-up
+  // activity so an infrequent (e.g. once-a-day) tick looks like a natural day's
+  // worth of activity rather than a burst at `now`.
+  const windowStart = lock.lastFinishedAt
+    ? new Date(lock.lastFinishedAt)
+    : new Date(now.getTime() - DEFAULT_WINDOW_MS);
+  const virtualTicks = Math.min(
+    MAX_VIRTUAL_TICKS,
+    Math.max(1, Math.round((now.getTime() - windowStart.getTime()) / 60_000))
+  );
+  const tickStart = Date.now();
+  const overBudget = () => Date.now() - tickStart > TICK_BUDGET_MS;
 
-  for (const doc of replyBots) {
-    const chance = doc.replyChancePerTick ?? 20;
-    if (chance <= 0) continue;
-    if (Math.random() * 100 >= chance) continue;
+  try {
+    // 1) Posting pass — backfill each due bot's missed slots at their natural
+    //    scheduled times (backdated) so posts don't all land at `now`.
+    const due = await Bot.find({
+      enabled: true,
+      $or: [{ nextPostAt: { $exists: false } }, { nextPostAt: { $lte: now } }],
+    })
+      .sort({ nextPostAt: 1, _id: 1 })
+      .limit(20)
+      .lean();
 
-    if ((doc.replyDailyLimit ?? 0) > 0) {
-      const since = new Date(Date.now() - 24 * 3_600_000);
-      const todayCount = await Comment.countDocuments({
-        author: doc.user,
-        createdAt: { $gte: since },
-      });
-      if (todayCount >= (doc.replyDailyLimit ?? 0)) continue;
-    }
+    const errors: { botId: string; message: string }[] = [];
+    let processed = 0;
 
-    const max = Math.max(1, Math.min(3, doc.repliesPerTick ?? 1));
-    for (let i = 0; i < max; i++) {
+    for (const doc of due) {
+      if (overBudget() || processed >= MAX_POSTS_PER_TICK) break;
+      const id = (doc._id as Types.ObjectId).toString();
+      // The slot this post "should" have happened at. Missing nextPostAt means a
+      // brand-new bot — post once at `now`.
+      let scheduledAt = doc.nextPostAt ? new Date(doc.nextPostAt) : now;
+      let perBot = 0;
       try {
-        await generateReplyForBot((doc._id as Types.ObjectId).toString());
-        replies += 1;
+        while (
+          scheduledAt <= now &&
+          perBot < MAX_BACKFILL_POSTS_PER_BOT &&
+          processed < MAX_POSTS_PER_TICK &&
+          !overBudget()
+        ) {
+          const { bot } = await generatePostForBot(id, { postedAt: scheduledAt });
+          processed += 1;
+          perBot += 1;
+          // generatePostForBot rolled nextPostAt forward FROM scheduledAt.
+          scheduledAt = bot.nextPostAt ? new Date(bot.nextPostAt) : now;
+        }
+        // Hit the per-bot cap but still behind (very long idle gap): jump to a
+        // fresh future slot so the next tick doesn't replay ancient history.
+        if (perBot >= MAX_BACKFILL_POSTS_PER_BOT && scheduledAt <= now) {
+          await Bot.findByIdAndUpdate(id, {
+            nextPostAt: rollNextPostAt(doc as unknown as BotDoc, now),
+          });
+        }
       } catch (e) {
         const message = e instanceof Error ? e.message : "Unknown error";
-        replyErrors.push({
-          botId: (doc._id as Types.ObjectId).toString(),
-          message,
+        errors.push({ botId: id, message });
+        await Bot.findByIdAndUpdate(id, {
+          lastError: message.slice(0, 500),
+          nextPostAt: new Date(Date.now() + 15 * 60 * 1000),
         });
-        await Bot.findByIdAndUpdate(doc._id, {
-          lastReplyError: message.slice(0, 500),
-        });
-        // Stop hammering this bot if it failed; try again next tick.
-        break;
       }
     }
-  }
 
-  // 3) Auto-response pass — bots respond to NEW comments in threads they're in.
-  const responseErrors: { botId: string; message: string }[] = [];
-  let responses = 0;
-  const respondingBots = (await Bot.find({
-    enabled: true,
-    autoRespondToComments: true,
-  }).lean()) as unknown as BotDoc[];
+    // 2) Replying pass — scale expected volume to the elapsed window and backdate
+    //    each reply to a natural moment within it.
+    const replyErrors: { botId: string; message: string }[] = [];
+    let replies = 0;
+    const replyBots = (await Bot.find({
+      enabled: true,
+      replyEnabled: true,
+    }).lean()) as unknown as BotDoc[];
 
-  for (const doc of respondingBots) {
-    const max = Math.max(0, Math.min(10, doc.autoRespondPerTick ?? 3));
-    if (max === 0) continue;
-    const botId = (doc._id as Types.ObjectId).toString();
+    for (const doc of replyBots) {
+      if (overBudget()) break;
+      const chance = doc.replyChancePerTick ?? 20;
+      if (chance <= 0) continue;
 
-    try {
-      const pending = await pickCommentsToRespondTo(doc, max);
-      for (const c of pending) {
+      // Expected replies across the window ≈ per-tick probability × virtual ticks.
+      const expected =
+        (chance / 100) * virtualTicks * Math.max(1, doc.repliesPerTick ?? 1);
+      let target = Math.min(MAX_REPLIES_PER_BOT_PER_TICK, Math.floor(expected));
+      const frac = expected - Math.floor(expected);
+      if (target < MAX_REPLIES_PER_BOT_PER_TICK && Math.random() < frac) {
+        target += 1;
+      }
+      if (target < 1) continue;
+
+      if ((doc.replyDailyLimit ?? 0) > 0) {
+        const since = new Date(Date.now() - 24 * 3_600_000);
+        const todayCount = await Comment.countDocuments({
+          author: doc.user,
+          createdAt: { $gte: since },
+        });
+        const remaining = (doc.replyDailyLimit ?? 0) - todayCount;
+        if (remaining <= 0) continue;
+        target = Math.min(target, remaining);
+      }
+
+      for (let i = 0; i < target; i++) {
+        if (overBudget()) break;
         try {
-          await generateAutoResponse(botId, c._id.toString());
-          responses += 1;
+          await generateReplyForBot((doc._id as Types.ObjectId).toString(), {
+            spreadSince: windowStart,
+          });
+          replies += 1;
         } catch (e) {
           const message = e instanceof Error ? e.message : "Unknown error";
-          responseErrors.push({ botId, message });
+          replyErrors.push({
+            botId: (doc._id as Types.ObjectId).toString(),
+            message,
+          });
           await Bot.findByIdAndUpdate(doc._id, {
             lastReplyError: message.slice(0, 500),
           });
+          // Stop hammering this bot if it failed; try again next tick.
           break;
         }
       }
-    } catch (e) {
-      const message = e instanceof Error ? e.message : "Unknown error";
-      responseErrors.push({ botId, message });
     }
-  }
 
-  return { processed, errors, replies, replyErrors, responses, responseErrors };
+    // 3) Auto-response pass — bots respond to NEW comments in threads they're in.
+    const responseErrors: { botId: string; message: string }[] = [];
+    let responses = 0;
+    const respondingBots = (await Bot.find({
+      enabled: true,
+      autoRespondToComments: true,
+    }).lean()) as unknown as BotDoc[];
+
+    for (const doc of respondingBots) {
+      if (overBudget()) break;
+      const max = Math.max(0, Math.min(10, doc.autoRespondPerTick ?? 3));
+      if (max === 0) continue;
+      const botId = (doc._id as Types.ObjectId).toString();
+
+      try {
+        const pending = await pickCommentsToRespondTo(doc, max);
+        for (const c of pending) {
+          if (overBudget()) break;
+          try {
+            await generateAutoResponse(botId, c._id.toString(), {
+              spreadSince: windowStart,
+            });
+            responses += 1;
+          } catch (e) {
+            const message = e instanceof Error ? e.message : "Unknown error";
+            responseErrors.push({ botId, message });
+            await Bot.findByIdAndUpdate(doc._id, {
+              lastReplyError: message.slice(0, 500),
+            });
+            break;
+          }
+        }
+      } catch (e) {
+        const message = e instanceof Error ? e.message : "Unknown error";
+        responseErrors.push({ botId, message });
+      }
+    }
+
+    return { processed, errors, replies, replyErrors, responses, responseErrors };
+  } finally {
+    await BotTickLock.updateOne(
+      { _id: "global" },
+      { $set: { lockedUntil: new Date(0), lastFinishedAt: new Date() } }
+    );
+  }
 }
 
 export const MIN_TICK_GAP_MS = MIN_GAP_MS;

@@ -73,6 +73,7 @@ export async function POST(req: Request) {
     author: new Types.ObjectId(session.user.id),
     book: new Types.ObjectId(parsed.data.bookId),
     content: parsed.data.content,
+    ...(parsed.data.image ? { image: parsed.data.image } : {}),
   });
 
   // Fan out to followers of this book. Best-effort — never block the

@@ -110,8 +110,8 @@ export async function GET() {
     recentPosts: recent.map((p) => ({
       id: (p._id as Types.ObjectId).toString(),
       content: p.content.slice(0, 160),
-      author: p.author as { username: string; name: string },
-      book: p.book as { title: string },
+      author: p.author as unknown as { username: string; name: string },
+      book: p.book as unknown as { title: string },
       createdAt: (p as { createdAt?: Date }).createdAt,
     })),
     recentUsers: recentUsers.map((u) => ({
