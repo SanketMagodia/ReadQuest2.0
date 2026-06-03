@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { Sparkles, Clock3 } from "lucide-react";
 import type { PostDTO } from "@/lib/serialize";
 import { PostCard } from "@/components/posts/PostCard";
 import { PostSkeletonList } from "@/components/feed/PostSkeleton";
@@ -101,30 +100,50 @@ export default function HomePage() {
   const isPersonalized = mode === "for-you" && (signals?.following ?? 0) + (signals?.readlist ?? 0) > 0;
 
   return (
-    <section className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-1 sm:px-3 layout-wide:max-w-none layout-wide:px-0">
-      <header className="sticky top-12 z-20 -mx-1 border-b border-border/70 bg-background/85 px-5 py-3 backdrop-blur layout-wide:top-0 layout-wide:-mx-0 layout-wide:px-3 layout-wide:py-3">
+    <section className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-0 sm:px-3 layout-wide:max-w-none layout-wide:px-0">
+      <header className="sticky top-12 z-20 -mx-1 border-b border-border/60 bg-background px-5 py-3 layout-wide:top-0 layout-wide:-mx-0 layout-wide:border-border/60 layout-wide:bg-background layout-wide:px-3 layout-wide:py-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted">
             Timeline
           </p>
           <div
-            className="inline-flex rounded-full border border-border bg-card p-1 shadow-[var(--shadow-soft)]"
+            className="hidden items-center gap-3 layout-wide:flex"
             role="tablist"
             aria-label="Feed mode"
           >
-            <TabButton
+            <BlendTabButton
               active={mode === "for-you"}
               onClick={() => setMode("for-you")}
-              icon={<Sparkles size={14} aria-hidden />}
               label="For you"
+              loading={initialLoading}
             />
-            <TabButton
+            <span aria-hidden className="h-4 w-px bg-border/70" />
+            <BlendTabButton
               active={mode === "latest"}
               onClick={() => setMode("latest")}
-              icon={<Clock3 size={14} aria-hidden />}
               label="Latest"
+              loading={initialLoading}
             />
           </div>
+        </div>
+        <div
+          className="mt-1 -mx-5 flex items-center justify-center gap-3 py-1.5 layout-wide:hidden"
+          role="tablist"
+          aria-label="Feed mode"
+        >
+          <BlendTabButton
+            active={mode === "for-you"}
+            onClick={() => setMode("for-you")}
+            label="For you"
+            loading={initialLoading}
+          />
+          <span aria-hidden className="h-4 w-px bg-border/70" />
+          <BlendTabButton
+            active={mode === "latest"}
+            onClick={() => setMode("latest")}
+            label="Latest"
+            loading={initialLoading}
+          />
         </div>
 
         {mode === "for-you" && !isPersonalized && !initialLoading ? (
@@ -138,7 +157,7 @@ export default function HomePage() {
         ) : null}
       </header>
 
-      <div className="flex flex-col gap-3 px-2 layout-wide:px-3">
+      <div className="flex flex-col gap-3 px-0 layout-wide:px-3">
         {isGuest ? <JoinReadquestFeedCard /> : null}
         <div className="layout-compact:block hidden">
           <AnnouncementFeedStrip />
@@ -181,16 +200,16 @@ export default function HomePage() {
   );
 }
 
-function TabButton({
+function BlendTabButton({
   active,
   onClick,
-  icon,
   label,
+  loading,
 }: {
   active: boolean;
   onClick: () => void;
-  icon: React.ReactNode;
   label: string;
+  loading?: boolean;
 }) {
   return (
     <button
@@ -198,15 +217,19 @@ function TabButton({
       role="tab"
       aria-selected={active}
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[13px] font-semibold transition ${
-        active
-          ? "text-white shadow-[var(--shadow-pop)]"
-          : "text-muted hover:text-foreground"
+      className={`relative inline-flex items-center justify-center px-0 py-1 text-center text-[13px] font-semibold transition ${
+        active ? "text-foreground" : "text-muted hover:text-foreground"
       }`}
-      style={active ? { background: "var(--gradient-brand)" } : undefined}
     >
-      {icon}
-      {label}
+      <span className={loading ? "animate-pulse blur-[0.6px] opacity-80" : ""}>
+        {label}
+      </span>
+      {active ? (
+        <span
+          aria-hidden
+          className="absolute -bottom-1 left-0 right-0 h-0.5 rounded-full bg-[var(--brand-1)]"
+        />
+      ) : null}
     </button>
   );
 }

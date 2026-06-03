@@ -48,7 +48,7 @@ export function PostCard({
   const hasCaption = Boolean(post.content?.trim());
 
   return (
-    <article className="group rounded-xl border border-border/80 bg-card p-5 shadow-[var(--shadow-soft)] transition hover:-translate-y-0.5 hover:border-border hover:shadow-lg">
+    <article className="group border-b border-border/60 bg-transparent px-0.5 py-1.5 transition hover:bg-foreground/[0.02] sm:px-1 sm:py-4">
       <div className="flex gap-4">
         <Link
           href={`/profile/${post.author.username}`}
