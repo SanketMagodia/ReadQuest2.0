@@ -37,6 +37,18 @@
 
   --shadow-soft: 0 10px 30px -10px rgba(15, 23, 42, 0.18);
   --shadow-pop: 0 12px 40px -8px rgba(14, 165, 233, 0.28);
+
+  --daily-quest-bg: linear-gradient(
+    145deg,
+    color-mix(in srgb, #fef9c3 55%, var(--card)) 0%,
+    color-mix(in srgb, var(--brand-amber) 18%, var(--card)) 48%,
+    color-mix(in srgb, #bae6fd 22%, var(--card)) 100%
+  );
+  --daily-quest-glow: color-mix(in srgb, var(--brand-amber) 42%, transparent);
+  --daily-quest-glow-cool: color-mix(in srgb, #38bdf8 28%, transparent);
+  --daily-quest-shadow:
+    0 18px 44px -18px color-mix(in srgb, var(--brand-amber) 45%, transparent),
+    0 8px 22px -12px rgba(15, 23, 42, 0.14);
 }
 
 .dark {
@@ -58,6 +70,18 @@
 
   --shadow-soft: 0 12px 36px -16px rgba(0, 0, 0, 0.7);
   --shadow-pop: 0 14px 46px -10px rgba(14, 165, 233, 0.22);
+
+  --daily-quest-bg: linear-gradient(
+    145deg,
+    color-mix(in srgb, #fcd34d 9%, #141218) 0%,
+    color-mix(in srgb, var(--brand-amber) 7%, #121018) 50%,
+    color-mix(in srgb, #0284c7 8%, #111016) 100%
+  );
+  --daily-quest-glow: color-mix(in srgb, var(--brand-amber) 22%, transparent);
+  --daily-quest-glow-cool: color-mix(in srgb, #38bdf8 16%, transparent);
+  --daily-quest-shadow:
+    0 22px 50px -22px rgba(0, 0, 0, 0.6),
+    0 10px 28px -14px color-mix(in srgb, var(--brand-amber) 18%, transparent);
 }
 
 @theme inline {
@@ -80,6 +104,8 @@
   --color-brand-mint: var(--brand-mint);
   --font-sans: var(--font-geist-sans), system-ui;
   --font-mono: var(--font-geist-mono), ui-monospace;
+  --font-display: var(--font-fraunces), "Iowan Old Style", "Apple Garamond",
+    Georgia, "Times New Roman", serif;
 }
 
 html {
@@ -129,6 +155,32 @@ a {
   color: inherit;
 }
 
+/* ───────────────────────────────────────────────────────────────────────────
+   Type system. Plus Jakarta Sans for UI/body with kerning + ligatures and a
+   hair of negative tracking for a tighter, more designed feel; Fraunces as an
+   editorial display serif for top-level titles, paired against the sans.
+   ─────────────────────────────────────────────────────────────────────────── */
+body {
+  font-feature-settings: "kern", "liga", "calt";
+  letter-spacing: -0.006em;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5 {
+  letter-spacing: -0.018em;
+  text-wrap: balance;
+}
+
+h1,
+.font-display {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.012em;
+}
+
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -164,6 +216,11 @@ a {
 
 .gradient-brand-bg {
   background: var(--gradient-brand);
+}
+
+.daily-quest-widget {
+  background: var(--daily-quest-bg);
+  box-shadow: var(--daily-quest-shadow);
 }
 
 .skeleton-shimmer {

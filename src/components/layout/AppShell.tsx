@@ -23,8 +23,8 @@ import { NotificationsBell } from "./NotificationsBell";
 import { JoinReadquestSidebarCard } from "@/components/auth/UnlockFeatures";
 
 const navMain = [
-  { href: "/", label: "Feed", icon: Library },
-  { href: "/explore", label: "Explore", icon: Compass },
+  { href: "/explore", label: "Home", icon: Compass },
+  { href: "/feed", label: "Feed", icon: Library },
   { href: "/compose", label: "Compose", icon: PenSquare },
   { href: "/friends", label: "Friends", icon: Users },
 ];

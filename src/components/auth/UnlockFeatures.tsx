@@ -144,75 +144,69 @@ export function JoinReadquestSidebarCard() {
   );
 }
 
-/** Guest-only card at the top of the home feed (especially compact layout). */
+/**
+ * Guest-only card shown in the Daily-quest slot on Home. It stretches to fill
+ * its grid cell (h-full) so it lines up with the "Top 5 Today" card beside it,
+ * and lays the perks out vertically so a narrow phone column reads as a tall,
+ * scannable "here's what you're missing" pitch instead of a squat strip.
+ */
 export function JoinReadquestFeedCard() {
   return (
     <article
-      className="overflow-hidden rounded-[22px] border border-border/80 bg-card shadow-[var(--shadow-soft)] max-sm:rounded-[18px] max-sm:shadow-none"
+      className="flex h-full min-h-[13rem] flex-col overflow-hidden rounded-2xl border border-border/70 p-3.5 shadow-[var(--shadow-soft)] layout-compact:shadow-none layout-wide:min-h-[18rem] layout-wide:rounded-3xl layout-wide:p-5"
       style={{
         background:
-          "linear-gradient(135deg, color-mix(in srgb, var(--brand-1) 6%, var(--card)), var(--card))",
+          "linear-gradient(155deg, color-mix(in srgb, var(--brand-1) 13%, var(--card)), color-mix(in srgb, var(--brand-2) 8%, var(--card)) 55%, var(--card))",
       }}
     >
-      {/* Phone: single compact strip */}
-      <div className="hidden max-sm:block px-3.5 py-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-muted">
-              Free to join
-            </p>
-            <h2 className="mt-0.5 text-[15px] font-bold leading-tight tracking-tight">
-              Your reading life, unlocked
-            </h2>
-          </div>
-          <Link
-            href="/register"
-            className="shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm"
-            style={{ background: "var(--gradient-brand)" }}
-          >
-            Join
-          </Link>
-        </div>
-        <UnlockFeaturesAuthStrip className="mt-2 [&>p]:hidden" />
-        <p className="mt-2 text-center text-[10px] text-muted">
-          Already reading?{" "}
+      <div>
+        <p className="inline-flex items-center gap-1 rounded-full bg-background/55 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.16em] text-sky-600 backdrop-blur-sm dark:text-sky-300">
+          <Sparkles size={10} strokeWidth={2.4} aria-hidden />
+          Free to join
+        </p>
+        <h2 className="mt-2 text-[17px] font-extrabold leading-[1.12] tracking-tight layout-wide:text-[20px]">
+          You&apos;re missing the good part
+        </h2>
+        <p className="mt-1 text-[11px] leading-snug text-muted layout-wide:text-[12px]">
+          Create a free account to make it yours.
+        </p>
+      </div>
+
+      <ul className="mt-3 grid flex-1 content-start gap-1.5 layout-wide:grid-cols-2 layout-wide:gap-2">
+        {UNLOCK_FEATURES.map(({ icon: Icon, title, hint }) => (
+          <li key={title} className="flex items-center gap-2">
+            <span
+              aria-hidden
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-background/70 text-sky-600 shadow-sm dark:text-sky-300"
+            >
+              <Icon size={12} strokeWidth={2.3} />
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-[12px] font-semibold leading-tight text-foreground/90">
+                {title}
+              </span>
+              <span className="hidden truncate text-[10.5px] leading-tight text-muted layout-wide:block">
+                {hint}
+              </span>
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      <div className="mt-3">
+        <Link
+          href="/register"
+          className="block w-full rounded-full px-3 py-2 text-center text-[12px] font-bold text-white shadow-[var(--shadow-pop)]"
+          style={{ background: "var(--gradient-brand)" }}
+        >
+          Create free account
+        </Link>
+        <p className="mt-1.5 text-center text-[10.5px] text-muted">
+          Have an account?{" "}
           <Link href="/login" className="font-semibold text-foreground hover:underline">
             Sign in
           </Link>
         </p>
-      </div>
-
-      {/* Tablet / desktop — compact so the feed stays visible */}
-      <div className="max-sm:hidden px-4 py-3 sm:px-4 sm:py-3">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-muted">
-              Free to join
-            </p>
-            <h2 className="mt-0.5 text-base font-bold leading-tight tracking-tight layout-wide:text-[15px]">
-              Your reading life, unlocked
-            </h2>
-            <p className="mt-1 text-[12px] text-muted layout-wide:hidden">
-              Browse as a guest — sign in when you&apos;re ready to play along.
-            </p>
-          </div>
-          <div className="flex shrink-0 flex-wrap gap-2">
-            <Link
-              href="/register"
-              className="inline-flex items-center justify-center rounded-full px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm layout-wide:px-3 layout-wide:py-1.5 layout-wide:text-[11px]"
-              style={{ background: "var(--gradient-brand)" }}
-            >
-              Create account
-            </Link>
-            <Link
-              href="/login"
-              className="inline-flex items-center justify-center rounded-full border border-border bg-background px-3.5 py-1.5 text-xs font-semibold transition hover:bg-hover layout-wide:px-3 layout-wide:py-1.5 layout-wide:text-[11px]"
-            >
-              Sign in
-            </Link>
-          </div>
-        </div>
-        <UnlockFeaturesAuthStrip className="mt-2.5 [&>p]:hidden" />
       </div>
     </article>
   );

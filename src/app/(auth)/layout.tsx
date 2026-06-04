@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { ReadquestLogo } from "@/components/brand/ReadquestLogo";
 import { BookCarousel } from "@/components/auth/BookCarousel";
 import { UnlockFeaturesAuthStrip } from "@/components/auth/UnlockFeatures";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
@@ -37,14 +38,17 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
       {/* Top bar */}
       <header className="mx-auto flex w-full max-w-6xl shrink-0 items-center justify-between px-4 pt-4 sm:px-8 sm:pt-8 lg:pt-8">
         <ReadquestLogo height={30} priority />
-        <Link
-          href="/"
-          aria-label="Back home"
-          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card/80 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted backdrop-blur transition hover:text-foreground sm:px-3 sm:text-[11px] sm:tracking-[0.18em]"
-        >
-          <ArrowLeft size={12} aria-hidden />
-          <span className="hidden sm:inline">Back home</span>
-        </Link>
+        <div className="inline-flex items-center gap-2">
+          <ThemeToggle />
+          <Link
+            href="/"
+            aria-label="Back home"
+            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card/80 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted backdrop-blur transition hover:text-foreground sm:px-3 sm:text-[11px] sm:tracking-[0.18em]"
+          >
+            <ArrowLeft size={12} aria-hidden />
+            <span className="hidden sm:inline">Back home</span>
+          </Link>
+        </div>
       </header>
 
       {/*
@@ -54,7 +58,10 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
       <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-4 px-4 pb-5 pt-3 sm:gap-6 sm:px-8 sm:pb-8 sm:pt-5 lg:flex-row lg:items-start lg:gap-14 lg:pb-24 lg:pt-14">
         <div className="contents lg:flex lg:min-w-0 lg:flex-1 lg:flex-col lg:gap-8 lg:pt-4">
           <section className="order-1 min-w-0 space-y-2.5 max-sm:text-center sm:space-y-3 lg:space-y-4">
-            <h2 className="text-[24px] font-black leading-[1.05] tracking-tight sm:text-[34px] lg:text-[42px]">
+            <h2
+              className="text-[28px] leading-[1.05] tracking-tight sm:text-[38px] lg:text-[46px]"
+              style={{ fontFamily: '"Brush Script MT", "Segoe Script", cursive' }}
+            >
               Where readers meet{" "}
               <span className="gradient-brand-text max-sm:mt-0.5 max-sm:block sm:inline">
                 between the lines.

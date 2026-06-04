@@ -1,13 +1,23 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Plus_Jakarta_Sans, Fraunces, Geist_Mono } from "next/font/google";
 import type { ReactNode } from "react";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { ServiceWorkerRegister } from "@/components/pwa/ServiceWorkerRegister";
 
-const geistSans = Geist({
+// UI / body — a warm, modern humanist sans. Fed into the existing
+// `--font-geist-sans` variable so every existing reference picks it up.
+const sans = Plus_Jakarta_Sans({
   variable: "--font-geist-sans",
   subsets: ["latin"],
+});
+
+// Editorial display serif for top-level titles — gives the books brand a more
+// characterful, "literary" feel that the geometric sans alone can't.
+const display = Fraunces({
+  variable: "--font-fraunces",
+  subsets: ["latin"],
+  weight: ["400", "600", "700", "800", "900"],
 });
 
 const geistMono = Geist_Mono({
@@ -54,7 +64,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable}`}
+      className={`${sans.variable} ${display.variable} ${geistMono.variable}`}
     >
       <body className="bg-background text-foreground min-h-dvh antialiased">
         <Providers>{children}</Providers>

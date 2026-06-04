@@ -88,10 +88,9 @@ export function DailyBookCard() {
 
   return (
     <article
-      className="relative overflow-hidden rounded-3xl border border-border bg-card p-px shadow-[var(--shadow-soft)] layout-compact:rounded-xl layout-compact:border-sky-300/40 layout-compact:bg-[color-mix(in_srgb,var(--brand-1)_6%,var(--card))] layout-compact:shadow-none dark:layout-compact:border-sky-700/50"
+      className="relative flex h-full min-h-[13rem] flex-col overflow-hidden rounded-3xl border border-border bg-card p-px shadow-[var(--shadow-soft)] layout-compact:rounded-xl layout-compact:border-sky-300/40 layout-compact:bg-[color-mix(in_srgb,var(--brand-1)_6%,var(--card))] layout-compact:shadow-none layout-wide:min-h-[18rem] dark:layout-compact:border-sky-700/50"
       aria-label="Today's read"
     >
-      {/* Decorative gradient corner — desktop only */}
       <div
         aria-hidden
         className="pointer-events-none absolute -top-24 -right-24 hidden h-56 w-56 rounded-full opacity-40 blur-3xl layout-wide:block"
@@ -103,12 +102,11 @@ export function DailyBookCard() {
         style={{ background: "var(--gradient-warm)" }}
       />
 
-      <div className="relative rounded-[22px] bg-card/95 p-5 layout-compact:rounded-[14px] layout-compact:p-3 sm:p-6">
-        {/* Header strip */}
+      <div className="relative flex min-h-0 flex-1 flex-col rounded-[22px] bg-card/95 p-4 layout-compact:rounded-[14px] layout-compact:p-3 sm:p-5">
         <div className="flex items-center justify-between gap-2 layout-compact:gap-1.5">
-          <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-muted layout-compact:rounded-full layout-compact:bg-[color-mix(in_srgb,var(--brand-1)_14%,transparent)] layout-compact:px-2 layout-compact:py-0.5 layout-compact:text-[9px] layout-compact:tracking-[0.16em]">
+          <p className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted layout-compact:rounded-full layout-compact:bg-[color-mix(in_srgb,var(--brand-1)_14%,transparent)] layout-compact:px-2 layout-compact:py-0.5 layout-compact:text-[9px] layout-compact:tracking-[0.14em]">
             <Sparkles
-              size={11}
+              size={10}
               aria-hidden
               className="text-amber-500 dark:text-amber-300 layout-compact:h-[10px] layout-compact:w-[10px]"
             />
@@ -122,9 +120,8 @@ export function DailyBookCard() {
           />
         </div>
 
-        <div className="mt-4 flex gap-4 layout-compact:mt-2.5 layout-compact:gap-3 sm:gap-5">
-          {/* Book cover */}
-          <div className="relative h-[130px] w-[90px] shrink-0 layout-compact:h-[88px] layout-compact:w-[62px] sm:h-[150px] sm:w-[104px]">
+        <div className="mt-3 flex gap-3 layout-compact:mt-2 layout-compact:gap-2.5 sm:mt-4 sm:gap-4">
+          <div className="relative h-[120px] w-[84px] shrink-0 layout-compact:h-[88px] layout-compact:w-[62px] sm:h-[140px] sm:w-[98px]">
             <div
               aria-hidden
               className="absolute inset-0 -rotate-[4deg] rounded-xl bg-pill shadow-[var(--shadow-soft)] layout-compact:rounded-lg"
@@ -143,7 +140,7 @@ export function DailyBookCard() {
                 />
               ) : (
                 <div
-                  className="flex h-full w-full items-center justify-center text-base font-bold text-white"
+                  className="flex h-full w-full items-center justify-center text-sm font-bold text-white"
                   style={{ background: "var(--gradient-brand)" }}
                 >
                   {pick.book.title.slice(0, 2).toUpperCase()}
@@ -152,11 +149,11 @@ export function DailyBookCard() {
             </div>
           </div>
 
-          <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted layout-compact:hidden">
+          <div className="flex min-w-0 flex-1 flex-col">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted layout-compact:hidden">
               Today&apos;s read
             </p>
-            <h2 className="mt-1 text-lg font-bold leading-snug layout-compact:mt-0 layout-compact:text-[15px] sm:text-xl">
+            <h2 className="mt-0.5 line-clamp-2 text-[15px] font-bold leading-snug layout-compact:mt-0 layout-compact:text-[14px] sm:text-[17px]">
               <Link
                 href={`/book/${pick.book.slug}`}
                 className="hover:underline underline-offset-4"
@@ -165,48 +162,47 @@ export function DailyBookCard() {
               </Link>
             </h2>
             {pick.book.authors ? (
-              <p className="text-sm text-muted layout-compact:text-[12px] layout-compact:leading-snug">
+              <p className="mt-0.5 truncate text-[12px] text-muted layout-compact:text-[11px] sm:text-[13px]">
                 {pick.book.authors.split(/[,;]/)[0].trim()}
               </p>
             ) : null}
 
             {firstCategory ? (
-              <p className="mt-2 inline-block rounded-full bg-pill px-2.5 py-0.5 text-[11px] font-semibold text-foreground/80 layout-compact:mt-1 layout-compact:hidden">
+              <p className="mt-1.5 inline-block rounded-full bg-pill px-2 py-0.5 text-[10px] font-semibold text-foreground/80 layout-compact:hidden">
                 #{firstCategory}
               </p>
             ) : null}
 
-            <div className="mt-4 flex flex-wrap items-center gap-2 layout-compact:mt-2 layout-compact:gap-1.5">
+            <div className="mt-2 flex flex-wrap items-center gap-1.5 layout-compact:mt-1.5 sm:mt-3 sm:gap-2">
               {pick.completed ? (
                 <span
-                  className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold text-white layout-compact:px-3 layout-compact:py-1.5 layout-compact:text-xs"
+                  className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-semibold text-white sm:text-xs"
                   style={{ background: "var(--gradient-cool)" }}
                 >
-                  <CheckCircle2 size={14} aria-hidden className="layout-compact:h-3 layout-compact:w-3" />
+                  <CheckCircle2 size={13} aria-hidden />
                   Done for today
                 </span>
               ) : (
                 <Link
                   href="/daily"
-                  className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold text-white shadow-[var(--shadow-pop)] transition hover:brightness-110 layout-compact:px-3 layout-compact:py-1.5 layout-compact:text-xs layout-compact:shadow-sm"
+                  className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-semibold text-white shadow-[var(--shadow-pop)] transition hover:brightness-110 sm:text-xs"
                   style={{ background: "var(--gradient-brand)" }}
                 >
-                  <BookOpenCheck size={14} aria-hidden className="layout-compact:h-3 layout-compact:w-3" />
+                  <BookOpenCheck size={13} aria-hidden />
                   <span className="layout-compact:hidden">Open today&apos;s book</span>
                   <span className="hidden layout-compact:inline">Open</span>
                 </Link>
               )}
               <Link
                 href={`/book/${pick.book.slug}`}
-                className="inline-flex items-center rounded-full border border-border bg-card px-3 py-2 text-xs font-semibold hover:bg-hover layout-compact:hidden"
+                className="inline-flex items-center rounded-full border border-border bg-card px-2.5 py-1.5 text-[11px] font-semibold hover:bg-hover layout-compact:hidden sm:text-xs"
               >
                 Visit book room
               </Link>
             </div>
 
-            {/* Community stats — hidden on compact mobile */}
             {stats.completedToday > 0 || stats.bookReaders > 0 ? (
-              <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[12px] text-muted layout-compact:hidden">
+              <div className="mt-2 hidden flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted layout-wide:flex">
                 {stats.completedToday > 0 ? (
                   <CommunityStat
                     icon={Trophy}
@@ -236,15 +232,13 @@ export function DailyBookCard() {
           </div>
         </div>
 
-        {/* Compact stats strip on mobile/portrait (same core numbers as desktop). */}
-        <div className="mt-2 hidden grid-cols-3 gap-1.5 layout-compact:grid">
+        <div className="mt-2 hidden shrink-0 grid-cols-3 gap-1 layout-compact:grid">
           <CompactStat label="Streak" value={`${streak.current}d`} icon={Flame} tone="warm" />
           <CompactStat label="Longest" value={`${streak.longest}d`} icon={Award} tone="brand" />
           <CompactStat label="Reads" value={`${streak.totalCompleted}`} icon={BookOpenCheck} tone="cool" />
         </div>
 
-        {/* Bottom stats strip — desktop / landscape only */}
-        <div className="mt-5 grid grid-cols-3 gap-2 border-t border-border/70 pt-4 text-[11px] font-semibold uppercase tracking-wide text-muted layout-compact:hidden">
+        <div className="mt-4 grid shrink-0 grid-cols-3 gap-2 border-t border-border/70 pt-3 text-[10px] font-semibold uppercase tracking-wide text-muted layout-compact:hidden sm:mt-5 sm:pt-4">
           <Stat
             label="Streak"
             value={`${streak.current}d`}
@@ -287,12 +281,14 @@ function CompactStat({
         ? "text-emerald-600 dark:text-emerald-300"
         : "text-sky-600 dark:text-sky-300";
   return (
-    <div className="rounded-lg border border-border/70 bg-pill/70 px-1.5 py-1.5 text-center">
-      <span className={`inline-flex items-center gap-1 text-[9px] font-semibold uppercase tracking-[0.12em] ${toneClass}`}>
-        <Icon size={9} />
-        {label}
+    <div
+      className="min-w-0 rounded-lg bg-pill/70 px-1 py-1.5 text-center"
+      title={`${label}: ${value}`}
+    >
+      <span className={`inline-flex items-center justify-center ${toneClass}`}>
+        <Icon size={11} aria-hidden />
       </span>
-      <p className="mt-0.5 text-[12px] font-bold leading-none text-foreground">{value}</p>
+      <p className="mt-0.5 truncate text-[11px] font-bold leading-none text-foreground">{value}</p>
     </div>
   );
 }
@@ -311,8 +307,8 @@ function StreakBadge({
   const alive = current > 0;
   return (
     <div
-      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold ${
-        compact ? "layout-compact:px-2 layout-compact:py-0.5 layout-compact:text-[10px]" : ""
+      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-semibold sm:px-3 sm:py-1 sm:text-[11px] ${
+        compact ? "layout-compact:px-2 layout-compact:py-0.5 layout-compact:text-[9px]" : ""
       } ${alive ? "text-white" : "border border-border bg-card text-muted"}`}
       style={
         alive
@@ -321,7 +317,7 @@ function StreakBadge({
       }
       title={`Longest streak: ${longest} days`}
     >
-      <Flame size={12} aria-hidden className={`${alive ? "" : "text-amber-500"} ${compact ? "layout-compact:h-[10px] layout-compact:w-[10px]" : ""}`} />
+      <Flame size={10} aria-hidden className={`${alive ? "" : "text-amber-500"} sm:h-3 sm:w-3`} />
       {alive ? (
         <>
           <span className={compact ? "layout-compact:hidden" : ""}>{current}-day streak</span>
@@ -353,8 +349,8 @@ function CommunityStat({
       ? "text-amber-600 dark:text-amber-300"
       : "text-sky-600 dark:text-sky-300";
   return (
-    <span className="inline-flex items-center gap-1.5">
-      <Icon size={13} className={accentClass} />
+    <span className="inline-flex items-center gap-1">
+      <Icon size={12} className={accentClass} />
       <span className="font-semibold text-foreground">{value}</span>
       <span>{label}</span>
     </span>
@@ -379,27 +375,32 @@ function Stat({
         ? "text-emerald-600 dark:text-emerald-300"
         : "text-sky-600 dark:text-sky-300";
   return (
-    <div className="flex flex-col items-center justify-center rounded-2xl bg-pill/70 px-3 py-2">
-      <span className={`inline-flex items-center gap-1 text-[10px] ${toneClass}`}>
-        <Icon size={11} />
+    <div className="flex flex-col items-center justify-center rounded-2xl bg-pill/70 px-2.5 py-1.5 sm:px-3 sm:py-2">
+      <span className={`inline-flex items-center gap-1 text-[9px] sm:text-[10px] ${toneClass}`}>
+        <Icon size={10} />
         {label}
       </span>
-      <span className="mt-0.5 text-sm font-bold text-foreground">{value}</span>
+      <span className="mt-0.5 text-[13px] font-bold text-foreground sm:text-sm">{value}</span>
     </div>
   );
 }
 
 function DailyCardSkeleton() {
   return (
-    <div className="animate-pulse rounded-3xl border border-border bg-card p-5 shadow-[var(--shadow-soft)] layout-compact:rounded-xl layout-compact:p-3 layout-compact:shadow-none sm:p-6">
-      <div className="flex gap-4 layout-compact:gap-3 sm:gap-5">
-        <div className="h-[130px] w-[90px] shrink-0 rounded-xl bg-pill layout-compact:h-[88px] layout-compact:w-[62px] sm:h-[150px] sm:w-[104px]" />
-        <div className="flex-1 space-y-2 layout-compact:space-y-1.5">
-          <div className="h-3 w-20 rounded bg-pill layout-compact:h-2.5 layout-compact:w-16" />
-          <div className="h-5 w-3/4 rounded bg-pill layout-compact:h-4" />
+    <div className="flex min-h-[13rem] animate-pulse flex-col rounded-3xl border border-border bg-card p-4 shadow-[var(--shadow-soft)] layout-compact:rounded-xl layout-compact:p-3 layout-compact:shadow-none layout-wide:min-h-[18rem] sm:p-5">
+      <div className="flex flex-1 gap-3 layout-compact:gap-2.5 sm:gap-4">
+        <div className="h-[120px] w-[84px] shrink-0 rounded-xl bg-pill layout-compact:h-[88px] layout-compact:w-[62px] sm:h-[140px] sm:w-[98px]" />
+        <div className="flex flex-1 flex-col gap-1.5 pt-0.5">
+          <div className="h-2.5 w-16 rounded bg-pill layout-compact:w-14" />
+          <div className="h-4 w-full rounded bg-pill layout-compact:h-3.5" />
           <div className="h-3 w-1/2 rounded bg-pill layout-compact:hidden" />
-          <div className="mt-4 h-9 w-44 rounded-full bg-pill layout-compact:mt-2 layout-compact:h-7 layout-compact:w-20" />
+          <div className="mt-auto h-7 w-20 rounded-full bg-pill sm:h-8 sm:w-36" />
         </div>
+      </div>
+      <div className="mt-2 hidden grid-cols-3 gap-1 layout-compact:grid">
+        {Array.from({ length: 3 }, (_, i) => (
+          <div key={i} className="h-10 rounded-lg bg-pill/80" />
+        ))}
       </div>
     </div>
   );

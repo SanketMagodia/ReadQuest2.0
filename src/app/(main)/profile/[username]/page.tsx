@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import {
   Bookmark,
+  CheckCircle2,
   Grid3X3,
   Library,
   Pencil,
@@ -15,6 +16,9 @@ import {
   Camera,
   Trash2,
   X,
+  ArrowDown,
+  ArrowUp,
+  Plus,
 } from "lucide-react";
 import type { PostDTO } from "@/lib/serialize";
 import { PostCard } from "@/components/posts/PostCard";
@@ -37,11 +41,18 @@ type PublicUser = {
 
 type ShelfCounts = {
   posts: number;
-  readlist: number;
+  wantToRead: number;
+  read: number;
   following: number;
+  recommendations: number;
 };
 
-type ProfileTab = "posts" | "readlist" | "following";
+type ReadStatus = "want" | "read";
+
+type RecommendedBook = ShelfBook & { rank: number };
+
+type ProfileTab = "posts" | "recommendations";
+type ShelfModalTab = "want-to-read" | "read" | "following";
 
 function formatJoined(iso?: string) {
   if (!iso) return null;
@@ -64,14 +75,19 @@ export default function ProfilePage() {
   const [loadedOnce, setLoadedOnce] = useState(false);
   const [posts, setPosts] = useState<PostDTO[]>([]);
   const [postsLoading, setPostsLoading] = useState(true);
-  const [readlist, setReadlist] = useState<ShelfBook[]>([]);
+  const [wantToRead, setWantToRead] = useState<ShelfBook[]>([]);
+  const [readBooks, setReadBooks] = useState<ShelfBook[]>([]);
+  const [recommendations, setRecommendations] = useState<RecommendedBook[]>([]);
   const [following, setFollowing] = useState<ShelfBook[]>([]);
   const [counts, setCounts] = useState<ShelfCounts>({
     posts: 0,
-    readlist: 0,
+    wantToRead: 0,
+    read: 0,
     following: 0,
+    recommendations: 0,
   });
   const [tab, setTab] = useState<ProfileTab>("posts");
+  const [shelfModalTab, setShelfModalTab] = useState<ShelfModalTab | null>(null);
   const [editing, setEditing] = useState(false);
   const [bio, setBio] = useState("");
   const [name, setName] = useState("");
@@ -103,7 +119,9 @@ export default function ProfilePage() {
       const shelf = rs.ok
         ? ((await rs.json()) as {
             counts?: ShelfCounts;
-            readlist?: ShelfBook[];
+            wantToRead?: ShelfBook[];
+            read?: ShelfBook[];
+            recommendations?: RecommendedBook[];
             following?: ShelfBook[];
           })
         : null;
@@ -116,13 +134,19 @@ export default function ProfilePage() {
       setName(udoc?.name ?? "");
       setImage(udoc?.image ?? "");
       setPosts(Array.isArray(pjson) ? pjson : []);
-      setReadlist(shelf?.readlist ?? []);
+      setWantToRead(shelf?.wantToRead ?? []);
+      setReadBooks(shelf?.read ?? []);
+      setRecommendations(
+        (shelf?.recommendations ?? []).sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99))
+      );
       setFollowing(shelf?.following ?? []);
       setCounts(
         shelf?.counts ?? {
           posts: Array.isArray(pjson) ? pjson.length : 0,
-          readlist: shelf?.readlist?.length ?? 0,
+          wantToRead: shelf?.wantToRead?.length ?? 0,
+          read: shelf?.read?.length ?? 0,
           following: shelf?.following?.length ?? 0,
+          recommendations: shelf?.recommendations?.length ?? 0,
         }
       );
       setPostsLoading(false);
@@ -177,6 +201,87 @@ export default function ProfilePage() {
     fileInputRef.current?.click();
   }
 
+  async function updateShelfStatus(bookId: string, status: ReadStatus) {
+    const prevWant = wantToRead;
+    const prevRead = readBooks;
+    if (status === "read") {
+      setWantToRead((prev) => prev.filter((b) => b.id !== bookId));
+      const moved = prevWant.find((b) => b.id === bookId);
+      if (moved) setReadBooks((prev) => [moved, ...prev.filter((b) => b.id !== bookId)]);
+    } else {
+      setReadBooks((prev) => prev.filter((b) => b.id !== bookId));
+      const moved = prevRead.find((b) => b.id === bookId);
+      if (moved) setWantToRead((prev) => [moved, ...prev.filter((b) => b.id !== bookId)]);
+      if (recommendations.some((r) => r.id === bookId)) {
+        void removeRecommendation(bookId);
+      }
+    }
+    try {
+      const res = await fetch("/api/readlist", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookId, status }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      setCounts((c) => ({
+        ...c,
+        wantToRead: status === "read" ? Math.max(0, c.wantToRead - 1) : c.wantToRead + 1,
+        read: status === "read" ? c.read + 1 : Math.max(0, c.read - 1),
+      }));
+    } catch {
+      setWantToRead(prevWant);
+      setReadBooks(prevRead);
+    }
+  }
+
+  async function addRecommendation(bookId: string) {
+    if (!isSelf) return;
+    const res = await fetch("/api/recommendations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bookId }),
+    });
+    if (!res.ok) return;
+    const source = readBooks.find((b) => b.id === bookId);
+    if (!source) return;
+    setRecommendations((prev) => [...prev, { ...source, rank: prev.length + 1 }]);
+    setCounts((c) => ({ ...c, recommendations: c.recommendations + 1 }));
+  }
+
+  async function removeRecommendation(bookId: string) {
+    if (!isSelf) return;
+    const prev = recommendations;
+    const next = prev
+      .filter((b) => b.id !== bookId)
+      .map((b, idx) => ({ ...b, rank: idx + 1 }));
+    setRecommendations(next);
+    setCounts((c) => ({ ...c, recommendations: Math.max(0, c.recommendations - 1) }));
+    const res = await fetch(`/api/recommendations?bookId=${encodeURIComponent(bookId)}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) {
+      setRecommendations(prev);
+      setCounts((c) => ({ ...c, recommendations: prev.length }));
+    }
+  }
+
+  async function moveRecommendation(bookId: string, dir: -1 | 1) {
+    const idx = recommendations.findIndex((b) => b.id === bookId);
+    if (idx < 0) return;
+    const target = idx + dir;
+    if (target < 0 || target >= recommendations.length) return;
+    const next = [...recommendations];
+    [next[idx], next[target]] = [next[target], next[idx]];
+    const ranked = next.map((b, i) => ({ ...b, rank: i + 1 }));
+    setRecommendations(ranked);
+    const res = await fetch("/api/recommendations", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bookIds: ranked.map((b) => b.id) }),
+    });
+    if (!res.ok) setRecommendations(recommendations);
+  }
+
   const initials = useMemo(
     () => (user ? user.username.slice(0, 2).toUpperCase() : "RQ"),
     [user]
@@ -200,10 +305,18 @@ export default function ProfilePage() {
     );
   }
 
-  const tabs: { id: ProfileTab; label: string; icon: typeof Grid3X3; count: number }[] = [
-    { id: "posts", label: "Posts", icon: Grid3X3, count: counts.posts },
-    { id: "readlist", label: "Readlist", icon: Bookmark, count: counts.readlist },
-    { id: "following", label: "Following", icon: Library, count: counts.following },
+  const primaryTabs: { id: ProfileTab; label: string; icon: typeof Grid3X3 }[] = [
+    { id: "posts", label: "Posts", icon: Grid3X3 },
+    { id: "recommendations", label: "Recommendations", icon: Sparkles },
+  ];
+  const quickShelfLinks: {
+    id: ShelfModalTab;
+    label: string;
+    count: number;
+  }[] = [
+    { id: "want-to-read", label: "Wishlist", count: counts.wantToRead },
+    { id: "read", label: "Read", count: counts.read },
+    { id: "following", label: "Following", count: counts.following },
   ];
 
   const joined = formatJoined(user.createdAt);
@@ -247,24 +360,43 @@ export default function ProfilePage() {
                 </h1>
                 <p className="mt-0.5 text-sm text-muted">@{user.username}</p>
               </div>
-              {isSelf ? (
-                <button
-                  type="button"
-                  onClick={() => setEditing((v) => !v)}
-                  className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold text-white shadow-[var(--shadow-pop)] transition active:translate-y-px"
-                  style={{ background: "var(--gradient-brand)" }}
-                >
-                  {editing ? (
-                    <>
-                      <X size={13} aria-hidden /> Close
-                    </>
-                  ) : (
-                    <>
-                      <Pencil size={13} aria-hidden /> Edit profile
-                    </>
-                  )}
-                </button>
-              ) : null}
+              <div className="ml-auto flex flex-col items-end gap-2">
+                {isSelf ? (
+                  <button
+                    type="button"
+                    onClick={() => setEditing((v) => !v)}
+                    className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold text-white shadow-[var(--shadow-pop)] transition active:translate-y-px"
+                    style={{ background: "var(--gradient-brand)" }}
+                  >
+                    {editing ? (
+                      <>
+                        <X size={13} aria-hidden /> Close
+                      </>
+                    ) : (
+                      <>
+                        <Pencil size={13} aria-hidden /> Edit profile
+                      </>
+                    )}
+                  </button>
+                ) : null}
+                <div className="flex flex-wrap justify-end gap-2">
+                  {quickShelfLinks.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setShelfModalTab(item.id)}
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                        shelfModalTab === item.id
+                          ? "border-sky-400/60 bg-sky-500/15 text-foreground"
+                          : "border-border bg-card text-muted hover:bg-hover hover:text-foreground"
+                      }`}
+                    >
+                      <span className="text-[13px] font-black leading-none">{item.count}</span>
+                      <span>{item.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
             <p className="mt-3 max-w-prose whitespace-pre-wrap text-[15px] leading-relaxed text-foreground/90">
               {user.bio || (isSelf ? "Add a bio so readers know your vibe." : "Quiet reader vibes.")}
@@ -278,24 +410,6 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        <div className="mt-6 grid grid-cols-3 divide-x divide-border overflow-hidden rounded-2xl border border-border bg-card shadow-[var(--shadow-soft)]">
-          {tabs.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTab(t.id)}
-              className={`flex flex-col items-center gap-0.5 px-2 py-3 text-center transition ${
-                tab === t.id ? "bg-pill" : "hover:bg-hover"
-              }`}
-              aria-pressed={tab === t.id}
-            >
-              <span className="text-lg font-bold sm:text-xl">{t.count}</span>
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                {t.label}
-              </span>
-            </button>
-          ))}
-        </div>
       </header>
 
       {editing && isSelf ? (
@@ -420,7 +534,7 @@ export default function ProfilePage() {
         className="mt-6 flex border-b border-border"
         aria-label="Profile sections"
       >
-        {tabs.map(({ id, label, icon: Icon }) => (
+        {primaryTabs.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             type="button"
@@ -473,30 +587,33 @@ export default function ProfilePage() {
               cta={isSelf ? { href: "/compose", label: "Compose a post" } : null}
             />
           )
-        ) : tab === "readlist" ? (
-          <ShelfBlock
-            books={readlist}
-            isSelf={isSelf}
-            emptyTitle="Readlist is empty"
-            emptyHint={
-              isSelf
-                ? "Tap “Add to readlist” on any book page."
-                : "No saved books yet."
-            }
-          />
         ) : (
-          <ShelfBlock
-            books={following}
+          <RecommendationsBlock
+            books={recommendations}
             isSelf={isSelf}
-            emptyTitle="Not following any books"
+            onMove={moveRecommendation}
+            onRemove={removeRecommendation}
             emptyHint={
               isSelf
-                ? "Follow books from Explore to tune your home feed."
-                : "When they follow a book, it'll show up here."
+                ? "Add up to 8 books from your Read shelf and rank them."
+                : "No recommendations shared yet."
             }
           />
         )}
       </section>
+
+      <ShelfModal
+        openTab={shelfModalTab}
+        onClose={() => setShelfModalTab(null)}
+        isSelf={isSelf}
+        wantToRead={wantToRead}
+        readBooks={readBooks}
+        following={following}
+        recommendations={recommendations}
+        onMarkRead={(bookId) => void updateShelfStatus(bookId, "read")}
+        onMoveToWant={(bookId) => void updateShelfStatus(bookId, "want")}
+        onRecommend={(bookId) => void addRecommendation(bookId)}
+      />
     </div>
   );
 }
@@ -556,11 +673,13 @@ function ShelfBlock({
   isSelf,
   emptyTitle,
   emptyHint,
+  actions,
 }: {
   books: ShelfBook[];
   isSelf: boolean;
   emptyTitle: string;
   emptyHint: string;
+  actions?: (book: ShelfBook) => React.ReactNode;
 }) {
   if (!books.length) {
     return (
@@ -572,7 +691,257 @@ function ShelfBlock({
       />
     );
   }
-  return <ProfileBookGrid books={books} emptyLabel={emptyTitle} />;
+  return <ProfileBookGrid books={books} emptyLabel={emptyTitle} actions={actions} />;
+}
+
+function RecommendationsBlock({
+  books,
+  isSelf,
+  onMove,
+  onRemove,
+  emptyHint,
+}: {
+  books: RecommendedBook[];
+  isSelf: boolean;
+  onMove: (bookId: string, dir: -1 | 1) => void;
+  onRemove: (bookId: string) => void;
+  emptyHint: string;
+}) {
+  if (!books.length) {
+    return (
+      <EmptyShelf
+        icon={<Sparkles size={18} aria-hidden />}
+        title="No recommendations yet"
+        hint={emptyHint}
+        cta={null}
+      />
+    );
+  }
+
+  return (
+    <ul className="mx-2 space-y-2">
+      {books.map((b, idx) => (
+        <li
+          key={b.id}
+          className="flex items-center gap-3 rounded-2xl border border-border bg-card px-3 py-2.5"
+        >
+          <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-pill text-xs font-black">
+            #{idx + 1}
+          </span>
+          <Link href={`/book/${b.slug || b.id}`} className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold">{b.title}</p>
+            {b.authors ? (
+              <p className="truncate text-xs text-muted">
+                by {(b.authors || "").split(/[;,]/)[0]?.trim()}
+              </p>
+            ) : null}
+          </Link>
+          {isSelf ? (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => onMove(b.id, -1)}
+                disabled={idx === 0}
+                className="rounded-full border border-border p-1.5 text-muted transition hover:bg-hover disabled:opacity-40"
+                aria-label="Move up"
+              >
+                <ArrowUp size={13} aria-hidden />
+              </button>
+              <button
+                type="button"
+                onClick={() => onMove(b.id, 1)}
+                disabled={idx === books.length - 1}
+                className="rounded-full border border-border p-1.5 text-muted transition hover:bg-hover disabled:opacity-40"
+                aria-label="Move down"
+              >
+                <ArrowDown size={13} aria-hidden />
+              </button>
+              <button
+                type="button"
+                onClick={() => onRemove(b.id)}
+                className="rounded-full border border-border p-1.5 text-muted transition hover:bg-hover"
+                aria-label="Remove recommendation"
+              >
+                <Trash2 size={13} aria-hidden />
+              </button>
+            </div>
+          ) : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function ShelfModal({
+  openTab,
+  onClose,
+  isSelf,
+  wantToRead,
+  readBooks,
+  following,
+  recommendations,
+  onMarkRead,
+  onMoveToWant,
+  onRecommend,
+}: {
+  openTab: ShelfModalTab | null;
+  onClose: () => void;
+  isSelf: boolean;
+  wantToRead: ShelfBook[];
+  readBooks: ShelfBook[];
+  following: ShelfBook[];
+  recommendations: RecommendedBook[];
+  onMarkRead: (bookId: string) => void;
+  onMoveToWant: (bookId: string) => void;
+  onRecommend: (bookId: string) => void;
+}) {
+  const [activeTab, setActiveTab] = useState<ShelfModalTab>("want-to-read");
+
+  useEffect(() => {
+    if (!openTab) return;
+    setActiveTab(openTab);
+  }, [openTab]);
+
+  useEffect(() => {
+    if (!openTab) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [openTab, onClose]);
+
+  if (!openTab) return null;
+
+  const tabs: { id: ShelfModalTab; label: string; count: number }[] = [
+    { id: "want-to-read", label: "Wishlist", count: wantToRead.length },
+    { id: "read", label: "Read", count: readBooks.length },
+    { id: "following", label: "Following", count: following.length },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end bg-black/55 backdrop-blur-[1px] sm:items-center sm:justify-center">
+      <button
+        type="button"
+        aria-label="Close"
+        className="absolute inset-0"
+        onClick={onClose}
+      />
+      <div className="relative max-h-[85vh] w-full overflow-hidden rounded-t-3xl border border-border bg-background sm:mx-4 sm:max-w-3xl sm:rounded-3xl">
+        <div className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur">
+          <div className="flex items-center justify-between px-4 py-3">
+            <p className="text-sm font-semibold">Library</p>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-full border border-border p-1.5 text-muted transition hover:bg-hover"
+              aria-label="Close modal"
+            >
+              <X size={14} aria-hidden />
+            </button>
+          </div>
+          <div className="flex border-t border-border/60">
+            {tabs.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setActiveTab(t.id)}
+                className={`relative flex flex-1 items-center justify-center gap-1.5 py-2.5 text-xs font-semibold uppercase tracking-wide ${
+                  activeTab === t.id ? "text-foreground" : "text-muted hover:text-foreground"
+                }`}
+              >
+                <span>{t.label}</span>
+                <span className="rounded-full bg-pill px-1.5 text-[10px] font-bold leading-4">
+                  {t.count}
+                </span>
+                {activeTab === t.id ? (
+                  <span
+                    aria-hidden
+                    className="absolute inset-x-3 -bottom-px h-[2px] rounded-full"
+                    style={{ background: "var(--gradient-brand)" }}
+                  />
+                ) : null}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="max-h-[calc(85vh-92px)] overflow-y-auto p-3 sm:p-4">
+          {activeTab === "want-to-read" ? (
+            <ShelfBlock
+              books={wantToRead}
+              isSelf={isSelf}
+              emptyTitle="Wishlist is empty"
+              emptyHint={
+                isSelf ? "Tap “Add to wishlist” on any book page." : "No planned books yet."
+              }
+              actions={
+                isSelf
+                  ? (book) => (
+                      <button
+                        type="button"
+                        onClick={() => onMarkRead(book.id)}
+                        className="rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-semibold transition hover:bg-hover"
+                      >
+                        Mark read
+                      </button>
+                    )
+                  : undefined
+              }
+            />
+          ) : activeTab === "read" ? (
+            <ShelfBlock
+              books={readBooks}
+              isSelf={isSelf}
+              emptyTitle="No books marked read yet"
+              emptyHint={
+                isSelf
+                  ? "Mark books as read from book pages or your wishlist."
+                  : "No completed books showcased yet."
+              }
+              actions={
+                isSelf
+                  ? (book) => (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => onMoveToWant(book.id)}
+                          className="rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-semibold transition hover:bg-hover"
+                        >
+                          Move to wishlist
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onRecommend(book.id)}
+                          disabled={
+                            recommendations.some((r) => r.id === book.id) ||
+                            recommendations.length >= 8
+                          }
+                          className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-semibold transition hover:bg-hover disabled:cursor-not-allowed disabled:opacity-55"
+                        >
+                          <Plus size={11} aria-hidden /> Recommend
+                        </button>
+                      </div>
+                    )
+                  : undefined
+              }
+            />
+          ) : (
+            <ShelfBlock
+              books={following}
+              isSelf={isSelf}
+              emptyTitle="Not following any books"
+              emptyHint={
+                isSelf
+                  ? "Follow books from Explore to tune your home feed."
+                  : "When they follow a book, it'll show up here."
+              }
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function EmptyShelf({

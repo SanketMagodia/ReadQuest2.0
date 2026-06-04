@@ -15,12 +15,13 @@ export async function GET(req: Request) {
       category: url.searchParams.get("category") ?? undefined,
       cursor: url.searchParams.get("cursor") ?? undefined,
       limit: url.searchParams.get("limit") ?? undefined,
+      sort: url.searchParams.get("sort") ?? undefined,
     });
     if (!parsed.success) {
       return NextResponse.json(parsed.error.flatten().fieldErrors, { status: 400 });
     }
 
-    const { q, category, cursor, limit } = parsed.data;
+    const { q, category, cursor, limit, sort } = parsed.data;
     await connectDB();
 
     const filter: Record<string, unknown> = {};
@@ -32,18 +33,50 @@ export async function GET(req: Request) {
       filter.$or = [{ title: rx }, { authors: rx }, { categories: rx }];
     }
 
-    let query = Book.find(filter).sort({ _id: -1 });
+    /**
+     * "recent" keeps the fast `_id` keyset pagination (cursor = last id).
+     * "title"/"rating" need a different sort key, so we fall back to numeric
+     * offset pagination (cursor = the next offset). Offsets are bounded by the
+     * 24-per-page UI so skip stays cheap.
+     */
+    let rows: Array<Record<string, unknown>>;
+    let nextCursor: string | null = null;
 
-    if (cursor && Types.ObjectId.isValid(cursor)) {
-      query = query.where({ _id: { $lt: new Types.ObjectId(cursor) } });
+    if (sort === "recent") {
+      let query = Book.find(filter).sort({ _id: -1 });
+      if (cursor && Types.ObjectId.isValid(cursor)) {
+        query = query.where({ _id: { $lt: new Types.ObjectId(cursor) } });
+      }
+      rows = (await query.limit(limit + 1).lean()) as unknown as Array<
+        Record<string, unknown>
+      >;
+      const hasMore = rows.length > limit;
+      if (hasMore) rows = rows.slice(0, limit);
+      nextCursor =
+        hasMore && rows.length
+          ? (rows[rows.length - 1]._id as Types.ObjectId).toString()
+          : null;
+    } else {
+      const offset = cursor && /^\d+$/.test(cursor) ? parseInt(cursor, 10) : 0;
+      const sortSpec: Record<string, 1 | -1> =
+        sort === "title"
+          ? { title: 1, _id: 1 }
+          : { averageRating: -1, ratingsCount: -1, _id: -1 };
+      let query = Book.find(filter).sort(sortSpec);
+      // Case/diacritic-insensitive ordering so "apple" and "Apple" interleave.
+      if (sort === "title") {
+        query = query.collation({ locale: "en", strength: 1 });
+      }
+      rows = (await query
+        .skip(offset)
+        .limit(limit + 1)
+        .lean()) as unknown as Array<Record<string, unknown>>;
+      const hasMore = rows.length > limit;
+      if (hasMore) rows = rows.slice(0, limit);
+      nextCursor = hasMore ? String(offset + limit) : null;
     }
 
-    const rows = await query.limit(limit + 1).lean();
-
-    const hasMore = rows.length > limit;
-    const slice = hasMore ? rows.slice(0, limit) : rows;
-    const nextCursor =
-      hasMore && slice.length ? (slice[slice.length - 1]._id as Types.ObjectId).toString() : null;
+    const slice = rows;
 
     const localBooks = slice.map((b) => ({
       source: "local" as const,

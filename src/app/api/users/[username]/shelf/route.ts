@@ -5,6 +5,7 @@ import User from "@/models/User";
 import ReadList from "@/models/ReadList";
 import BookFollow from "@/models/BookFollow";
 import Post from "@/models/Post";
+import UserRecommendation from "@/models/UserRecommendation";
 import "@/models/Book";
 
 type PopulatedBook = {
@@ -16,17 +17,24 @@ type PopulatedBook = {
 };
 
 function serializeBooks(
-  rows: { book: PopulatedBook | null }[]
-): { id: string; slug: string; title: string; authors: string; thumbnail?: string }[] {
+  rows: { book: PopulatedBook | null; rank?: number }[]
+): {
+  id: string;
+  slug: string;
+  title: string;
+  authors: string;
+  thumbnail?: string;
+  rank?: number;
+}[] {
   return rows
-    .map((r) => r.book)
-    .filter((b): b is PopulatedBook => Boolean(b && b._id))
-    .map((b) => ({
-      id: b._id.toString(),
-      slug: b.slug ?? "",
-      title: b.title,
-      authors: b.authors ?? "",
-      thumbnail: b.thumbnail,
+    .filter((r) => Boolean(r.book && r.book._id))
+    .map((r) => ({
+      id: r.book!._id.toString(),
+      slug: r.book!.slug ?? "",
+      title: r.book!.title,
+      authors: r.book!.authors ?? "",
+      thumbnail: r.book!.thumbnail,
+      rank: typeof r.rank === "number" ? r.rank : undefined,
     }));
 }
 
@@ -42,8 +50,13 @@ export async function GET(
 
   const userId = user._id as Types.ObjectId;
 
-  const [readRows, followRows, postCount] = await Promise.all([
-    ReadList.find({ user: userId })
+  const [wantRows, readRows, followRows, recRows, postCount] = await Promise.all([
+    ReadList.find({ user: userId, $or: [{ status: "want" }, { status: { $exists: false } }] })
+      .sort({ createdAt: -1 })
+      .populate("book", "title authors thumbnail slug")
+      .limit(120)
+      .lean(),
+    ReadList.find({ user: userId, status: "read" })
       .sort({ createdAt: -1 })
       .populate("book", "title authors thumbnail slug")
       .limit(120)
@@ -53,19 +66,36 @@ export async function GET(
       .populate("book", "title authors thumbnail slug")
       .limit(120)
       .lean(),
+    UserRecommendation.find({ user: userId })
+      .sort({ rank: 1, createdAt: 1 })
+      .populate("book", "title authors thumbnail slug")
+      .limit(12)
+      .lean(),
     Post.countDocuments({ author: userId }),
   ]);
 
-  const readlist = serializeBooks(readRows as { book: PopulatedBook | null }[]);
+  const wantToRead = serializeBooks(
+    wantRows as unknown as { book: PopulatedBook | null; rank?: number }[]
+  );
+  const read = serializeBooks(
+    readRows as unknown as { book: PopulatedBook | null; rank?: number }[]
+  );
   const following = serializeBooks(followRows as { book: PopulatedBook | null }[]);
+  const recommendations = serializeBooks(
+    recRows as unknown as { book: PopulatedBook | null; rank?: number }[]
+  );
 
   return NextResponse.json({
     counts: {
       posts: postCount,
-      readlist: readlist.length,
+      wantToRead: wantToRead.length,
+      read: read.length,
       following: following.length,
+      recommendations: recommendations.length,
     },
-    readlist,
+    wantToRead,
+    read,
     following,
+    recommendations,
   });
 }

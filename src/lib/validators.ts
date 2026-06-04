@@ -68,6 +68,8 @@ export const bookSearchSchema = z.object({
   category: z.string().trim().optional(),
   cursor: z.string().optional(),
   limit: z.coerce.number().min(1).max(48).optional().default(24),
+  /** recent = newest first (default), title = A→Z, rating = top rated. */
+  sort: z.enum(["recent", "title", "rating"]).optional().default("recent"),
 });
 
 /** Allow http(s) URLs, data: URLs (uploaded avatars), or empty string to clear. */

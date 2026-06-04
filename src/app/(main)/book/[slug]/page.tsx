@@ -3,7 +3,15 @@ import { Types } from "mongoose";
 import Link from "next/link";
 import Image from "next/image";
 import type { Metadata } from "next";
-import { ArrowLeft, Calendar, BookOpenText, Star, Sparkles } from "lucide-react";
+import {
+  ArrowLeft,
+  Calendar,
+  BookOpenText,
+  Star,
+  Sparkles,
+  Newspaper,
+  ExternalLink,
+} from "lucide-react";
 import connectDB from "@/lib/db";
 import Book from "@/models/Book";
 import Post from "@/models/Post";
@@ -13,6 +21,7 @@ import "@/models/User";
 import { serializePosts } from "@/lib/serialize";
 import { looksLikeObjectId, makeBookSlug, withUniqueSuffix } from "@/lib/slug";
 import { getAppSession } from "@/lib/session";
+import { getNytReviews } from "@/lib/nyt";
 import { BookActions } from "./BookActions";
 
 type BookLean = {
@@ -27,6 +36,8 @@ type BookLean = {
   publishedYear?: number;
   averageRating?: number;
   numPages?: number;
+  isbn13?: string;
+  isbn10?: string;
 };
 
 async function resolveBookBySlugOrId(input: string): Promise<BookLean | null> {
@@ -131,20 +142,33 @@ export default async function BookPage({
   const session = await getAppSession();
   const userId = session?.user?.id;
 
-  const [postCount, postIdsRaw, isFollowing, onReadlist] = await Promise.all([
-    Post.countDocuments({ book: bookId }),
-    Post.find({ book: bookId })
-      .sort({ _id: -1 })
-      .limit(30)
-      .select("_id")
-      .lean(),
-    userId
-      ? BookFollow.exists({ user: userId, book: bookId }).then(Boolean)
-      : Promise.resolve(false),
-    userId
-      ? ReadList.exists({ user: userId, book: bookId }).then(Boolean)
-      : Promise.resolve(false),
-  ]);
+  const [postCount, postIdsRaw, isFollowing, readListEntry, nytReviews] =
+    await Promise.all([
+      Post.countDocuments({ book: bookId }),
+      Post.find({ book: bookId })
+        .sort({ _id: -1 })
+        .limit(30)
+        .select("_id")
+        .lean(),
+      userId
+        ? BookFollow.exists({ user: userId, book: bookId }).then(Boolean)
+        : Promise.resolve(false),
+      userId
+        ? ReadList.findOne({ user: userId, book: bookId })
+            .select("status")
+            .lean()
+        : Promise.resolve(null),
+      getNytReviews({
+        isbn: book.isbn13 || book.isbn10 || undefined,
+        title: book.isbn13 || book.isbn10 ? undefined : book.title,
+        author:
+          book.isbn13 || book.isbn10 || book.title
+            ? undefined
+            : book.authors,
+      }),
+    ]);
+  const readStatus =
+    (readListEntry as { status?: "want" | "read" } | null)?.status ?? null;
 
   const postIds = postIdsRaw.map((r) => (r._id as Types.ObjectId).toString());
   const posts = await serializePosts(postIds, { viewerId: userId });
@@ -275,7 +299,7 @@ export default async function BookPage({
           <BookActions
             bookId={bookId}
             initialFollowing={isFollowing}
-            initialOnReadlist={onReadlist}
+            initialReadStatus={readStatus}
             authenticated={!!userId}
           />
 
@@ -301,6 +325,54 @@ export default async function BookPage({
           <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-foreground/85">
             {book.description}
           </p>
+        </section>
+      ) : null}
+
+      {nytReviews.length ? (
+        <section className="space-y-3">
+          <h2 className="inline-flex items-center gap-2 text-lg font-bold">
+            <Newspaper
+              size={18}
+              aria-hidden
+              className="text-rose-500 dark:text-rose-300"
+            />
+            New York Times review
+          </h2>
+          <div className="flex flex-col gap-3">
+            {nytReviews.slice(0, 3).map((r) => (
+              <a
+                key={r.url}
+                href={r.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group rounded-2xl border border-border bg-card p-4 transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-soft)]"
+              >
+                <div className="flex items-center justify-between gap-3 text-xs text-muted">
+                  <span className="font-semibold text-foreground/85">
+                    {r.byline || "The New York Times"}
+                  </span>
+                  {r.publicationDate ? (
+                    <time dateTime={r.publicationDate}>
+                      {new Date(r.publicationDate).toLocaleDateString(undefined, {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </time>
+                  ) : null}
+                </div>
+                {r.summary ? (
+                  <p className="mt-2 line-clamp-3 text-[14px] leading-relaxed text-foreground/85">
+                    {r.summary}
+                  </p>
+                ) : null}
+                <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-rose-600 dark:text-rose-300">
+                  Read on nytimes.com
+                  <ExternalLink size={11} aria-hidden />
+                </span>
+              </a>
+            ))}
+          </div>
         </section>
       ) : null}
 

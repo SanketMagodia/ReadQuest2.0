@@ -2,8 +2,9 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -11,11 +12,15 @@ import {
   useState,
   type ChangeEvent,
   type FormEvent,
+  type ReactNode,
 } from "react";
 import {
+  ArrowDownUp,
+  ChevronDown,
   ExternalLink,
   Flame,
   Globe,
+  ListFilter,
   MessageSquare,
   Plus,
   RefreshCw,
@@ -24,8 +29,13 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { useSession } from "next-auth/react";
 import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
 import { useInfiniteScroll } from "@/lib/hooks/useInfiniteScroll";
+import { DailyBookCard } from "@/components/feed/DailyBookCard";
+import { JoinReadquestFeedCard } from "@/components/auth/UnlockFeatures";
+import { NytBestsellers } from "@/components/explore/NytBestsellers";
+import { NytTopPicks } from "@/components/explore/NytTopPicks";
 
 type BookRow = {
   id: string;
@@ -54,6 +64,14 @@ type OLResult = {
 
 type Category = { label: string; count: number };
 
+type SortKey = "recent" | "title" | "rating";
+
+const SORT_LABELS: Record<SortKey, string> = {
+  recent: "Newest",
+  title: "A–Z",
+  rating: "Top rated",
+};
+
 type Community = {
   id: string;
   slug: string;
@@ -69,10 +87,32 @@ type Community = {
 
 const PAGE_SIZE = 24;
 
+/**
+ * Reads `?q=` from the URL and pushes it up to the page. Lives behind a
+ * Suspense boundary (Next.js 16 requires `useSearchParams` to be wrapped) so
+ * clicking the right-rail Discover chips — which link to /explore?q=… while
+ * the reader is already here — actually runs the search.
+ */
+function QuerySync({ onApply }: { onApply: (q: string) => void }) {
+  const searchParams = useSearchParams();
+  const urlQ = searchParams.get("q") ?? "";
+  useEffect(() => {
+    onApply(urlQ);
+  }, [urlQ, onApply]);
+  return null;
+}
+
 export default function ExplorePage() {
   const router = useRouter();
+  const { data: session, status } = useSession();
+  const isGuest = status === "unauthenticated";
+  const firstName =
+    (session?.user?.name || session?.user?.username || "")
+      .trim()
+      .split(/\s+/)[0] || "";
   const [q, setQ] = useState("");
   const [category, setCategory] = useState("");
+  const [sort, setSort] = useState<SortKey>("recent");
   const [books, setBooks] = useState<BookRow[]>([]);
   const [olResults, setOlResults] = useState<OLResult[]>([]);
   const [adoptingKey, setAdoptingKey] = useState<string | null>(null);
@@ -94,18 +134,22 @@ export default function ExplorePage() {
       reset,
       qOverride,
       categoryOverride,
+      sortOverride,
     }: {
       cursor?: string | null;
       reset?: boolean;
       qOverride?: string;
       categoryOverride?: string;
+      sortOverride?: SortKey;
     } = {}) => {
       const seq = ++seqRef.current;
       const params = new URLSearchParams();
       const qVal = qOverride ?? q;
       const catVal = categoryOverride ?? category;
+      const sortVal = sortOverride ?? sort;
       if (qVal.trim()) params.set("q", qVal.trim());
       if (catVal.trim()) params.set("category", catVal.trim());
+      if (sortVal !== "recent") params.set("sort", sortVal);
       params.set("limit", String(PAGE_SIZE));
       if (cursor && !reset) params.set("cursor", cursor);
 
@@ -137,8 +181,14 @@ export default function ExplorePage() {
       if (reset) setInitialLoading(false);
       else setLoadingMore(false);
     },
-    [q, category]
+    [q, category, sort]
   );
+
+  function handleSortChange(next: SortKey) {
+    if (next === sort) return;
+    setSort(next);
+    void fetchBooks({ reset: true, sortOverride: next });
+  }
 
   useEffect(() => {
     void fetchBooks({ reset: true });
@@ -189,10 +239,23 @@ export default function ExplorePage() {
   function clearFilters() {
     setQ("");
     setCategory("");
+    setSort("recent");
     prevQRef.current = "";
     prevCategoryRef.current = "";
-    void fetchBooks({ reset: true, qOverride: "", categoryOverride: "" });
+    void fetchBooks({
+      reset: true,
+      qOverride: "",
+      categoryOverride: "",
+      sortOverride: "recent",
+    });
   }
+
+  // Apply a `?q=` arriving from the URL (e.g. the right-rail Discover chips
+  // link here while the user is already on Explore). The debounced search
+  // effect picks up the resulting state change and fetches.
+  const applyUrlQuery = useCallback((next: string) => {
+    setQ((prev) => (prev === next ? prev : next));
+  }, []);
 
   /**
    * Adopt an Open Library result into our database, then navigate to it.
@@ -268,14 +331,41 @@ export default function ExplorePage() {
               ? `Results for “${q}”`
               : "Everything"}
         </p>
-        <button
-          type="button"
-          onClick={() => setOpenCreate((v) => !v)}
-          className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-xs font-semibold shadow-[var(--shadow-soft)] hover:bg-hover"
-        >
-          <Plus size={14} aria-hidden />
-          Add a book
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <FilterSelect
+            icon={ListFilter}
+            ariaLabel="Filter by genre"
+            value={category}
+            onChange={(v) => setCategory(v)}
+          >
+            <option value="">All genres</option>
+            {categories.map((c) => (
+              <option key={c.label} value={c.label}>
+                {c.label}
+              </option>
+            ))}
+          </FilterSelect>
+          <FilterSelect
+            icon={ArrowDownUp}
+            ariaLabel="Sort books"
+            value={sort}
+            onChange={(v) => handleSortChange(v as SortKey)}
+          >
+            {(Object.keys(SORT_LABELS) as SortKey[]).map((key) => (
+              <option key={key} value={key}>
+                {SORT_LABELS[key]}
+              </option>
+            ))}
+          </FilterSelect>
+          <button
+            type="button"
+            onClick={() => setOpenCreate((v) => !v)}
+            className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-xs font-semibold shadow-[var(--shadow-soft)] hover:bg-hover"
+          >
+            <Plus size={14} aria-hidden />
+            Add a book
+          </button>
+        </div>
       </div>
 
       {openCreate ? (
@@ -339,33 +429,37 @@ export default function ExplorePage() {
 
   return (
     <section className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-2 pb-12 sm:px-4">
+      <Suspense fallback={null}>
+        <QuerySync onApply={applyUrlQuery} />
+      </Suspense>
       <header
-        className="relative overflow-hidden rounded-[28px] border border-border bg-card p-6 shadow-[var(--shadow-soft)] sm:p-8"
+        className="relative -mx-5 overflow-hidden rounded-b-[22px] border-x-0 border-b border-t-0 border-border bg-card px-5 py-5 shadow-[var(--shadow-soft)] layout-wide:-mx-4 sm:rounded-b-[28px] sm:p-8"
       >
         <div
           aria-hidden
-          className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full blur-3xl opacity-50"
+          className="pointer-events-none absolute -right-16 -top-16 h-52 w-52 rounded-full blur-3xl opacity-60 sm:-right-20 sm:-top-20 sm:h-64 sm:w-64 sm:opacity-50"
           style={{ background: "var(--gradient-brand)" }}
         />
         <div
           aria-hidden
-          className="pointer-events-none absolute -left-16 bottom-0 h-48 w-48 rounded-full blur-3xl opacity-40"
+          className="pointer-events-none absolute -left-12 bottom-0 h-40 w-40 rounded-full blur-3xl opacity-50 sm:-left-16 sm:h-48 sm:w-48 sm:opacity-40"
           style={{ background: "var(--gradient-warm)" }}
         />
-        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted">
-          discover
+        <p className="inline-flex items-center gap-1.5 rounded-full bg-background/60 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted backdrop-blur-sm sm:bg-transparent sm:px-0 sm:py-0 sm:text-[11px] sm:tracking-[0.22em]">
+          <Sparkles size={12} aria-hidden className="text-amber-500 dark:text-amber-300" />
+          {firstName ? `welcome back, ${firstName}` : "welcome"}
         </p>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-[34px]">
+        <h1 className="mt-2 text-[24px] font-bold leading-[1.1] tracking-tight sm:mt-2 sm:text-[34px]">
           Explore <span className="gradient-brand-text">stories</span>
         </h1>
-        <p className="mt-2 max-w-2xl text-sm text-muted sm:text-[15px]">
-          Search by title, author, or vibe. Follow books to make Home feel
-          personal.
+        <p className="mt-1.5 hidden max-w-2xl text-sm text-muted sm:mt-2 sm:block sm:text-[15px]">
+          Search by title, author, or vibe — knock out today&apos;s quest, and
+          follow books to make this feel like home.
         </p>
 
-        <form onSubmit={submitSearch} className="relative mt-6 max-w-2xl">
+        <form onSubmit={submitSearch} className="relative mt-3.5 max-w-2xl sm:mt-6">
           <Search
-            size={18}
+            size={17}
             aria-hidden
             className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-muted"
           />
@@ -374,7 +468,7 @@ export default function ExplorePage() {
             onChange={(e: ChangeEvent<HTMLInputElement>) => setQ(e.target.value)}
             placeholder="Search titles, authors, themes…"
             aria-label="Search"
-            className="w-full rounded-full border border-border bg-background py-3.5 pl-12 pr-10 text-[15px] shadow-inner outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70"
+            className="w-full rounded-full border border-border bg-background py-2.5 pl-11 pr-10 text-[14px] shadow-inner outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70 sm:py-3.5 sm:pl-12 sm:text-[15px]"
           />
           {initialLoading && q.trim() ? (
             <span
@@ -405,6 +499,21 @@ export default function ExplorePage() {
           </div>
         ) : null}
       </header>
+
+      {/* Daily quest (or a join CTA for guests) leads Home with the NYT top
+          books alongside it — side by side at every width, padded on mobile,
+          full-bleed on desktop, and stretched to equal height. */}
+      {!isSearching ? (
+        <div className="grid grid-cols-[1.5fr_1fr] items-stretch gap-3 layout-wide:-mx-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] lg:gap-4">
+          <div className="h-full">
+            {isGuest ? <JoinReadquestFeedCard /> : <DailyBookCard />}
+          </div>
+          <NytTopPicks />
+        </div>
+      ) : null}
+
+      {/* Curated recommendations from the NYT bestseller lists. */}
+      {!isSearching ? <NytBestsellers /> : null}
 
       {/* When the user is searching or has a category active, results jump
           to the top — communities + shelves slide below so the user doesn't
@@ -837,6 +946,43 @@ function BookCard({ book, onOpen }: { book: BookRow; onOpen: () => void }) {
         </div>
       </div>
     </button>
+  );
+}
+
+function FilterSelect({
+  icon: Icon,
+  ariaLabel,
+  value,
+  onChange,
+  children,
+}: {
+  icon: typeof ListFilter;
+  ariaLabel: string;
+  value: string;
+  onChange: (value: string) => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="relative">
+      <Icon
+        size={13}
+        aria-hidden
+        className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted"
+      />
+      <select
+        aria-label={ariaLabel}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="max-w-[10rem] cursor-pointer appearance-none truncate rounded-full border border-border bg-card py-2 pl-7 pr-7 text-xs font-semibold text-foreground/85 shadow-[var(--shadow-soft)] hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70"
+      >
+        {children}
+      </select>
+      <ChevronDown
+        size={13}
+        aria-hidden
+        className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted"
+      />
+    </div>
   );
 }
 

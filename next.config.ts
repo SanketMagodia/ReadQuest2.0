@@ -7,6 +7,15 @@ const nextConfig: NextConfig = {
       { protocol: "http", hostname: "**" },
     ],
   },
+  async redirects() {
+    return [
+      {
+        source: "/",
+        destination: "/explore",
+        permanent: false,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
