@@ -7,6 +7,18 @@ import { bookCreateSchema, bookSearchSchema } from "@/lib/validators";
 import { makeBookSlug, withUniqueSuffix } from "@/lib/slug";
 import { searchOpenLibrary, type OLBookResult } from "@/lib/openlibrary";
 
+type BookLean = {
+  _id: Types.ObjectId;
+  slug?: string;
+  title?: string;
+  subtitle?: string;
+  authors?: string;
+  categories?: string;
+  thumbnail?: string;
+  publishedYear?: number;
+  averageRating?: number;
+};
+
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
@@ -39,7 +51,7 @@ export async function GET(req: Request) {
      * offset pagination (cursor = the next offset). Offsets are bounded by the
      * 24-per-page UI so skip stays cheap.
      */
-    let rows: Array<Record<string, unknown>>;
+    let rows: BookLean[];
     let nextCursor: string | null = null;
 
     if (sort === "recent") {
@@ -47,9 +59,7 @@ export async function GET(req: Request) {
       if (cursor && Types.ObjectId.isValid(cursor)) {
         query = query.where({ _id: { $lt: new Types.ObjectId(cursor) } });
       }
-      rows = (await query.limit(limit + 1).lean()) as unknown as Array<
-        Record<string, unknown>
-      >;
+      rows = (await query.limit(limit + 1).lean()) as unknown as BookLean[];
       const hasMore = rows.length > limit;
       if (hasMore) rows = rows.slice(0, limit);
       nextCursor =
@@ -70,7 +80,7 @@ export async function GET(req: Request) {
       rows = (await query
         .skip(offset)
         .limit(limit + 1)
-        .lean()) as unknown as Array<Record<string, unknown>>;
+        .lean()) as unknown as BookLean[];
       const hasMore = rows.length > limit;
       if (hasMore) rows = rows.slice(0, limit);
       nextCursor = hasMore ? String(offset + limit) : null;
@@ -80,13 +90,13 @@ export async function GET(req: Request) {
 
     const localBooks = slice.map((b) => ({
       source: "local" as const,
-      id: (b._id as Types.ObjectId).toString(),
-      slug: (b as { slug?: string }).slug ?? "",
-      title: b.title,
-      subtitle: b.subtitle,
-      authors: b.authors,
-      categories: b.categories,
-      thumbnail: b.thumbnail,
+      id: b._id.toString(),
+      slug: b.slug ?? "",
+      title: b.title ?? "",
+      subtitle: b.subtitle ?? "",
+      authors: b.authors ?? "",
+      categories: b.categories ?? "",
+      thumbnail: b.thumbnail ?? "",
       publishedYear: b.publishedYear,
       averageRating: b.averageRating,
     }));
