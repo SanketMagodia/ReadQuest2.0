@@ -11,13 +11,21 @@ import "@/models/User";
 import { groqChat } from "@/lib/groq";
 
 const MIN_GAP_MS = 60 * 1000;
+// Pause between consecutive LLM calls to keep Groq TPM usage well under the limit.
+// Override with BOT_LLM_SLEEP_MS env var (0 = no sleep).
+const SLEEP_BETWEEN_LLM_MS = parseInt(
+  process.env.BOT_LLM_SLEEP_MS ?? "30000",
+  10
+);
+const sleep = (ms: number) =>
+  ms > 0 ? new Promise<void>((r) => setTimeout(r, ms)) : Promise.resolve();
 // Lock TTL: only a fallback for a crashed tick (the lock is normally released in
 // `finally`). Must comfortably exceed TICK_BUDGET_MS so a slow tick never has its
 // lock expire underneath it.
-const TICK_LOCK_MS = 5 * 60 * 1000;
-// Soft wall-clock budget per tick. We stop starting new work past this so a single
-// (possibly browser-triggered) tick stays within Vercel's function maxDuration.
-const TICK_BUDGET_MS = 50 * 1000;
+const TICK_LOCK_MS = 20 * 60 * 1000;
+// Soft wall-clock budget per tick. Raised to 8 min to accommodate the deliberate
+// sleep between LLM calls. Set BOT_LLM_SLEEP_MS=0 to revert to rapid-fire mode.
+const TICK_BUDGET_MS = 8 * 60 * 1000;
 // When catching up after a long gap, cap how many posts a single bot may backfill
 // in one tick (bounds LLM calls / time). Remaining slots are handled next tick.
 const MAX_BACKFILL_POSTS_PER_BOT = 8;
@@ -803,6 +811,7 @@ export async function runBotTick(): Promise<{
           perBot += 1;
           // generatePostForBot rolled nextPostAt forward FROM scheduledAt.
           scheduledAt = bot.nextPostAt ? new Date(bot.nextPostAt) : now;
+          await sleep(SLEEP_BETWEEN_LLM_MS);
         }
         // Hit the per-bot cap but still behind (very long idle gap): jump to a
         // fresh future slot so the next tick doesn't replay ancient history.
@@ -863,6 +872,7 @@ export async function runBotTick(): Promise<{
             spreadSince: windowStart,
           });
           replies += 1;
+          await sleep(SLEEP_BETWEEN_LLM_MS);
         } catch (e) {
           const message = e instanceof Error ? e.message : "Unknown error";
           replyErrors.push({
@@ -901,6 +911,7 @@ export async function runBotTick(): Promise<{
               spreadSince: windowStart,
             });
             responses += 1;
+            await sleep(SLEEP_BETWEEN_LLM_MS);
           } catch (e) {
             const message = e instanceof Error ? e.message : "Unknown error";
             responseErrors.push({ botId, message });

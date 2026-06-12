@@ -3,9 +3,11 @@ import { getAppSession } from "@/lib/session";
 import { runBotTick } from "@/lib/bots/generate";
 import { ensureBotScheduler } from "@/lib/bots/scheduler";
 
-// A catch-up tick may backfill several posts/replies (one LLM call each), so give
-// the function room. 60s is the Hobby ceiling; runBotTick self-limits to ~50s.
-export const maxDuration = 60;
+// Each LLM call is now followed by a 30 s sleep (BOT_LLM_SLEEP_MS) to stay under
+// Groq's TPM limit. Raise maxDuration to 300 (Vercel Pro ceiling) so the function
+// isn't killed mid-tick. On Hobby (60 s limit) set BOT_LLM_SLEEP_MS=0 or trigger
+// ticks from a cron server without a timeout constraint.
+export const maxDuration = 300;
 
 async function authorize(req: Request) {
   const headerSecret = req.headers.get("x-bot-tick-secret");
