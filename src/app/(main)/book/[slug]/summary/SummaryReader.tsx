@@ -80,6 +80,7 @@ export function SummaryReader({
 
   // Reading progress
   const articleRef = useRef<HTMLDivElement | null>(null);
+  const scopeCardRef = useRef<HTMLElement | null>(null);
   const [progress, setProgress] = useState(0);
 
   const refresh = useCallback(async () => {
@@ -257,7 +258,7 @@ export function SummaryReader({
         <div className={headerSpacer} aria-hidden />
 
         {/* Book chip + scope switcher */}
-        <section className="mt-4 mb-8 flex flex-col gap-5 rounded-3xl border border-border bg-card p-5 shadow-[var(--shadow-soft)] sm:p-6">
+        <section ref={scopeCardRef} className="mt-4 mb-8 flex flex-col gap-5 rounded-3xl border border-border bg-card p-5 shadow-[var(--shadow-soft)] sm:p-6">
           <div className="flex items-start gap-4">
             <div className="relative h-[88px] w-[60px] shrink-0 overflow-hidden rounded-xl bg-pill ring-1 ring-border/60">
               {thumbnail ? (
@@ -414,7 +415,14 @@ export function SummaryReader({
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={() => setPanelOpen((v) => !v)}
+                  onClick={() => {
+                    setPanelOpen(true);
+                    setError(null);
+                    scopeCardRef.current?.scrollIntoView({
+                      behavior: "smooth",
+                      block: "start",
+                    });
+                  }}
                   className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 font-semibold hover:bg-hover"
                 >
                   <Wand2 size={12} aria-hidden />

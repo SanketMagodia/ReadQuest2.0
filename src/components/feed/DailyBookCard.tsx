@@ -387,19 +387,19 @@ function Stat({
 
 function DailyCardSkeleton() {
   return (
-    <div className="flex min-h-[13rem] animate-pulse flex-col rounded-3xl border border-border bg-card p-4 shadow-[var(--shadow-soft)] layout-compact:rounded-xl layout-compact:p-3 layout-compact:shadow-none layout-wide:min-h-[18rem] sm:p-5">
+    <div className="flex min-h-[13rem] flex-col rounded-3xl border border-border bg-card p-4 shadow-[var(--shadow-soft)] layout-compact:rounded-xl layout-compact:p-3 layout-compact:shadow-none layout-wide:min-h-[18rem] sm:p-5">
       <div className="flex flex-1 gap-3 layout-compact:gap-2.5 sm:gap-4">
-        <div className="h-[120px] w-[84px] shrink-0 rounded-xl bg-pill layout-compact:h-[88px] layout-compact:w-[62px] sm:h-[140px] sm:w-[98px]" />
+        <div className="skeleton-shimmer h-[120px] w-[84px] shrink-0 rounded-xl layout-compact:h-[88px] layout-compact:w-[62px] sm:h-[140px] sm:w-[98px]" />
         <div className="flex flex-1 flex-col gap-1.5 pt-0.5">
-          <div className="h-2.5 w-16 rounded bg-pill layout-compact:w-14" />
-          <div className="h-4 w-full rounded bg-pill layout-compact:h-3.5" />
-          <div className="h-3 w-1/2 rounded bg-pill layout-compact:hidden" />
-          <div className="mt-auto h-7 w-20 rounded-full bg-pill sm:h-8 sm:w-36" />
+          <div className="skeleton-shimmer h-2.5 w-16 rounded layout-compact:w-14" />
+          <div className="skeleton-shimmer h-4 w-full rounded layout-compact:h-3.5" />
+          <div className="skeleton-shimmer h-3 w-1/2 rounded layout-compact:hidden" />
+          <div className="skeleton-shimmer mt-auto h-7 w-20 rounded-full sm:h-8 sm:w-36" />
         </div>
       </div>
       <div className="mt-2 hidden grid-cols-3 gap-1 layout-compact:grid">
         {Array.from({ length: 3 }, (_, i) => (
-          <div key={i} className="h-10 rounded-lg bg-pill/80" />
+          <div key={i} className="skeleton-shimmer h-10 rounded-lg" />
         ))}
       </div>
     </div>
