@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { ReadquestLogo } from "@/components/brand/ReadquestLogo";
+import { TheGistClubLogo } from "@/components/brand/TheGistClubLogo";
 import { BookCarousel } from "@/components/auth/BookCarousel";
 import { UnlockFeaturesAuthStrip } from "@/components/auth/UnlockFeatures";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
+import { AuthFooter } from "@/components/layout/AuthFooter";
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
@@ -37,7 +38,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
 
       {/* Top bar */}
       <header className="mx-auto flex w-full max-w-6xl shrink-0 items-center justify-between px-4 pt-4 sm:px-8 sm:pt-8 lg:pt-8">
-        <ReadquestLogo height={30} priority />
+        <TheGistClubLogo height={38} priority />
         <div className="inline-flex items-center gap-2">
           <ThemeToggle />
           <Link
@@ -96,6 +97,8 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
           <div className="w-full lg:sticky lg:top-10">{children}</div>
         </section>
       </div>
+
+      <AuthFooter />
     </div>
   );
 }

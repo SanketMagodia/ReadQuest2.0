@@ -8,6 +8,7 @@ import {
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BRAND_SHORT } from "@/lib/brand";
 
 export const UNLOCK_FEATURES = [
   {
@@ -124,7 +125,7 @@ export function JoinReadquestSidebarCard() {
       style={{ background: "var(--gradient-brand)" }}
     >
       <div className="rounded-[14px] bg-card p-3">
-        <p className="text-[12px] font-semibold leading-tight">Join Readquest</p>
+        <p className="text-[12px] font-semibold leading-tight">Join {BRAND_SHORT}</p>
         <p className="mt-1 text-[10px] leading-snug text-muted">{perks}</p>
         <Link
           href="/register"
@@ -217,7 +218,7 @@ export function JoinReadquestRailPitch() {
   return (
     <section className="rounded-3xl border border-border bg-card p-4 shadow-[var(--shadow-soft)]">
       <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-sky-600 dark:text-sky-300">
-        Join Readquest
+        Join {BRAND_SHORT}
       </p>
       <p className="mt-1.5 text-[14px] font-semibold leading-snug">
         Sign in before you dive in

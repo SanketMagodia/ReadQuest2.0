@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 
 /**
- * Registers the Readquest service worker on the client.
+ * Registers The Gist Club service worker on the client.
  * - Only runs in the browser, on HTTPS (or localhost) where SW is allowed.
  * - Skips registration in `next dev` to avoid stale caches during development.
  */

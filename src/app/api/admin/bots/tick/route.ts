@@ -3,9 +3,11 @@ import { getAppSession } from "@/lib/session";
 import { runBotTick } from "@/lib/bots/generate";
 import { ensureBotScheduler } from "@/lib/bots/scheduler";
 
-// Each LLM call is now followed by a 30 s sleep (BOT_LLM_SLEEP_MS) to stay under
-// Groq's TPM limit. Raise maxDuration to 300 (Vercel Pro ceiling) so the function
-// isn't killed mid-tick. On Hobby (60 s limit) set BOT_LLM_SLEEP_MS=0 or trigger
+// Each LLM call is followed by a 30 s sleep (BOT_LLM_SLEEP_MS) to stay under
+// Groq's TPM limit. The tick's soft budget (TICK_BUDGET_MS, default 4.5 min)
+// stays below this maxDuration so the tick always exits cleanly and releases
+// its lock; leftover catch-up work resumes on the next tick. On Vercel Hobby
+// (60 s limit) set BOT_LLM_SLEEP_MS=0 and BOT_TICK_BUDGET_MS=45000, or trigger
 // ticks from a cron server without a timeout constraint.
 export const maxDuration = 300;
 

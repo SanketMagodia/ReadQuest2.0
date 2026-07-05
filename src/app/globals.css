@@ -112,6 +112,7 @@ html {
   background: var(--bg);
   color: var(--fg);
   -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
   /* Hard cap to prevent any rogue element from forcing horizontal scroll on
      phones (the symptom is "I have to pinch-zoom to read"). We use `clip`
      instead of `hidden` so it does NOT establish a scroll container —
@@ -745,4 +746,804 @@ h1,
 .rq-progress-fill {
   height: 100%;
   transition: width 280ms ease;
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Explore hero + page polish: aurora backdrop, self-flipping 3D book,
+   rotating gradient words, conic-halo search, drifting sparks, scroll
+   reveals, and a hover "shine" sweep for cards.
+   ─────────────────────────────────────────────────────────────────────────── */
+.rq-hero {
+  position: relative;
+  isolation: isolate;
+}
+
+/* Soft aurora wash behind the hero. Blurred radial blobs that drift very
+   slowly — decorative only, so pointer-events off and behind content. */
+.rq-hero-aurora {
+  position: absolute;
+  inset: -28% -8%;
+  z-index: -1;
+  pointer-events: none;
+  filter: blur(52px);
+  opacity: 0.5;
+}
+.dark .rq-hero-aurora {
+  opacity: 0.36;
+}
+.rq-hero-aurora span {
+  position: absolute;
+  border-radius: 50%;
+  will-change: transform;
+}
+.rq-hero-aurora span:nth-child(1) {
+  top: 4%;
+  left: -6%;
+  width: 46%;
+  height: 66%;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--brand-1) 62%, transparent),
+    transparent 72%
+  );
+  animation: rq-blob-a 17s ease-in-out infinite alternate;
+}
+.rq-hero-aurora span:nth-child(2) {
+  top: -8%;
+  right: -4%;
+  width: 42%;
+  height: 58%;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--brand-amber) 50%, transparent),
+    transparent 72%
+  );
+  animation: rq-blob-b 21s ease-in-out infinite alternate;
+}
+.rq-hero-aurora span:nth-child(3) {
+  bottom: -14%;
+  left: 28%;
+  width: 46%;
+  height: 58%;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--brand-mint) 44%, transparent),
+    transparent 72%
+  );
+  animation: rq-blob-c 25s ease-in-out infinite alternate;
+}
+@keyframes rq-blob-a {
+  to {
+    transform: translate3d(12%, 14%, 0) scale(1.12);
+  }
+}
+@keyframes rq-blob-b {
+  to {
+    transform: translate3d(-10%, 18%, 0) scale(1.18);
+  }
+}
+@keyframes rq-blob-c {
+  to {
+    transform: translate3d(-14%, -10%, 0) scale(1.08);
+  }
+}
+
+/* Staggered hero entrance (element starts hidden, slides in; inline
+   animation-delay controls the stagger). */
+.rq-enter {
+  opacity: 0;
+  animation: rq-slide 640ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
+}
+
+/* Rotating word carousel inside the headline. All words stack in one grid
+   cell; each fades/rises through on a shared 12.5s cycle (5 words × 2.5s,
+   offset via --d). Gradient-clipped text, alternating palettes. */
+.rq-hero-words {
+  position: relative;
+  display: inline-grid;
+  text-align: left;
+  vertical-align: baseline;
+}
+.rq-hero-words > span {
+  grid-area: 1 / 1;
+  opacity: 0;
+  transform: translateY(0.55em);
+  animation: rq-word-cycle 12.5s ease-in-out infinite;
+  animation-delay: var(--d, 0s);
+  background-image: var(--gradient-brand);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  padding-bottom: 0.08em; /* keep descenders unclipped */
+  will-change: transform, opacity;
+}
+.rq-hero-words > span:nth-child(2),
+.rq-hero-words > span:nth-child(5) {
+  background-image: var(--gradient-warm);
+}
+.rq-hero-words > span:nth-child(3) {
+  background-image: var(--gradient-cool);
+}
+@keyframes rq-word-cycle {
+  0% {
+    opacity: 0;
+    transform: translateY(0.55em);
+  }
+  3.5%,
+  17% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  21%,
+  100% {
+    opacity: 0;
+    transform: translateY(-0.5em);
+  }
+}
+
+/* Hand-drawn squiggle under the rotating word — the stroke draws itself in. */
+.rq-hero-squiggle {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -0.16em;
+  width: 100%;
+  height: 0.3em;
+  overflow: visible;
+  pointer-events: none;
+}
+.rq-hero-squiggle path {
+  stroke-dasharray: 260;
+  stroke-dashoffset: 260;
+  animation: rq-draw 1.5s cubic-bezier(0.6, 0, 0.3, 1) 0.55s forwards;
+}
+@keyframes rq-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Search field. The animated gradient border is a big conic-gradient square
+   slowly rotating behind the pill, clipped by `overflow: hidden` to the
+   1.5px frame left around the solid inner field — a plain transform
+   animation, so no @property/houdini dependency. Idle it reads as a soft
+   pastel ring; focusing saturates the ring, lifts the pill, and blooms a
+   brand-tinted glow (box-shadows are not clipped by overflow). */
+.rq-search {
+  position: relative;
+  border-radius: 9999px;
+  padding: 1.5px;
+  overflow: hidden;
+  background: var(--border);
+  box-shadow: var(--shadow-soft);
+  transition:
+    transform 320ms cubic-bezier(0.23, 1, 0.32, 1),
+    box-shadow 320ms ease;
+}
+.rq-search::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 130%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%) rotate(0deg);
+  background: conic-gradient(
+    from 0deg,
+    var(--brand-3),
+    var(--brand-1),
+    var(--brand-mint),
+    var(--brand-amber),
+    var(--brand-coral),
+    var(--brand-3)
+  );
+  animation: rq-spin-slow 9s linear infinite;
+  opacity: 0.55;
+  transition: opacity 320ms ease;
+  will-change: transform;
+}
+.dark .rq-search::before {
+  opacity: 0.45;
+}
+.rq-search:focus-within {
+  transform: translateY(-1px);
+  box-shadow:
+    0 18px 44px -16px color-mix(in srgb, var(--brand-1) 55%, transparent),
+    var(--shadow-soft);
+}
+.rq-search:focus-within::before {
+  opacity: 1;
+}
+@keyframes rq-spin-slow {
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+/* Drifting sparks — tiny stars / book glyphs that float up and fade. */
+.rq-hero-spark {
+  position: absolute;
+  display: inline-flex;
+  pointer-events: none;
+  opacity: 0;
+  animation: rq-spark 9s ease-in-out infinite;
+  animation-delay: var(--d, 0s);
+  color: var(--brand-1);
+  will-change: transform, opacity;
+}
+.rq-hero-spark:nth-child(3n) {
+  color: var(--brand-amber);
+}
+.rq-hero-spark:nth-child(3n + 2) {
+  color: var(--brand-mint);
+}
+@keyframes rq-spark {
+  0%,
+  100% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.6) rotate(0deg);
+  }
+  12% {
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 0.5;
+    transform: translateY(-26px) scale(1) rotate(14deg);
+  }
+  88% {
+    opacity: 0;
+    transform: translateY(-48px) scale(0.7) rotate(-10deg);
+  }
+}
+
+/* ── Floating 3D book. An open book, gently bobbing, whose leaves flip
+   themselves forever. Pure CSS transforms — no images. ── */
+.rq-book3d {
+  --paper: #fbf7ec;
+  --paper-edge: #e9e1cd;
+  --ink: rgba(74, 63, 48, 0.3);
+  position: relative;
+  width: 190px;
+  height: 138px;
+  perspective: 1100px;
+}
+/* Dark mode: keep the pages a warm lamplit cream (instead of vanishing into
+   the background) and float the book on a soft amber reading-lamp glow. */
+.dark .rq-book3d {
+  --paper: #ecdfc0;
+  --paper-edge: #c8b48b;
+  --ink: rgba(96, 78, 52, 0.4);
+}
+.rq-book3d::before {
+  content: "";
+  position: absolute;
+  inset: -22% -16%;
+  border-radius: 50%;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--brand-amber) 30%, transparent),
+    color-mix(in srgb, var(--brand-1) 10%, transparent) 55%,
+    transparent 75%
+  );
+  filter: blur(16px);
+  opacity: 0;
+  pointer-events: none;
+}
+.dark .rq-book3d::before {
+  opacity: 1;
+  animation: rq-book-glow 6.5s ease-in-out infinite;
+}
+@keyframes rq-book-glow {
+  0%,
+  100% {
+    opacity: 0.65;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@media (min-width: 1024px) {
+  .rq-book3d {
+    width: 230px;
+    height: 166px;
+  }
+}
+.rq-book3d-tilt {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  animation: rq-book-bob 6.5s ease-in-out infinite;
+}
+@keyframes rq-book-bob {
+  0%,
+  100% {
+    transform: rotateX(38deg) rotateZ(-7deg) translateY(0);
+  }
+  50% {
+    transform: rotateX(38deg) rotateZ(-7deg) translateY(-9px);
+  }
+}
+.rq-book3d-page {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  background: linear-gradient(105deg, var(--paper), var(--paper-edge));
+}
+.rq-book3d-page--left {
+  left: 0;
+  border-radius: 12px 2px 2px 12px;
+  box-shadow: inset -14px 0 18px -14px rgba(0, 0, 0, 0.35);
+}
+.rq-book3d-page--right {
+  right: 0;
+  border-radius: 2px 12px 12px 2px;
+  box-shadow: inset 14px 0 18px -14px rgba(0, 0, 0, 0.35);
+}
+/* Faint "printed text" lines on the resting pages. */
+.rq-book3d-page::after {
+  content: "";
+  position: absolute;
+  inset: 16% 14%;
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--ink) 0 1.5px,
+    transparent 1.5px 9px
+  );
+  border-radius: 2px;
+  opacity: 0.75;
+}
+.rq-book3d-leaf {
+  position: absolute;
+  left: 50%;
+  top: 1.5%;
+  bottom: 1.5%;
+  width: calc(50% - 3px);
+  transform-origin: left center;
+  border-radius: 2px 10px 10px 2px;
+  background: linear-gradient(100deg, var(--paper) 20%, var(--paper-edge));
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+  animation: rq-leaf-turn 8s cubic-bezier(0.55, 0.08, 0.35, 0.95) infinite;
+  animation-delay: var(--d, 0s);
+  will-change: transform, opacity;
+}
+@keyframes rq-leaf-turn {
+  0% {
+    transform: rotateY(-4deg);
+    opacity: 1;
+  }
+  26% {
+    transform: rotateY(-176deg);
+    opacity: 1;
+  }
+  31% {
+    transform: rotateY(-176deg);
+    opacity: 0;
+  }
+  92% {
+    transform: rotateY(-4deg);
+    opacity: 0;
+  }
+  100% {
+    transform: rotateY(-4deg);
+    opacity: 1;
+  }
+}
+.rq-book3d-shadow {
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  bottom: -16px;
+  height: 22px;
+  border-radius: 50%;
+  background: radial-gradient(
+    closest-side,
+    rgba(15, 23, 42, 0.35),
+    transparent 72%
+  );
+  filter: blur(6px);
+  animation: rq-book-shadow 6.5s ease-in-out infinite;
+}
+.dark .rq-book3d-shadow {
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.6), transparent 72%);
+}
+@keyframes rq-book-shadow {
+  0%,
+  100% {
+    transform: scaleX(1);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scaleX(0.85);
+    opacity: 0.45;
+  }
+}
+
+/* Gradient hairline that closes the hero. */
+.rq-hero-rule {
+  height: 1px;
+  border: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--brand-1) 45%, var(--border)) 30%,
+    color-mix(in srgb, var(--brand-amber) 40%, var(--border)) 70%,
+    transparent
+  );
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   "The Gist Club" logo: a gradient quill writing a flowing line in the air
+   (the ink stroke draws itself in a loop), paired with an editorial
+   two-line wordmark — a tiny letterspaced THE over a big serif "Gist Club".
+   ─────────────────────────────────────────────────────────────────────────── */
+.gc-logo {
+  line-height: 1;
+  user-select: none;
+}
+.gc-mark {
+  display: inline-block;
+  flex-shrink: 0;
+  /* Colored halo lifts the bubble off any background. */
+  filter: drop-shadow(0 5px 12px color-mix(in srgb, var(--brand-1) 50%, transparent));
+}
+.gc-mark svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+/* The quill sways with a writing rhythm, pivoting around its nib. */
+.gc-feather {
+  transform-origin: 18% 82%;
+  transform-box: fill-box;
+  animation: gc-feather-write 3.2s ease-in-out infinite;
+  transition: transform 420ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.gc-logo:hover .gc-feather {
+  animation-play-state: paused;
+  transform: rotate(-8deg) translateY(-1.5px) scale(1.06);
+}
+@keyframes gc-feather-write {
+  0%,
+  100% {
+    transform: rotate(0deg) translate(0, 0);
+  }
+  25% {
+    transform: rotate(-2.6deg) translate(0.4px, 0.5px);
+  }
+  55% {
+    transform: rotate(1.6deg) translate(-0.3px, -0.4px);
+  }
+  78% {
+    transform: rotate(-1.2deg) translate(0.2px, 0.3px);
+  }
+}
+/* The flowing line the quill writes in the air: draws itself, holds,
+   fades, loops. dasharray/offset are set on the path in the SVG. */
+.gc-script {
+  animation: gc-script-draw 6s ease-in-out infinite;
+}
+@keyframes gc-script-draw {
+  0% {
+    stroke-dashoffset: 60;
+    opacity: 1;
+  }
+  40%,
+  78% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  88% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+  100% {
+    stroke-dashoffset: 60;
+    opacity: 0;
+  }
+}
+/* Ink drop lands where the stroke finishes. */
+.gc-inkdot {
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: gc-inkdot-pop 6s cubic-bezier(0.34, 1.56, 0.64, 1) infinite;
+}
+@keyframes gc-inkdot-pop {
+  0%,
+  38% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  44% {
+    transform: scale(1.35);
+    opacity: 1;
+  }
+  48%,
+  78% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  88%,
+  100% {
+    transform: scale(0);
+    opacity: 0;
+  }
+}
+.gc-spark {
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: gc-spark-twinkle 3.4s ease-in-out infinite;
+}
+@keyframes gc-spark-twinkle {
+  0%,
+  100% {
+    transform: scale(0.55) rotate(0deg);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1) rotate(28deg);
+    opacity: 1;
+  }
+}
+/* Wordmark: small letterspaced THE over the name. */
+.gc-the {
+  display: block;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--fg) 55%, transparent);
+}
+.gc-name {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  color: var(--fg);
+}
+/* Compact layouts (phones / portrait tablets): the lockup sits on the
+   translucent top bar, so give the wordmark more contrast in both themes
+   and soften the mark's halo so it doesn't smear on small screens. */
+@media (max-aspect-ratio: 1/1) {
+  .gc-mark {
+    filter: drop-shadow(0 2px 6px color-mix(in srgb, var(--brand-1) 35%, transparent));
+  }
+  .gc-the {
+    color: color-mix(in srgb, var(--fg) 78%, transparent);
+  }
+  .dark .gc-the {
+    color: color-mix(in srgb, var(--fg) 70%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gc-feather,
+  .gc-script,
+  .gc-inkdot,
+  .gc-spark {
+    animation: none !important;
+  }
+  .gc-script {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  .gc-inkdot {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* Scroll-in reveal (class toggled by the <Reveal> component). */
+.rq-reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition:
+    opacity 680ms cubic-bezier(0.23, 1, 0.32, 1),
+    transform 680ms cubic-bezier(0.23, 1, 0.32, 1);
+  will-change: opacity, transform;
+}
+.rq-reveal.rq-in {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Hover shine — a light sweep across card covers, triggered by the
+   surrounding `.group` (Tailwind) hover. */
+.rq-shine {
+  position: relative;
+  overflow: hidden;
+}
+.rq-shine::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.32) 50%,
+    transparent 60%
+  );
+  transform: translateX(-130%);
+  transition: transform 700ms ease;
+  pointer-events: none;
+}
+.group:hover .rq-shine::after,
+.group:focus-visible .rq-shine::after {
+  transform: translateX(130%);
+}
+
+/* Reduced motion: several hero animations end on a "hidden" keyframe, so
+   when the global killswitch freezes them we must pin a sensible resting
+   state by hand. */
+@media (prefers-reduced-motion: reduce) {
+  .rq-hero-words > span {
+    animation: none !important;
+    opacity: 0;
+    transform: none;
+  }
+  .rq-hero-words > span:first-child {
+    opacity: 1;
+  }
+  .rq-hero-spark {
+    display: none;
+  }
+  .rq-book3d-leaf {
+    animation: none !important;
+  }
+  .rq-hero-squiggle path {
+    stroke-dashoffset: 0;
+    animation: none !important;
+  }
+  .info-hero-glyph,
+  .info-contact-pulse {
+    animation: none !important;
+  }
+  .info-panel-enter {
+    animation: none !important;
+  }
+}
+
+/* ── Info pages (About / Guidelines / Privacy) ─────────────────────────── */
+
+.info-hero {
+  background: var(--gradient-brand);
+}
+.info-hero--about .info-hero-glow {
+  --info-glow-a: color-mix(in srgb, var(--brand-1) 28%, transparent);
+  --info-glow-b: color-mix(in srgb, var(--brand-2) 22%, transparent);
+}
+.info-hero--guidelines .info-hero-glow {
+  --info-glow-a: color-mix(in srgb, #fbbf24 24%, transparent);
+  --info-glow-b: color-mix(in srgb, var(--brand-1) 20%, transparent);
+}
+.info-hero--privacy .info-hero-glow {
+  --info-glow-a: color-mix(in srgb, #a78bfa 22%, transparent);
+  --info-glow-b: color-mix(in srgb, var(--brand-3) 18%, transparent);
+}
+
+.info-hero-glow {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+}
+.info-hero-glow::before,
+.info-hero-glow::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(40px);
+  animation: info-glow-drift 14s ease-in-out infinite alternate;
+}
+.info-hero-glow::before {
+  width: 55%;
+  height: 55%;
+  top: -15%;
+  right: -10%;
+  background: var(--info-glow-a, color-mix(in srgb, var(--brand-1) 25%, transparent));
+}
+.info-hero-glow::after {
+  width: 45%;
+  height: 45%;
+  bottom: -20%;
+  left: -5%;
+  background: var(--info-glow-b, color-mix(in srgb, var(--brand-3) 20%, transparent));
+  animation-delay: -6s;
+}
+
+@keyframes info-glow-drift {
+  from { transform: translate(0, 0) scale(1); }
+  to { transform: translate(12px, -8px) scale(1.08); }
+}
+
+.info-hero-glyphs {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+}
+.info-hero-glyph {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  background: color-mix(in srgb, var(--card) 75%, transparent);
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+  backdrop-filter: blur(6px);
+  animation: info-glyph-float 8s ease-in-out infinite;
+}
+.info-hero-glyph--1 {
+  top: 14%;
+  right: 8%;
+  width: 2.25rem;
+  height: 2.25rem;
+}
+.info-hero-glyph--2 {
+  bottom: 18%;
+  right: 22%;
+  width: 1.75rem;
+  height: 1.75rem;
+  animation-delay: -2.5s;
+}
+.info-hero-glyph--3 {
+  top: 42%;
+  right: 4%;
+  width: 1.5rem;
+  height: 1.5rem;
+  animation-delay: -4.8s;
+  opacity: 0.7;
+}
+
+@keyframes info-glyph-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+.info-quote {
+  position: relative;
+}
+.info-quote::before {
+  content: "\201C";
+  position: absolute;
+  top: 0.35rem;
+  left: 0.75rem;
+  font-size: 3rem;
+  line-height: 1;
+  font-family: var(--font-fraunces), Georgia, serif;
+  color: color-mix(in srgb, var(--brand-1) 35%, transparent);
+  pointer-events: none;
+}
+
+.info-contact-pulse {
+  background: var(--gradient-brand);
+  animation: info-pulse 2.8s ease-in-out infinite;
+}
+
+@keyframes info-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.9; }
+  50% { transform: scale(1.06); opacity: 1; }
+}
+
+.info-panel-enter {
+  animation: info-panel-in 420ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@keyframes info-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.info-guideline-tab:active {
+  transform: scale(0.98);
+}
+
+.info-accordion-body {
+  will-change: grid-template-rows;
 }

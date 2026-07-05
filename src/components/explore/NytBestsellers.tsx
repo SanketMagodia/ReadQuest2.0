@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   BookText,
+  ChevronLeft,
+  ChevronRight,
   ExternalLink,
   Newspaper,
   RefreshCw,
@@ -17,7 +19,7 @@ import type { NytBook, NytList, NytListName } from "@/lib/nyt";
  * One `/api/nyt/overview` call supplies the top 5 books for every list (so tab
  * switching is instant and cheap), `/api/nyt/names` orders + labels the tabs,
  * and "See full list" lazily pulls the full ~15-book list for a category.
- * Tapping a book adopts it into the Readquest library and opens its book room.
+ * Tapping a book adopts it into the TGC library and opens its book room.
  */
 
 type ListLite = Pick<NytList, "encodedName" | "displayName" | "books">;
@@ -47,6 +49,26 @@ export function NytBestsellers() {
   const [expanding, setExpanding] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const railRef = useRef<HTMLDivElement>(null);
+  const [canScroll, setCanScroll] = useState({ left: false, right: false });
+
+  /** Keep the arrow buttons in sync with the rail's scroll position. */
+  const updateScrollState = useCallback(() => {
+    const el = railRef.current;
+    if (!el) return;
+    setCanScroll({
+      left: el.scrollLeft > 4,
+      right: el.scrollLeft + el.clientWidth < el.scrollWidth - 4,
+    });
+  }, []);
+
+  const nudge = useCallback((dir: -1 | 1) => {
+    const el = railRef.current;
+    if (!el) return;
+    el.scrollBy({
+      left: dir * Math.round(el.clientWidth * 0.85),
+      behavior: "smooth",
+    });
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -120,6 +142,13 @@ export function NytBestsellers() {
     if (!active) return [];
     return showAll && fullLists[active] ? fullLists[active] : activeList?.books ?? [];
   }, [active, showAll, fullLists, activeList]);
+
+  // Re-measure whenever the rail's content or the viewport changes.
+  useEffect(() => {
+    updateScrollState();
+    window.addEventListener("resize", updateScrollState);
+    return () => window.removeEventListener("resize", updateScrollState);
+  }, [books, loading, updateScrollState]);
 
   function selectTab(encoded: string) {
     setActive(encoded);
@@ -240,23 +269,42 @@ export function NytBestsellers() {
             })}
           </div>
 
-          {/* Book rail */}
-          <div
-            ref={railRef}
-            className="-mx-2 mt-3 flex gap-3 overflow-x-auto px-2 pb-2 [scrollbar-width:none] sm:mx-0 sm:px-0"
-          >
-            {books.map((b) => {
-              const id = b.isbn13 || b.isbn10 || b.title;
-              return (
-                <NytBookCard
-                  key={id}
-                  book={b}
-                  adopting={adoptingIsbn === id}
-                  disabled={!!adoptingIsbn && adoptingIsbn !== id}
-                  onOpen={() => void adopt(b)}
-                />
-              );
-            })}
+          {/* Book rail — streaming-app style: soft gradient fades melt the
+              clipped cards into the page at each scrollable edge, and the
+              paddles glide in over them when the pointer is on the rail.
+              Pointer/desktop only; phones keep the plain swipe rail. */}
+          <div className="group/rail relative mt-3">
+            <div
+              ref={railRef}
+              onScroll={updateScrollState}
+              className="-mx-2 flex gap-3 overflow-x-auto px-2 pb-2 [scrollbar-width:none] sm:mx-0 sm:px-0"
+            >
+              {books.map((b) => {
+                const id = b.isbn13 || b.isbn10 || b.title;
+                return (
+                  <NytBookCard
+                    key={id}
+                    book={b}
+                    adopting={adoptingIsbn === id}
+                    disabled={!!adoptingIsbn && adoptingIsbn !== id}
+                    onOpen={() => void adopt(b)}
+                  />
+                );
+              })}
+            </div>
+
+            <RailEdgeFade side="left" visible={canScroll.left} />
+            <RailEdgeFade side="right" visible={canScroll.right} />
+            <RailPaddle
+              side="left"
+              visible={canScroll.left}
+              onClick={() => nudge(-1)}
+            />
+            <RailPaddle
+              side="right"
+              visible={canScroll.right}
+              onClick={() => nudge(1)}
+            />
           </div>
 
           {/* See full list */}
@@ -280,6 +328,78 @@ export function NytBestsellers() {
         </>
       )}
     </section>
+  );
+}
+
+/**
+ * Soft gradient veil at a scrollable edge of the rail: melts the clipped
+ * cards into the page background (instead of a hard cut) and doubles as the
+ * "there's more this way" hint. Fades away at the ends of the rail.
+ */
+function RailEdgeFade({
+  side,
+  visible,
+}: {
+  side: "left" | "right";
+  visible: boolean;
+}) {
+  return (
+    <div
+      aria-hidden
+      className={`pointer-events-none absolute inset-y-0 z-[5] hidden w-14 transition-opacity duration-500 sm:block ${
+        side === "left" ? "left-0" : "right-0"
+      } ${visible ? "opacity-100" : "opacity-0"}`}
+      style={{
+        background: `linear-gradient(to ${side === "left" ? "right" : "left"}, var(--bg) 8%, color-mix(in srgb, var(--bg) 55%, transparent) 55%, transparent)`,
+      }}
+    />
+  );
+}
+
+/**
+ * Edge paddle for the book rail. Stays out of the way until the pointer is
+ * over the rail, then glides in from its edge; presses feel springy via
+ * scale micro-interactions. Hidden entirely on touch-first (compact) sizes
+ * where swiping is the natural gesture, and fades out (with the edge veil)
+ * when the rail can't scroll further that way.
+ */
+function RailPaddle({
+  side,
+  visible,
+  onClick,
+}: {
+  side: "left" | "right";
+  visible: boolean;
+  onClick: () => void;
+}) {
+  const Icon = side === "left" ? ChevronLeft : ChevronRight;
+  const slideAway = side === "left" ? "-translate-x-2" : "translate-x-2";
+  return (
+    <button
+      type="button"
+      aria-label={side === "left" ? "Scroll back" : "Scroll forward"}
+      aria-hidden={!visible}
+      tabIndex={visible ? 0 : -1}
+      onClick={onClick}
+      className={`absolute top-1/2 z-10 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-card/95 text-foreground/85 shadow-[0_6px_24px_-6px_rgba(15,23,42,0.35)] ring-1 ring-border/60 backdrop-blur-md transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] hover:scale-110 hover:text-foreground hover:shadow-[0_10px_30px_-6px_rgba(14,165,233,0.35)] hover:ring-[color-mix(in_srgb,var(--brand-1)_45%,var(--border))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/80 active:scale-90 active:duration-100 sm:flex ${
+        side === "left" ? "left-1.5" : "right-1.5"
+      } ${
+        visible
+          ? `opacity-0 group-hover/rail:translate-x-0 group-hover/rail:opacity-100 focus-visible:translate-x-0 focus-visible:opacity-100 ${slideAway} group-hover/rail:[transition-delay:40ms]`
+          : `pointer-events-none opacity-0 ${slideAway}`
+      }`}
+    >
+      <Icon
+        size={17}
+        aria-hidden
+        strokeWidth={2.4}
+        className={`transition-transform duration-300 ${
+          side === "left"
+            ? "group-hover/rail:-translate-x-px"
+            : "group-hover/rail:translate-x-px"
+        }`}
+      />
+    </button>
   );
 }
 

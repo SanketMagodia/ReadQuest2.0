@@ -24,7 +24,7 @@ function escapeRegex(s: string) {
 /**
  * Adopt a New York Times bestseller into our library, then navigate to it.
  * Dedupes by ISBN-13, then ISBN-10, then (title, primary author) so we never
- * create a second copy of a book Readquest already knows about — including
+ * create a second copy of a book TGC already knows about — including
  * ones adopted earlier from Open Library.
  */
 export async function POST(req: Request) {

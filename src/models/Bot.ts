@@ -12,8 +12,10 @@ const botSchema = new Schema(
     enabled: { type: Boolean, default: false, index: true },
     persona: { type: String, default: "", maxlength: 1200 },
     categories: { type: [String], default: [] },
-    intervalMinMinutes: { type: Number, default: 180, min: 10, max: 24 * 60 },
-    intervalMaxMinutes: { type: Number, default: 360, min: 10, max: 24 * 60 },
+    // Posting cadence, stored in minutes (admin UI presents it in days).
+    // Max 30 days between posts.
+    intervalMinMinutes: { type: Number, default: 1440, min: 10, max: 30 * 24 * 60 },
+    intervalMaxMinutes: { type: Number, default: 4320, min: 10, max: 30 * 24 * 60 },
     model: { type: String, default: "" },
     postsCount: { type: Number, default: 0 },
     lastPostAt: { type: Date },

@@ -22,6 +22,7 @@ import { serializePosts } from "@/lib/serialize";
 import { looksLikeObjectId, makeBookSlug, withUniqueSuffix } from "@/lib/slug";
 import { getAppSession } from "@/lib/session";
 import { getNytReviews } from "@/lib/nyt";
+import { BRAND_NAME, BRAND_SHORT } from "@/lib/brand";
 import { BookActions } from "./BookActions";
 
 type BookLean = {
@@ -78,7 +79,7 @@ export async function generateMetadata({
   const title = `${book.title} by ${authors}`;
   const description = book.description
     ? truncate(book.description, 200)
-    : `Quotes, threads, and readers' takes on ${book.title} by ${authors} — join the discussion on Readquest.`;
+    : `Quotes, threads, and readers' takes on ${book.title} by ${authors} — join the discussion on ${BRAND_NAME} (${BRAND_SHORT}).`;
   const url = `${siteUrl()}/book/${canonicalSlug}`;
   const cover = book.thumbnail
     ? book.thumbnail.replace(/^http:/, "https:")
@@ -93,7 +94,7 @@ export async function generateMetadata({
       title,
       description,
       url,
-      siteName: "Readquest",
+      siteName: BRAND_NAME,
       images: cover ? [{ url: cover, alt: book.title }] : undefined,
     },
     twitter: {
@@ -108,7 +109,7 @@ export async function generateMetadata({
       ...(book.categories?.split(",").map((c) => c.trim()).filter(Boolean) ?? []),
       "quotes",
       "book discussion",
-      "Readquest",
+      BRAND_SHORT,
     ],
   };
 }

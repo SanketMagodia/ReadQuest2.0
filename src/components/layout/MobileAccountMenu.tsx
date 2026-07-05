@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useSession, signOut } from "next-auth/react";
 import { LogIn, LogOut, Shield, UserRound, X } from "lucide-react";
+import { MobileSiteLinks } from "@/components/layout/SidebarFooter";
 
 /**
  * Compact account menu shown in the mobile top bar.
@@ -149,24 +150,28 @@ export function MobileAccountMenu() {
                   </button>
                 </li>
               </ul>
+              <MobileSiteLinks onNavigate={() => setOpen(false)} />
             </>
           ) : (
-            <ul className="py-1.5">
-              <MenuItem
-                href="/login"
-                icon={<LogIn size={16} aria-hidden />}
-                onSelect={() => setOpen(false)}
-              >
-                Sign in
-              </MenuItem>
-              <MenuItem
-                href="/register"
-                icon={<UserRound size={16} aria-hidden />}
-                onSelect={() => setOpen(false)}
-              >
-                Create account
-              </MenuItem>
-            </ul>
+            <>
+              <ul className="py-1.5">
+                <MenuItem
+                  href="/login"
+                  icon={<LogIn size={16} aria-hidden />}
+                  onSelect={() => setOpen(false)}
+                >
+                  Sign in
+                </MenuItem>
+                <MenuItem
+                  href="/register"
+                  icon={<UserRound size={16} aria-hidden />}
+                  onSelect={() => setOpen(false)}
+                >
+                  Create account
+                </MenuItem>
+              </ul>
+              <MobileSiteLinks onNavigate={() => setOpen(false)} />
+            </>
           )}
         </div>
       ) : null}

@@ -63,6 +63,10 @@ export const commentCreateSchema = z.object({
     .nullable(),
 });
 
+export const dmMessageSchema = z.object({
+  content: z.string().trim().min(1).max(1500),
+});
+
 export const bookSearchSchema = z.object({
   q: z.string().trim().optional(),
   category: z.string().trim().optional(),
@@ -99,8 +103,8 @@ export const botCreateSchema = z.object({
   image: z.union([z.string().url(), z.literal("")]).optional(),
   persona: z.string().trim().min(10).max(1200),
   categories: categoryListSchema.min(1),
-  intervalMinMinutes: z.coerce.number().int().min(10).max(24 * 60).default(180),
-  intervalMaxMinutes: z.coerce.number().int().min(10).max(24 * 60).default(360),
+  intervalMinMinutes: z.coerce.number().int().min(10).max(30 * 24 * 60).default(1440),
+  intervalMaxMinutes: z.coerce.number().int().min(10).max(30 * 24 * 60).default(4320),
   enabled: z.boolean().optional().default(false),
   model: z.string().trim().max(80).optional().default(""),
 
@@ -121,8 +125,8 @@ export const botUpdateSchema = z.object({
   image: z.union([z.string().url(), z.literal("")]).optional(),
   persona: z.string().trim().min(10).max(1200).optional(),
   categories: categoryListSchema.min(1).optional(),
-  intervalMinMinutes: z.coerce.number().int().min(10).max(24 * 60).optional(),
-  intervalMaxMinutes: z.coerce.number().int().min(10).max(24 * 60).optional(),
+  intervalMinMinutes: z.coerce.number().int().min(10).max(30 * 24 * 60).optional(),
+  intervalMaxMinutes: z.coerce.number().int().min(10).max(30 * 24 * 60).optional(),
   enabled: z.boolean().optional(),
   model: z.string().trim().max(80).optional(),
 

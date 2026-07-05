@@ -25,6 +25,15 @@ function fmtWhen(iso: string) {
   });
 }
 
+/** Readers stop seeing a broadcast 24h after publish (or at expiresAt). */
+function isExpired(item: Broadcast) {
+  const dayEnd = new Date(item.createdAt).getTime() + 24 * 60 * 60 * 1000;
+  const expiry = item.expiresAt
+    ? Math.min(new Date(item.expiresAt).getTime(), dayEnd)
+    : dayEnd;
+  return expiry <= Date.now();
+}
+
 export function AdminBroadcasts() {
   const [items, setItems] = useState<Broadcast[]>([]);
   const [loading, setLoading] = useState(true);
@@ -115,6 +124,7 @@ export function AdminBroadcasts() {
             <p className="mt-1 text-sm text-muted">
               Pops up as a dismissible card in the right panel (wide screens)
               or at the top of the feed (compact). Readers close it with ×.
+              Broadcasts last 24 hours, then disappear on their own.
             </p>
           </div>
         </div>
@@ -205,7 +215,11 @@ export function AdminBroadcasts() {
                     <p className="mt-2 text-[11px] text-muted">
                       {fmtWhen(item.createdAt)}
                       {item.author ? ` · @${item.author.username}` : ""}
-                      {item.active ? " · live" : " · hidden"}
+                      {isExpired(item) ?
+                        " · expired"
+                      : item.active ?
+                        " · live"
+                      : " · hidden"}
                     </p>
                   </div>
                   <div className="flex shrink-0 gap-2">

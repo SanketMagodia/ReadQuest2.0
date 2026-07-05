@@ -58,7 +58,7 @@ export async function POST(req: Request) {
   const desc = (book.description || "").slice(0, 700);
 
   const system = [
-    "You write short, authentic social-media posts for a books community called Readquest.",
+    "You write short, authentic social-media posts for a books community called The Gist Club (TGC).",
     "Voice: a real reader sharing a thought about a book they have just read or are reading.",
     "Style rules:",
     "- 1 to 3 short sentences, max 280 characters total.",

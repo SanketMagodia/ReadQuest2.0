@@ -124,7 +124,7 @@ function buildSummaryPrompts(book: BookLean, scope: "shared" | "personal", userP
     );
 
   const system = [
-    "You are condensing a book into a MINI-BOOK for a reading community called Readquest.",
+    "You are condensing a book into a MINI-BOOK for a reading community called The Gist Club (TGC).",
     "The output should READ LIKE THE BOOK, not like a summary.",
     "",
     "VOICE",

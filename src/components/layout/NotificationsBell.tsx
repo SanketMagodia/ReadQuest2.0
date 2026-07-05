@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import Image from "next/image";
 import { Bell, CheckCheck, Loader2 } from "lucide-react";
@@ -94,6 +95,9 @@ export function NotificationsBell({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  // Sidebar flyout coordinates (viewport-fixed, computed from the button).
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
 
   const fetchAll = useCallback(async () => {
     if (!session?.user?.id) return;
@@ -141,24 +145,41 @@ export function NotificationsBell({
     if (open) void fetchAll();
   }, [open, fetchAll]);
 
-  // Click-outside to close.
+  // Click-outside to close. The sidebar panel is portaled to <body>, so we
+  // must check it separately from the trigger container.
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      const el = containerRef.current;
-      if (!el) return;
-      if (!el.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (containerRef.current?.contains(target)) return;
+      if (panelRef.current?.contains(target)) return;
+      setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
     };
+    // Layout shifts (resize / orientation change) invalidate the measured
+    // flyout position — just close.
+    const onResize = () => setOpen(false);
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
+    window.addEventListener("resize", onResize);
     return () => {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", onResize);
     };
   }, [open]);
+
+  const toggleOpen = useCallback(() => {
+    setOpen((o) => {
+      if (!o && variant === "sidebar") {
+        const btn = containerRef.current?.getBoundingClientRect();
+        if (btn) setPos({ top: Math.max(12, btn.top - 4), left: btn.right + 12 });
+      }
+      return !o;
+    });
+  }, [variant]);
 
   const markAllRead = useCallback(async () => {
     if (!unread) return;
@@ -193,6 +214,13 @@ export function NotificationsBell({
 
   if (!session?.user?.id) return null;
 
+  // The sidebar flyout escapes the sidebar's overflow/stacking context via a
+  // portal; the topbar variant stays inline (its fixed positioning works).
+  const renderPanel = (node: React.ReactNode) =>
+    variant === "sidebar" && typeof document !== "undefined"
+      ? createPortal(node, document.body)
+      : node;
+
   const Badge = () =>
     unread > 0 ? (
       <span
@@ -212,7 +240,7 @@ export function NotificationsBell({
           aria-haspopup="dialog"
           aria-expanded={open}
           aria-label="Notifications"
-          onClick={() => setOpen((o) => !o)}
+          onClick={toggleOpen}
           className={cn(
             "group relative flex w-full items-center gap-4 rounded-full px-4 py-3 text-[16px] font-semibold transition",
             open
@@ -232,7 +260,7 @@ export function NotificationsBell({
           aria-haspopup="dialog"
           aria-expanded={open}
           aria-label="Notifications"
-          onClick={() => setOpen((o) => !o)}
+          onClick={toggleOpen}
           className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-background text-foreground transition hover:bg-hover"
         >
           <Bell size={18} aria-hidden />
@@ -241,22 +269,36 @@ export function NotificationsBell({
       )}
 
       {open ? (
-        <div
-          role="dialog"
-          aria-label="Notifications"
-          className={cn(
-            "z-50 overflow-hidden rounded-2xl border border-border bg-background shadow-[var(--shadow-pop)]",
-            // Desktop / sidebar: float beneath the bell, capped width.
-            variant === "sidebar"
-              ? "absolute left-0 mt-2 w-[22rem] max-w-[calc(100vw-1.5rem)] sm:left-2"
-              // Mobile / topbar: the bell isn't at the screen edge (theme
-              // toggle + account menu sit to its right), so anchoring with
-              // `right-0` pushed the popup off the left of the viewport.
-              // Pin to the viewport with fixed positioning + symmetric
-              // gutters instead.
-              : "fixed left-3 right-3 top-[3.25rem]"
-          )}
-        >
+        renderPanel(
+          <div
+            ref={panelRef}
+            role="dialog"
+            aria-label="Notifications"
+            className={cn(
+              "z-50 flex flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-[var(--shadow-pop)]",
+              // Desktop / sidebar: portaled to <body> and positioned as a
+              // flyout to the RIGHT of the sidebar. Rendering it inside the
+              // narrow sidebar clipped it at the sidebar's edge (the aside
+              // is overflow-hidden and only ~13rem wide).
+              variant === "sidebar"
+                ? "animate-slide fixed w-[23rem] max-w-[calc(100vw-2rem)]"
+                // Mobile / topbar: the bell isn't at the screen edge (theme
+                // toggle + account menu sit to its right), so anchoring with
+                // `right-0` pushed the popup off the left of the viewport.
+                // Pin to the viewport with fixed positioning + symmetric
+                // gutters instead.
+                : "fixed left-3 right-3 top-[3.25rem]"
+            )}
+            style={
+              variant === "sidebar" && pos
+                ? {
+                    top: pos.top,
+                    left: pos.left,
+                    maxHeight: `calc(100vh - ${pos.top + 16}px)`,
+                  }
+                : undefined
+            }
+          >
           <header className="flex items-center justify-between gap-3 border-b border-border/70 px-4 py-3">
             <div>
               <h3 className="text-sm font-bold tracking-tight">
@@ -284,7 +326,7 @@ export function NotificationsBell({
             </button>
           </header>
 
-          <div className="max-h-[70vh] overflow-y-auto">
+          <div className="min-h-0 max-h-[70vh] flex-1 overflow-y-auto">
             {loading && !items.length ? (
               <div className="flex items-center justify-center px-4 py-10 text-muted">
                 <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
@@ -359,7 +401,8 @@ export function NotificationsBell({
               See all notifications
             </Link>
           </footer>
-        </div>
+          </div>
+        )
       ) : null}
     </div>
   );

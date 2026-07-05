@@ -2,8 +2,10 @@ import { redirect } from "next/navigation";
 import { getAppSession } from "@/lib/session";
 import { AdminDashboard } from "./AdminDashboard";
 
+import { pageTitle } from "@/lib/brand";
+
 export const metadata = {
-  title: "Admin · Readquest",
+  title: pageTitle("Admin"),
 };
 
 export default async function AdminPage() {

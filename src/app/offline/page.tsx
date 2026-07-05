@@ -1,7 +1,9 @@
+import { BRAND_NAME, pageTitle } from "@/lib/brand";
+
 export const dynamic = "force-static";
 
 export const metadata = {
-  title: "Offline",
+  title: pageTitle("Offline"),
 };
 
 export default function OfflinePage() {
@@ -19,7 +21,7 @@ export default function OfflinePage() {
         No connection right now
       </h1>
       <p className="text-sm leading-relaxed text-muted">
-        Readquest needs the network to load fresh quotes and threads. We&apos;ll
+        {BRAND_NAME} needs the network to load fresh quotes and threads. We&apos;ll
         reconnect automatically — try again in a moment.
       </p>
       <a

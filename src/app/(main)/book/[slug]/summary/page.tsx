@@ -5,6 +5,7 @@ import { Source_Serif_4 } from "next/font/google";
 import connectDB from "@/lib/db";
 import Book from "@/models/Book";
 import { looksLikeObjectId } from "@/lib/slug";
+import { BRAND_NAME } from "@/lib/brand";
 import { SummaryReader } from "./SummaryReader";
 
 // Medium-style reading serif. Scoped to this route so we don't pay the cost
@@ -60,7 +61,7 @@ export async function generateMetadata({
       title,
       description,
       url,
-      siteName: "Readquest",
+      siteName: BRAND_NAME,
       type: "article",
     },
     twitter: { card: "summary", title, description },

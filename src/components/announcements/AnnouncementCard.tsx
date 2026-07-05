@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { BRAND_NAME } from "@/lib/brand";
 import { Megaphone, X } from "lucide-react";
 
 export type AnnouncementItem = {
@@ -42,7 +43,7 @@ export function AnnouncementCard({
       : null}
       <p className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">
         <Megaphone size={11} aria-hidden />
-        From Readquest
+        From {BRAND_NAME}
       </p>
       <h3
         className={

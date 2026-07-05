@@ -19,16 +19,23 @@ const SLEEP_BETWEEN_LLM_MS = parseInt(
 );
 const sleep = (ms: number) =>
   ms > 0 ? new Promise<void>((r) => setTimeout(r, ms)) : Promise.resolve();
+// Soft wall-clock budget per tick. Must stay BELOW the route's maxDuration
+// (300 s on Vercel) or the platform kills the function mid-tick and the lock
+// stays held until its TTL. Override with BOT_TICK_BUDGET_MS for local runs.
+const TICK_BUDGET_MS = parseInt(
+  process.env.BOT_TICK_BUDGET_MS ?? String(4 * 60 * 1000 + 30 * 1000),
+  10
+);
 // Lock TTL: only a fallback for a crashed tick (the lock is normally released in
-// `finally`). Must comfortably exceed TICK_BUDGET_MS so a slow tick never has its
-// lock expire underneath it.
-const TICK_LOCK_MS = 20 * 60 * 1000;
-// Soft wall-clock budget per tick. Raised to 8 min to accommodate the deliberate
-// sleep between LLM calls. Set BOT_LLM_SLEEP_MS=0 to revert to rapid-fire mode.
-const TICK_BUDGET_MS = 8 * 60 * 1000;
-// When catching up after a long gap, cap how many posts a single bot may backfill
-// in one tick (bounds LLM calls / time). Remaining slots are handled next tick.
-const MAX_BACKFILL_POSTS_PER_BOT = 8;
+// `finally`). Always kept comfortably above TICK_BUDGET_MS so a slow tick never
+// has its lock expire underneath it.
+const TICK_LOCK_MS = Math.max(10 * 60 * 1000, TICK_BUDGET_MS + 5 * 60 * 1000);
+// Cap how many posts a single bot may backfill in one tick. A bot that missed
+// many slots only fills its most recent 2–3 scheduled times (see
+// buildCatchUpSlots), never the whole backlog.
+const MAX_BACKFILL_POSTS_PER_BOT = 3;
+// Replies/auto-responses are never backdated further than this.
+const MAX_CATCHUP_WINDOW_MS = 24 * 60 * 60 * 1000;
 const MAX_POSTS_PER_TICK = 40;
 const MAX_REPLIES_PER_BOT_PER_TICK = 4;
 // Cap how much we scale reply volume by elapsed time (in "virtual" 1-minute ticks).
@@ -57,10 +64,49 @@ function randomMinutes(min: number, max: number) {
 }
 
 export function rollNextPostAt(bot: BotDoc, from = new Date()) {
-  const min = bot.intervalMinMinutes || 180;
-  const max = bot.intervalMaxMinutes || 360;
+  const min = bot.intervalMinMinutes || 1440;
+  const max = bot.intervalMaxMinutes || 4320;
   const minutes = randomMinutes(min, max);
   return new Date(from.getTime() + minutes * 60 * 1000);
+}
+
+/**
+ * The backdated moments a due bot should post at during this tick.
+ *
+ * - Barely behind (missed ≤ MAX_BACKFILL_POSTS_PER_BOT slots): honor the real
+ *   schedule — walk forward from nextPostAt at the bot's cadence.
+ * - Long idle gap: don't replay the backlog. Synthesize only the most recent
+ *   2–3 slots by walking BACKWARD from a fresh moment near `now` at the bot's
+ *   own cadence, so the feed shows a naturally scattered recent trail instead
+ *   of a month-old blast.
+ */
+export function buildCatchUpSlots(bot: BotDoc, now = new Date()): Date[] {
+  const scheduled = bot.nextPostAt ? new Date(bot.nextPostAt) : now;
+  if (scheduled > now) return [];
+
+  const forward: Date[] = [];
+  let t = scheduled;
+  while (t <= now && forward.length <= MAX_BACKFILL_POSTS_PER_BOT) {
+    forward.push(new Date(t));
+    t = rollNextPostAt(bot, t);
+  }
+  if (forward.length <= MAX_BACKFILL_POSTS_PER_BOT) return forward;
+
+  const count = 2 + (Math.random() < 0.5 ? 1 : 0); // 2 or 3
+  const minMinutes = Math.max(10, bot.intervalMinMinutes || 1440);
+  const maxMinutes = Math.max(minMinutes, bot.intervalMaxMinutes || 4320);
+  // Newest slot lands a random 5–50% of the min interval before `now` — recent,
+  // but not suspiciously "the second the admin clicked".
+  const recentOffsetMs = (0.05 + Math.random() * 0.45) * minMinutes * 60_000;
+  const slots: Date[] = [];
+  let anchor = new Date(now.getTime() - recentOffsetMs);
+  for (let i = 0; i < count; i++) {
+    slots.unshift(anchor);
+    anchor = new Date(
+      anchor.getTime() - randomMinutes(minMinutes, maxMinutes) * 60_000
+    );
+  }
+  return slots;
 }
 
 type BookContext = {
@@ -110,7 +156,7 @@ function buildPrompt(bot: BotDoc, book: BookContext) {
   const persona = (bot.persona || "").trim() || "A passionate reader.";
 
   const system = [
-    "You write short, authentic social-media posts for a books community called Readquest.",
+    "You write short, authentic social-media posts for a books community called The Gist Club (TGC).",
     "Voice: a real person sharing a thought about a book they have just read or are reading.",
     "Style rules:",
     "- 1 to 3 short sentences, max 280 characters total.",
@@ -344,7 +390,7 @@ function buildReplyPrompt(bot: BotDoc, book: BookContext, post: CandidatePost) {
   const original = post.content.replace(/\s+/g, " ").trim().slice(0, 400);
 
   const system = [
-    "You are replying to another reader's quick post on Readquest, a books community.",
+    "You are replying to another reader's quick post on The Gist Club (TGC), a books community.",
     "Voice: a real person reacting to their take in 1–2 short, casual sentences.",
     "Style rules:",
     "- 1 to 2 short sentences, max 240 characters total.",
@@ -582,7 +628,7 @@ function buildAutoResponsePrompt(
   const targetLabel = speakerLabel(target, botUserId);
 
   const system = [
-    "You are continuing a real conversation in a books community called Readquest.",
+    "You are continuing a real conversation in a books community called The Gist Club (TGC).",
     "Voice: stay in character as the persona below. You are replying to one specific message.",
     "Style rules:",
     "- 1 to 2 short sentences, max 240 characters total.",
@@ -731,6 +777,8 @@ export async function runBotTick(): Promise<{
   replyErrors: { botId: string; message: string }[];
   responses: number;
   responseErrors: { botId: string; message: string }[];
+  /** Enabled bots still overdue after this tick (catch-up continues next tick). */
+  stillDue?: number;
   skippedDueToLock?: boolean;
 }> {
   await connectDB();
@@ -765,18 +813,28 @@ export async function runBotTick(): Promise<{
     };
   }
 
-  // How long since the previous completed tick — used to spread/scale catch-up
-  // activity so an infrequent (e.g. once-a-day) tick looks like a natural day's
-  // worth of activity rather than a burst at `now`.
-  const windowStart = lock.lastFinishedAt
-    ? new Date(lock.lastFinishedAt)
-    : new Date(now.getTime() - DEFAULT_WINDOW_MS);
+  // How long since the previous completed tick — used to spread/scale reply
+  // catch-up so an infrequent (e.g. once-a-day) tick looks like a natural day's
+  // worth of activity rather than a burst at `now`. Clamped to the last 24 h.
+  const windowStart = new Date(
+    Math.max(
+      lock.lastFinishedAt
+        ? new Date(lock.lastFinishedAt).getTime()
+        : now.getTime() - DEFAULT_WINDOW_MS,
+      now.getTime() - MAX_CATCHUP_WINDOW_MS
+    )
+  );
   const virtualTicks = Math.min(
     MAX_VIRTUAL_TICKS,
     Math.max(1, Math.round((now.getTime() - windowStart.getTime()) / 60_000))
   );
   const tickStart = Date.now();
   const overBudget = () => Date.now() - tickStart > TICK_BUDGET_MS;
+  // Rate-limit pause before the NEXT LLM call. Skipped once the budget is spent
+  // (the loops exit anyway, so there is no next call to pace).
+  const pace = async () => {
+    if (!overBudget()) await sleep(SLEEP_BETWEEN_LLM_MS);
+  };
 
   try {
     // 1) Posting pass — backfill each due bot's missed slots at their natural
@@ -795,27 +853,19 @@ export async function runBotTick(): Promise<{
     for (const doc of due) {
       if (overBudget() || processed >= MAX_POSTS_PER_TICK) break;
       const id = (doc._id as Types.ObjectId).toString();
-      // The slot this post "should" have happened at. Missing nextPostAt means a
-      // brand-new bot — post once at `now`.
-      let scheduledAt = doc.nextPostAt ? new Date(doc.nextPostAt) : now;
-      let perBot = 0;
+      const slots = buildCatchUpSlots(doc as unknown as BotDoc, now);
       try {
-        while (
-          scheduledAt <= now &&
-          perBot < MAX_BACKFILL_POSTS_PER_BOT &&
-          processed < MAX_POSTS_PER_TICK &&
-          !overBudget()
-        ) {
-          const { bot } = await generatePostForBot(id, { postedAt: scheduledAt });
+        for (const slot of slots) {
+          if (processed >= MAX_POSTS_PER_TICK || overBudget()) break;
+          await generatePostForBot(id, { postedAt: slot });
           processed += 1;
-          perBot += 1;
-          // generatePostForBot rolled nextPostAt forward FROM scheduledAt.
-          scheduledAt = bot.nextPostAt ? new Date(bot.nextPostAt) : now;
-          await sleep(SLEEP_BETWEEN_LLM_MS);
+          await pace();
         }
-        // Hit the per-bot cap but still behind (very long idle gap): jump to a
-        // fresh future slot so the next tick doesn't replay ancient history.
-        if (perBot >= MAX_BACKFILL_POSTS_PER_BOT && scheduledAt <= now) {
+        // generatePostForBot rolls nextPostAt forward from each slot; if the
+        // final roll (or an early exit on budget) left the schedule in the
+        // past, jump to a fresh future slot so the next tick starts clean.
+        const fresh = await Bot.findById(id).select("nextPostAt").lean();
+        if (!fresh?.nextPostAt || new Date(fresh.nextPostAt) <= now) {
           await Bot.findByIdAndUpdate(id, {
             nextPostAt: rollNextPostAt(doc as unknown as BotDoc, now),
           });
@@ -872,7 +922,7 @@ export async function runBotTick(): Promise<{
             spreadSince: windowStart,
           });
           replies += 1;
-          await sleep(SLEEP_BETWEEN_LLM_MS);
+          await pace();
         } catch (e) {
           const message = e instanceof Error ? e.message : "Unknown error";
           replyErrors.push({
@@ -911,7 +961,7 @@ export async function runBotTick(): Promise<{
               spreadSince: windowStart,
             });
             responses += 1;
-            await sleep(SLEEP_BETWEEN_LLM_MS);
+            await pace();
           } catch (e) {
             const message = e instanceof Error ? e.message : "Unknown error";
             responseErrors.push({ botId, message });
@@ -927,7 +977,23 @@ export async function runBotTick(): Promise<{
       }
     }
 
-    return { processed, errors, replies, replyErrors, responses, responseErrors };
+    const stillDue = await Bot.countDocuments({
+      enabled: true,
+      $or: [
+        { nextPostAt: { $exists: false } },
+        { nextPostAt: { $lte: new Date() } },
+      ],
+    });
+
+    return {
+      processed,
+      errors,
+      replies,
+      replyErrors,
+      responses,
+      responseErrors,
+      stillDue,
+    };
   } finally {
     await BotTickLock.updateOne(
       { _id: "global" },

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Download } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BRAND_NAME } from "@/lib/brand";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -98,7 +99,7 @@ export function InstallPrompt({ className, variant = "pill" }: Props) {
             Install
           </p>
           <p className="mt-2 text-base font-semibold leading-snug">
-            Add Readquest to your home screen
+            Add {BRAND_NAME} to your home screen
           </p>
           <p className="mt-2 text-[13px] leading-relaxed text-muted">
             Open as a standalone app, launch in one tap, and read offline.
@@ -134,7 +135,7 @@ export function InstallPrompt({ className, variant = "pill" }: Props) {
         "inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground/85 transition hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70",
         className
       )}
-      aria-label="Install Readquest as an app"
+      aria-label={`Install ${BRAND_NAME} as an app`}
     >
       <Download size={14} aria-hidden />
       Install app

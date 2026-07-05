@@ -1,5 +1,5 @@
 /**
- * URL-slug utilities for Readquest.
+ * URL-slug utilities for The Gist Club.
  *
  * We slug books as "<title>-<first-author>" lowercase, ASCII, hyphen-separated.
  * Slug uniqueness is enforced by the DB; callers append a numeric suffix on

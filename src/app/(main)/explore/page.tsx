@@ -10,7 +10,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type ChangeEvent,
   type FormEvent,
   type ReactNode,
 } from "react";
@@ -24,16 +23,17 @@ import {
   MessageSquare,
   Plus,
   RefreshCw,
-  Search,
   Sparkles,
   Users,
-  X,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
+import { Reveal } from "@/components/ui/Reveal";
 import { useInfiniteScroll } from "@/lib/hooks/useInfiniteScroll";
 import { DailyBookCard } from "@/components/feed/DailyBookCard";
 import { JoinReadquestFeedCard } from "@/components/auth/UnlockFeatures";
+import { BRAND_NAME } from "@/lib/brand";
+import { ExploreHero } from "@/components/explore/ExploreHero";
 import { NytBestsellers } from "@/components/explore/NytBestsellers";
 import { NytTopPicks } from "@/components/explore/NytTopPicks";
 
@@ -432,99 +432,49 @@ export default function ExplorePage() {
       <Suspense fallback={null}>
         <QuerySync onApply={applyUrlQuery} />
       </Suspense>
-      <header
-        className="relative -mx-5 overflow-hidden rounded-b-[22px] border-x-0 border-b border-t-0 border-border bg-card px-5 py-5 shadow-[var(--shadow-soft)] layout-wide:-mx-4 sm:rounded-b-[28px] sm:p-8"
-      >
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -right-16 -top-16 h-52 w-52 rounded-full blur-3xl opacity-60 sm:-right-20 sm:-top-20 sm:h-64 sm:w-64 sm:opacity-50"
-          style={{ background: "var(--gradient-brand)" }}
-        />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -left-12 bottom-0 h-40 w-40 rounded-full blur-3xl opacity-50 sm:-left-16 sm:h-48 sm:w-48 sm:opacity-40"
-          style={{ background: "var(--gradient-warm)" }}
-        />
-        <p className="inline-flex items-center gap-1.5 rounded-full bg-background/60 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted backdrop-blur-sm sm:bg-transparent sm:px-0 sm:py-0 sm:text-[11px] sm:tracking-[0.22em]">
-          <Sparkles size={12} aria-hidden className="text-amber-500 dark:text-amber-300" />
-          {firstName ? `welcome back, ${firstName}` : "welcome"}
-        </p>
-        <h1 className="mt-2 text-[24px] font-bold leading-[1.1] tracking-tight sm:mt-2 sm:text-[34px]">
-          Explore <span className="gradient-brand-text">stories</span>
-        </h1>
-        <p className="mt-1.5 hidden max-w-2xl text-sm text-muted sm:mt-2 sm:block sm:text-[15px]">
-          Search by title, author, or vibe — knock out today&apos;s quest, and
-          follow books to make this feel like home.
-        </p>
-
-        <form onSubmit={submitSearch} className="relative mt-3.5 max-w-2xl sm:mt-6">
-          <Search
-            size={17}
-            aria-hidden
-            className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-muted"
-          />
-          <input
-            value={q}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => setQ(e.target.value)}
-            placeholder="Search titles, authors, themes…"
-            aria-label="Search"
-            className="w-full rounded-full border border-border bg-background py-2.5 pl-11 pr-10 text-[14px] shadow-inner outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70 sm:py-3.5 sm:pl-12 sm:text-[15px]"
-          />
-          {initialLoading && q.trim() ? (
-            <span
-              aria-hidden
-              className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2"
-            >
-              <RefreshCw size={16} className="animate-spin text-muted" />
-            </span>
-          ) : null}
-        </form>
-
-        {category ? (
-          <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
-            <span className="text-muted">Filtering:</span>
-            <span
-              className="inline-flex items-center gap-2 rounded-full bg-pill px-3 py-1 font-semibold"
-            >
-              {category}
-              <button
-                type="button"
-                onClick={clearFilters}
-                aria-label="Clear filter"
-                className="rounded-full p-0.5 hover:bg-hover"
-              >
-                <X size={12} />
-              </button>
-            </span>
-          </div>
-        ) : null}
-      </header>
+      <ExploreHero
+        firstName={firstName}
+        q={q}
+        onQChange={setQ}
+        onSubmit={submitSearch}
+        searching={initialLoading}
+        category={category}
+        onClearFilters={clearFilters}
+      />
 
       {/* Daily quest (or a join CTA for guests) leads Home with the NYT top
           books alongside it — side by side at every width, padded on mobile,
           full-bleed on desktop, and stretched to equal height. */}
       {!isSearching ? (
-        <div className="grid grid-cols-[1.5fr_1fr] items-stretch gap-3 layout-wide:-mx-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] lg:gap-4">
-          <div className="h-full">
-            {isGuest ? <JoinReadquestFeedCard /> : <DailyBookCard />}
+        <Reveal>
+          <div className="grid grid-cols-[1.5fr_1fr] items-stretch gap-3 layout-wide:-mx-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] lg:gap-4">
+            <div className="h-full">
+              {isGuest ? <JoinReadquestFeedCard /> : <DailyBookCard />}
+            </div>
+            <NytTopPicks />
           </div>
-          <NytTopPicks />
-        </div>
+        </Reveal>
       ) : null}
 
       {/* Curated recommendations from the NYT bestseller lists. */}
-      {!isSearching ? <NytBestsellers /> : null}
+      {!isSearching ? (
+        <Reveal delay={60}>
+          <NytBestsellers />
+        </Reveal>
+      ) : null}
 
       {/* When the user is searching or has a category active, results jump
           to the top — communities + shelves slide below so the user doesn't
           have to scroll past discovery content to see what they asked for. */}
       {isSearching ? resultsSection : null}
 
-      <CommunitiesPanel
-        communities={communities}
-        loading={communitiesLoading}
-        onOpen={(c) => router.push(`/book/${c.slug || c.id}`)}
-      />
+      <Reveal>
+        <CommunitiesPanel
+          communities={communities}
+          loading={communitiesLoading}
+          onOpen={(c) => router.push(`/book/${c.slug || c.id}`)}
+        />
+      </Reveal>
 
       {featuredCategories.length ? (
         <section aria-label="Categories" className="-mx-2 px-2 sm:mx-0 sm:px-0">
@@ -561,6 +511,9 @@ export default function ExplorePage() {
                   onClick={() => {
                     const next = active ? "" : c.label;
                     setCategory(next);
+                    // Picking a shelf moves the results to the top of the
+                    // page — carry the reader up there too.
+                    if (next) window.scrollTo({ top: 0, behavior: "smooth" });
                   }}
                   className={`group inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
                     active
@@ -587,7 +540,11 @@ export default function ExplorePage() {
         </section>
       ) : null}
 
-      {!isSearching ? resultsSection : null}
+      {!isSearching ? (
+        <Reveal delay={40} className="flex flex-col gap-6">
+          {resultsSection}
+        </Reveal>
+      ) : null}
     </section>
   );
 }
@@ -626,7 +583,7 @@ function OpenLibrarySection({
               : `Books matching "${q}"`}
           </h2>
           <p className="mt-1 max-w-2xl text-sm text-muted">
-            Not yet in Readquest. Tap one to pull it into our library and open
+            Not yet in {BRAND_NAME}. Tap one to pull it into our library and open
             its book room — we&apos;ll save the title, cover, and details for
             everyone.
           </p>
@@ -678,7 +635,7 @@ function OpenLibraryCard({
       disabled={disabled || adopting}
       className="group relative flex flex-col overflow-hidden rounded-[22px] border border-border bg-card text-left shadow-[var(--shadow-soft)] outline-none transition hover:-translate-y-0.5 hover:shadow-lg focus-visible:ring-2 focus-visible:ring-emerald-400/70 disabled:opacity-60"
     >
-      <div className="relative aspect-[2/3] w-full overflow-hidden bg-pill">
+      <div className="rq-shine relative aspect-[2/3] w-full overflow-hidden bg-pill">
         {result.thumbnail ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -839,7 +796,7 @@ function CommunityCard({
         className="absolute inset-x-0 top-0 h-0.5"
         style={{ background: accent }}
       />
-      <div className="relative h-[78px] w-[54px] shrink-0 overflow-hidden rounded-lg bg-pill ring-1 ring-border/60">
+      <div className="rq-shine relative h-[78px] w-[54px] shrink-0 overflow-hidden rounded-lg bg-pill ring-1 ring-border/60">
         {community.thumbnail ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -905,7 +862,7 @@ function BookCard({ book, onOpen }: { book: BookRow; onOpen: () => void }) {
       onClick={onOpen}
       className="group flex h-full w-full flex-col overflow-hidden rounded-[22px] border border-border bg-card text-left shadow-[var(--shadow-soft)] outline-none transition hover:-translate-y-1 hover:shadow-lg focus-visible:ring-2 focus-visible:ring-sky-400/70"
     >
-      <div className="relative w-full overflow-hidden bg-pill aspect-[2/3]">
+      <div className="rq-shine relative w-full overflow-hidden bg-pill aspect-[2/3]">
         {book.thumbnail ? (
           <Image
             src={book.thumbnail.replace(/^http:/, "https:")}

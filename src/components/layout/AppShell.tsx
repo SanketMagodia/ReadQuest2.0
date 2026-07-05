@@ -15,19 +15,33 @@ import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./theme-toggle";
-import { ReadquestLogo } from "@/components/brand/ReadquestLogo";
+import { TheGistClubLogo } from "@/components/brand/TheGistClubLogo";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import { RightRail } from "./RightRail";
 import { MobileAccountMenu } from "./MobileAccountMenu";
 import { NotificationsBell } from "./NotificationsBell";
+import { MessagesBubble } from "@/components/dm/MessagesBubble";
 import { JoinReadquestSidebarCard } from "@/components/auth/UnlockFeatures";
+import { SidebarFooter } from "@/components/layout/SidebarFooter";
 
-const navMain = [
+import type { LucideIcon } from "lucide-react";
+
+type NavItem = {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+};
+
+const navMain: NavItem[] = [
   { href: "/explore", label: "Home", icon: Compass },
   { href: "/feed", label: "Feed", icon: Library },
   { href: "/compose", label: "Compose", icon: PenSquare },
   { href: "/friends", label: "Friends", icon: Users },
 ];
+
+function navActive(pathname: string, href: string): boolean {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -40,7 +54,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Wide layout sidebar (landscape tablets / desktops) */}
       <aside className="sticky top-0 z-20 hidden h-[100dvh] min-h-0 shrink-0 flex-col overflow-hidden border-r border-border/50 bg-background/75 py-4 backdrop-blur layout-wide:flex lg:w-48 xl:w-52">
         <div className="mb-4 shrink-0 flex items-center justify-between gap-2 px-3">
-          <ReadquestLogo height={32} priority />
+          <TheGistClubLogo height={36} priority />
           <ThemeToggle />
         </div>
 
@@ -50,13 +64,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         >
           {navMain.map((item) => {
             const Icon = item.icon;
-            const active =
-              pathname === item.href ||
-              (item.href !== "/" && pathname.startsWith(item.href));
+            const href = item.href;
+            const active = navActive(pathname, item.href);
             return (
               <Link
                 key={item.href}
-                href={item.href}
+                href={href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
                   "group relative flex items-center gap-4 rounded-full px-4 py-3 text-[16px] font-semibold transition",
@@ -129,7 +142,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           )}
         </nav>
 
-        {!username ? <JoinReadquestSidebarCard /> : null}
+        <div className="mt-auto shrink-0 space-y-2">
+          {!username ? <JoinReadquestSidebarCard /> : null}
+          <SidebarFooter />
+        </div>
       </aside>
 
       {/* Main column. `min-w-0` is critical: without it, any unbreakable long
@@ -138,7 +154,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <main className="min-h-[100dvh] min-w-0 flex-1 pb-28 layout-wide:pb-8 layout-wide:px-1">
         {/* Compact layout top bar (phones + portrait tablets) */}
         <div className="sticky top-0 z-30 -mx-3 flex items-center justify-between gap-2 border-b border-border/70 bg-background/85 px-3 py-2.5 backdrop-blur layout-wide:hidden">
-          <ReadquestLogo height={28} />
+          <TheGistClubLogo height={30} />
           <div className="flex items-center gap-1.5">
             <InstallPrompt />
             <NotificationsBell variant="topbar" />
@@ -159,13 +175,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       >
         {navMain.map((item) => {
           const Icon = item.icon;
-          const active =
-            pathname === item.href ||
-            (item.href !== "/" && pathname.startsWith(item.href));
+          const href = item.href;
+          const active = navActive(pathname, item.href);
           return (
             <Link
               key={item.href}
-              href={item.href}
+              href={href}
               aria-label={item.label}
               aria-current={active ? "page" : undefined}
               className={cn(
@@ -213,6 +228,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           You
         </Link>
       </nav>
+
+      {username ? <MessagesBubble /> : null}
     </div>
   );
 }

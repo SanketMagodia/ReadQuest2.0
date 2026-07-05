@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BRAND_NAME } from "@/lib/brand";
 
 type Cover = {
   src: string;
@@ -87,7 +88,7 @@ function BookSpine({
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-3 text-center text-white">
           <BookOpen size={22} aria-hidden />
           <p className="text-[10px] font-bold uppercase tracking-[0.16em] leading-tight">
-            {cover.label ?? "Readquest"}
+            {cover.label ?? BRAND_NAME}
           </p>
         </div>
       )}
@@ -120,7 +121,7 @@ export function BookCarousel({
         "[mask-image:linear-gradient(to_right,transparent,black_6%,black_94%,transparent)] [-webkit-mask-image:linear-gradient(to_right,transparent,black_6%,black_94%,transparent)]",
         className
       )}
-      aria-label="A shelf of books featured on Readquest"
+      aria-label={`A shelf of books featured on ${BRAND_NAME}`}
       role="img"
     >
       <div

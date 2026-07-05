@@ -1,11 +1,16 @@
 import type { MetadataRoute } from "next";
+import {
+  BRAND_DESCRIPTION,
+  BRAND_NAME,
+  BRAND_SHORT,
+  BRAND_TITLE,
+} from "@/lib/brand";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Readquest — Books, quotes, threads",
-    short_name: "Readquest",
-    description:
-      "A reader-first social space: quotes, threaded discussions, and book discovery powered by community.",
+    name: BRAND_TITLE,
+    short_name: BRAND_SHORT,
+    description: BRAND_DESCRIPTION,
     start_url: "/",
     scope: "/",
     display: "standalone",
@@ -15,16 +20,22 @@ export default function manifest(): MetadataRoute.Manifest {
     categories: ["books", "social", "education", "lifestyle"],
     icons: [
       {
-        src: "/logo192.png",
-        sizes: "192x192",
-        type: "image/png",
+        src: "/brand/tgc-icon.svg",
+        sizes: "any",
+        type: "image/svg+xml",
         purpose: "any",
       },
       {
-        src: "/logo192.png",
-        sizes: "192x192",
+        src: "/apple-icon",
+        sizes: "180x180",
         type: "image/png",
         purpose: "maskable",
+      },
+      {
+        src: "/apple-icon",
+        sizes: "192x192",
+        type: "image/png",
+        purpose: "any",
       },
     ],
     shortcuts: [
@@ -37,7 +48,7 @@ export default function manifest(): MetadataRoute.Manifest {
       {
         name: "Explore books",
         short_name: "Explore",
-        description: "Discover new reads",
+        description: "Discover new reads on TGC",
         url: "/explore",
       },
     ],

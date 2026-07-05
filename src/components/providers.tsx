@@ -2,6 +2,7 @@
 
 import { SessionProvider } from "next-auth/react";
 import { ThemeProvider } from "next-themes";
+import { DmProvider } from "@/components/dm/DmProvider";
 
 export function Providers({
   children,
@@ -11,7 +12,7 @@ export function Providers({
   return (
     <SessionProvider>
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem storageKey="readquest-theme">
-        {children}
+        <DmProvider>{children}</DmProvider>
       </ThemeProvider>
     </SessionProvider>
   );

@@ -13,7 +13,7 @@
 const SEARCH_URL = "https://openlibrary.org/search.json";
 const WORK_BASE = "https://openlibrary.org";
 const COVER_BASE = "https://covers.openlibrary.org/b/id";
-const UA = { "User-Agent": "Readquest/1.0 (+https://readquest)" };
+const UA = { "User-Agent": "TheGistClub/1.0 (+https://thegistclub)" };
 const FETCH_TIMEOUT_MS = 4_000;
 
 function isNetworkTimeout(err: unknown) {

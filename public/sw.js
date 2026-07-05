@@ -1,4 +1,4 @@
-/* Readquest service worker — minimal offline support only.
+/* The Gist Club service worker — minimal offline support only.
    IMPORTANT: never cache HTML navigations on success — auth routes redirect
    (307) and must always hit the network or middleware will look "stuck". */
 
@@ -6,7 +6,7 @@ const VERSION = "rq-v2";
 const APP_SHELL_CACHE = `rq-shell-${VERSION}`;
 const RUNTIME_CACHE = `rq-runtime-${VERSION}`;
 
-const APP_SHELL = ["/offline", "/logo192.png", "/loading.gif"];
+const APP_SHELL = ["/offline", "/brand/tgc-icon.svg", "/loading.gif"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

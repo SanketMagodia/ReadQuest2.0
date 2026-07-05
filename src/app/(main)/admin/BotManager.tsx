@@ -48,8 +48,8 @@ type FormState = {
   image: string;
   persona: string;
   categories: string[];
-  intervalMinMinutes: number;
-  intervalMaxMinutes: number;
+  intervalMinDays: number;
+  intervalMaxDays: number;
   enabled: boolean;
   model: string;
 
@@ -69,8 +69,8 @@ const emptyForm: FormState = {
   image: "",
   persona: "",
   categories: [],
-  intervalMinMinutes: 180,
-  intervalMaxMinutes: 360,
+  intervalMinDays: 1,
+  intervalMaxDays: 3,
   enabled: false,
   model: "",
 
@@ -82,6 +82,10 @@ const emptyForm: FormState = {
   autoRespondToComments: true,
   autoRespondPerTick: 3,
 };
+
+/** Cadence is stored in minutes on the server; the admin UI works in days. */
+const minutesToDays = (m: number) => Math.round((m / 1440) * 100) / 100;
+const daysToMinutes = (d: number) => Math.max(10, Math.round(d * 1440));
 
 function splitCats(raw: string): string[] {
   return raw
@@ -122,6 +126,19 @@ const PERSONA_PRESETS = [
     categories: splitCats("History, Biography, Nonfiction"),
   },
 ];
+
+function formatCadence(minMinutes: number, maxMinutes: number) {
+  const fmt = (m: number) => {
+    const d = m / 1440;
+    if (d >= 1) return `${Math.round(d * 10) / 10}d`;
+    const h = m / 60;
+    if (h >= 1) return `${Math.round(h * 10) / 10}h`;
+    return `${m}m`;
+  };
+  return minMinutes === maxMinutes
+    ? `every ~${fmt(minMinutes)}`
+    : `every ${fmt(minMinutes)}–${fmt(maxMinutes)}`;
+}
 
 function formatRelative(iso: string | null) {
   if (!iso) return "never";
@@ -174,11 +191,20 @@ export function BotManager() {
       setFormError("Pick at least one category for this bot to post about.");
       return;
     }
+    if (form.intervalMaxDays < form.intervalMinDays) {
+      setFormError("Max days must be greater than or equal to min days.");
+      return;
+    }
     setCreating(true);
+    const { intervalMinDays, intervalMaxDays, ...rest } = form;
     const res = await fetch("/api/admin/bots", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify({
+        ...rest,
+        intervalMinMinutes: daysToMinutes(intervalMinDays),
+        intervalMaxMinutes: daysToMinutes(intervalMaxDays),
+      }),
     });
     setCreating(false);
     if (res.ok) {
@@ -287,7 +313,16 @@ export function BotManager() {
         replyErrors: { message: string }[];
         responses: number;
         responseErrors: { message: string }[];
+        stillDue?: number;
+        skippedDueToLock?: boolean;
       };
+      if (j.skippedDueToLock) {
+        setToast({
+          kind: "err",
+          text: "A tick is already running (or its lock hasn't expired yet). Try again in a few minutes.",
+        });
+        return;
+      }
       const errCount =
         (j.errors?.length ?? 0) +
         (j.replyErrors?.length ?? 0) +
@@ -296,7 +331,11 @@ export function BotManager() {
         kind: errCount ? "err" : "ok",
         text: `Tick ran: ${j.processed} posted, ${j.replies} replied, ${j.responses} responded${
           errCount ? `, ${errCount} errors` : ""
-        }.`,
+        }.${
+          j.stillDue
+            ? ` ${j.stillDue} bot${j.stillDue === 1 ? " is" : "s are"} still catching up — run tick again to continue.`
+            : ""
+        }`,
       });
       void refresh();
     } else {
@@ -466,27 +505,34 @@ export function BotManager() {
           </Field>
 
           <div className="grid gap-4 sm:grid-cols-3">
-            <Field label="Interval min (minutes)">
+            <Field label="Posts every… min (days)">
               <input
                 type="number"
-                min={10}
-                value={form.intervalMinMinutes}
+                min={0.1}
+                max={30}
+                step={0.5}
+                value={form.intervalMinDays}
                 onChange={(e) =>
-                  setForm((f) => ({ ...f, intervalMinMinutes: Number(e.target.value) || 0 }))
+                  setForm((f) => ({ ...f, intervalMinDays: Number(e.target.value) || 0 }))
                 }
                 className={inputCls}
               />
             </Field>
-            <Field label="Interval max (minutes)">
+            <Field label="Posts every… max (days)">
               <input
                 type="number"
-                min={10}
-                value={form.intervalMaxMinutes}
+                min={0.1}
+                max={30}
+                step={0.5}
+                value={form.intervalMaxDays}
                 onChange={(e) =>
-                  setForm((f) => ({ ...f, intervalMaxMinutes: Number(e.target.value) || 0 }))
+                  setForm((f) => ({ ...f, intervalMaxDays: Number(e.target.value) || 0 }))
                 }
                 className={inputCls}
               />
+              <p className="mt-1 text-[11px] text-muted">
+                e.g. 1–3 → a new post every 1 to 3 days, at a random moment.
+              </p>
             </Field>
             <Field label="Model (optional)">
               <input
@@ -630,7 +676,7 @@ export function BotManager() {
               checked={form.enabled}
               onChange={(e) => setForm((f) => ({ ...f, enabled: e.target.checked }))}
             />
-            Enable immediately (first post within ~30 seconds)
+            Enable immediately (first post on the next tick)
           </label>
 
           {formError ? (
@@ -856,8 +902,8 @@ function BotRow({
     image: bot.user.image,
     persona: bot.persona,
     categories: bot.categories,
-    intervalMinMinutes: bot.intervalMinMinutes,
-    intervalMaxMinutes: bot.intervalMaxMinutes,
+    intervalMinDays: minutesToDays(bot.intervalMinMinutes),
+    intervalMaxDays: minutesToDays(bot.intervalMaxMinutes),
     model: bot.model,
     replyEnabled: bot.replyEnabled,
     replyCategories: bot.replyCategories,
@@ -875,8 +921,8 @@ function BotRow({
       image: bot.user.image,
       persona: bot.persona,
       categories: bot.categories,
-      intervalMinMinutes: bot.intervalMinMinutes,
-      intervalMaxMinutes: bot.intervalMaxMinutes,
+      intervalMinDays: minutesToDays(bot.intervalMinMinutes),
+      intervalMaxDays: minutesToDays(bot.intervalMaxMinutes),
       model: bot.model,
       replyEnabled: bot.replyEnabled,
       replyCategories: bot.replyCategories,
@@ -895,8 +941,8 @@ function BotRow({
       image: draft.image,
       persona: draft.persona,
       categories: draft.categories,
-      intervalMinMinutes: draft.intervalMinMinutes,
-      intervalMaxMinutes: draft.intervalMaxMinutes,
+      intervalMinMinutes: daysToMinutes(draft.intervalMinDays),
+      intervalMaxMinutes: daysToMinutes(draft.intervalMaxDays),
       model: draft.model,
       replyEnabled: draft.replyEnabled,
       replyCategories: draft.replyCategories,
@@ -943,7 +989,9 @@ function BotRow({
               )}
             </div>
             <p className="mt-1.5 text-[11px] text-muted">
-              {bot.postsCount} posts · last {formatRelative(bot.lastPostAt)} · next{" "}
+              {bot.postsCount} posts ·{" "}
+              {formatCadence(bot.intervalMinMinutes, bot.intervalMaxMinutes)} · last{" "}
+              {formatRelative(bot.lastPostAt)} · next{" "}
               {bot.enabled ? formatRelative(bot.nextPostAt) : "paused"}
             </p>
             <p className="text-[11px] text-muted">
@@ -1087,22 +1135,28 @@ function BotRow({
           </Field>
 
           <div className="grid gap-3 sm:grid-cols-3">
-            <Field label="Interval min (min)">
+            <Field label="Posts every… min (days)">
               <input
                 type="number"
-                value={draft.intervalMinMinutes}
+                min={0.1}
+                max={30}
+                step={0.5}
+                value={draft.intervalMinDays}
                 onChange={(e) =>
-                  setDraft({ ...draft, intervalMinMinutes: Number(e.target.value) || 0 })
+                  setDraft({ ...draft, intervalMinDays: Number(e.target.value) || 0 })
                 }
                 className={inputCls}
               />
             </Field>
-            <Field label="Interval max (min)">
+            <Field label="Posts every… max (days)">
               <input
                 type="number"
-                value={draft.intervalMaxMinutes}
+                min={0.1}
+                max={30}
+                step={0.5}
+                value={draft.intervalMaxDays}
                 onChange={(e) =>
-                  setDraft({ ...draft, intervalMaxMinutes: Number(e.target.value) || 0 })
+                  setDraft({ ...draft, intervalMaxDays: Number(e.target.value) || 0 })
                 }
                 className={inputCls}
               />

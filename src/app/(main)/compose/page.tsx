@@ -6,8 +6,9 @@ import { useSession } from "next-auth/react";
 import Image from "next/image";
 import type { ChangeEvent } from "react";
 import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
-import { RefreshCw, Sparkles, X, ImagePlus } from "lucide-react";
+import { RefreshCw, Sparkles, X, ImagePlus, PenSquare } from "lucide-react";
 import { fileToPostImageDataUrl } from "@/lib/post-image";
+import { SignInRequired } from "@/components/auth/SignInRequired";
 
 type BookRow = {
   id: string;
@@ -111,7 +112,6 @@ export default function ComposePage() {
     setError(null);
     if (status !== "authenticated") {
       setError("Sign in to post.");
-      router.push("/login");
       return;
     }
     if (!book) {
@@ -146,6 +146,26 @@ export default function ComposePage() {
     } finally {
       setPublishing(false);
     }
+  }
+
+  if (status === "loading") {
+    return <LoadingIndicator fullPage label="Loading…" />;
+  }
+
+  if (status === "unauthenticated") {
+    return (
+      <SignInRequired
+        title="Sign in to compose a post"
+        description="Search a book, share a quote, and publish to your profile — sign in or create a free account first."
+        icon={PenSquare}
+        nextPath="/compose"
+        hints={[
+          "Attach posts to books in our library",
+          "Add text or an image",
+          "Shows up on your profile and in feeds",
+        ]}
+      />
+    );
   }
 
   return (

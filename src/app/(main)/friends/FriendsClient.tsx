@@ -9,6 +9,7 @@ import {
   Check,
   Clock,
   Loader2,
+  MessageCircle,
   Search,
   UserMinus,
   UserPlus,
@@ -16,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useDm } from "@/components/dm/DmProvider";
 
 type UserLite = {
   id: string;
@@ -123,6 +125,7 @@ function Avatar({
 
 export function FriendsClient() {
   const searchParams = useSearchParams();
+  const { openWithUser } = useDm();
   const initialTab = ((): Tab => {
     const t = searchParams?.get("tab");
     if (t === "requests" || t === "find") return t;
@@ -177,6 +180,11 @@ export function FriendsClient() {
     void loadFriends();
     void loadRequests();
   }, [loadFriends, loadRequests]);
+
+  useEffect(() => {
+    const dm = searchParams?.get("dm")?.trim().toLowerCase();
+    if (dm) openWithUser(dm);
+  }, [searchParams, openWithUser]);
 
   const tabs: { id: Tab; label: string; icon: typeof Users; count?: number }[] =
     [
@@ -286,6 +294,7 @@ function FriendsList({
   onChange: () => void;
   onSwitchTab: (t: Tab) => void;
 }) {
+  const { openWithUser } = useDm();
   const [removing, setRemoving] = useState<string | null>(null);
 
   async function unfriend(username: string) {
@@ -316,7 +325,7 @@ function FriendsList({
       <EmptyState
         icon={<Users size={20} aria-hidden />}
         title="No friends yet"
-        hint="Search for a reader by username and send them a request."
+        hint="Add friends to start chatting — search for a reader by username."
         cta={{
           label: "Find people",
           onClick: () => onSwitchTab("find"),
@@ -381,20 +390,31 @@ function FriendsList({
                 </p>
               )}
             </div>
-            <button
-              type="button"
-              onClick={() => void unfriend(f.user.username)}
-              disabled={removing === f.user.username}
-              aria-label={`Remove ${f.user.username}`}
-              className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-semibold text-muted transition hover:bg-hover hover:text-foreground disabled:opacity-60"
-            >
-              {removing === f.user.username ? (
-                <Loader2 size={12} className="animate-spin" aria-hidden />
-              ) : (
-                <UserMinus size={12} aria-hidden />
-              )}
-              <span className="hidden sm:inline">Remove</span>
-            </button>
+            <div className="flex shrink-0 flex-col gap-1.5 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => openWithUser(f.user.username)}
+                className="inline-flex items-center justify-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold text-white shadow-[var(--shadow-pop)]"
+                style={{ background: "var(--gradient-brand)" }}
+              >
+                <MessageCircle size={12} aria-hidden />
+                <span className="hidden sm:inline">Message</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => void unfriend(f.user.username)}
+                disabled={removing === f.user.username}
+                aria-label={`Remove ${f.user.username}`}
+                className="inline-flex items-center justify-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-semibold text-muted transition hover:bg-hover hover:text-foreground disabled:opacity-60"
+              >
+                {removing === f.user.username ? (
+                  <Loader2 size={12} className="animate-spin" aria-hidden />
+                ) : (
+                  <UserMinus size={12} aria-hidden />
+                )}
+                <span className="hidden sm:inline">Remove</span>
+              </button>
+            </div>
           </div>
         </li>
       ))}
@@ -745,12 +765,19 @@ function RelationshipButton({
   busy: boolean;
   onSend: () => void;
 }) {
+  const { openWithUser } = useDm();
+
   if (relationship === "friends") {
     return (
-      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-pill px-3 py-1.5 text-[11px] font-semibold text-foreground/80">
-        <Check size={12} aria-hidden />
-        Friends
-      </span>
+      <button
+        type="button"
+        onClick={() => openWithUser(username)}
+        className="inline-flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-semibold text-white shadow-[var(--shadow-pop)]"
+        style={{ background: "var(--gradient-brand)" }}
+      >
+        <MessageCircle size={12} aria-hidden />
+        Message
+      </button>
     );
   }
   if (relationship === "outgoing_request") {

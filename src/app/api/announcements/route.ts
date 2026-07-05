@@ -2,12 +2,18 @@ import { NextResponse } from "next/server";
 import connectDB from "@/lib/db";
 import Announcement from "@/models/Announcement";
 
+/** Broadcasts are day-notes: they disappear for readers 24h after publish. */
+const BROADCAST_TTL_MS = 24 * 60 * 60 * 1000;
+
 /** Active admin broadcasts for the right rail (wide) or feed (compact). */
 export async function GET() {
   await connectDB();
   const now = new Date();
   const rows = await Announcement.find({
     active: true,
+    // Hard 24h cap (also covers legacy rows created without expiresAt)…
+    createdAt: { $gt: new Date(now.getTime() - BROADCAST_TTL_MS) },
+    // …while still honoring an explicit earlier expiry when one is set.
     $or: [
       { expiresAt: { $exists: false } },
       { expiresAt: null },

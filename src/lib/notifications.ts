@@ -278,3 +278,21 @@ export async function notifyFollowedBookPost(args: {
     book: args.bookId,
   });
 }
+
+export async function notifyDirectMessage(args: {
+  recipientId: ID;
+  actorId: ID;
+  actorName: string;
+  actorUsername: string;
+  conversationId: ID;
+  preview: string;
+}) {
+  return createNotification({
+    recipient: args.recipientId,
+    actor: args.actorId,
+    type: "dm_message",
+    link: `/friends?dm=${args.actorUsername}`,
+    message: `${args.actorName} sent you a message`,
+    preview: trim(args.preview),
+  });
+}

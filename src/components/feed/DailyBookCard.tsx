@@ -58,11 +58,16 @@ export function DailyBookCard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Session not resolved yet — keep the skeleton showing rather than
+    // flipping `loading` off, so the blurred placeholder appears from first
+    // paint like the other Home cards do.
+    if (status === "loading") return;
     if (status !== "authenticated") {
       setLoading(false);
       return;
     }
     let cancelled = false;
+    setLoading(true);
     void (async () => {
       try {
         const res = await fetch("/api/feed/daily", { cache: "no-store" });
@@ -78,8 +83,13 @@ export function DailyBookCard() {
     };
   }, [status]);
 
+  // Show the skeleton while the session is still resolving or the daily pick
+  // is loading — this is the blurred box that was previously missed because
+  // the component returned null during the "loading" session phase.
+  if (status === "loading" || (status === "authenticated" && loading)) {
+    return <DailyCardSkeleton />;
+  }
   if (status !== "authenticated") return null;
-  if (loading) return <DailyCardSkeleton />;
   if (!data?.pick) return null;
 
   const { pick, streak } = data;

@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 140" width="560" height="140" role="img" aria-label="The Gist Club">
+  <defs>
+    <linearGradient id="quill" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="0.55" stop-color="#0ea5e9"/>
+      <stop offset="1" stop-color="#0284c7"/>
+    </linearGradient>
+    <style>
+      .feather { transform-origin: 18% 82%; transform-box: fill-box; animation: sway 3.2s ease-in-out infinite; }
+      .script { stroke-dasharray: 140; stroke-dashoffset: 140; animation: draw 6s ease-in-out infinite; }
+      .inkdot { transform-origin: center; transform-box: fill-box; animation: pop 6s cubic-bezier(.34,1.56,.64,1) infinite; }
+      .spark { transform-origin: center; transform-box: fill-box; animation: twinkle 3.4s ease-in-out infinite; }
+      @keyframes sway { 0%,100% { transform: rotate(0deg); } 25% { transform: rotate(-2.6deg) translate(1px,1px); } 55% { transform: rotate(1.6deg) translate(-0.8px,-1px); } 78% { transform: rotate(-1.2deg); } }
+      @keyframes draw { 0% { stroke-dashoffset: 140; opacity: 1; } 40%,78% { stroke-dashoffset: 0; opacity: 1; } 88% { stroke-dashoffset: 0; opacity: 0; } 100% { stroke-dashoffset: 140; opacity: 0; } }
+      @keyframes pop { 0%,38% { transform: scale(0); opacity: 0; } 44% { transform: scale(1.35); opacity: 1; } 48%,78% { transform: scale(1); opacity: 1; } 88%,100% { transform: scale(0); opacity: 0; } }
+      @keyframes twinkle { 0%,100% { transform: scale(.55) rotate(0deg); opacity: .5; } 50% { transform: scale(1) rotate(28deg); opacity: 1; } }
+      @media (prefers-reduced-motion: reduce) { .feather,.script,.inkdot,.spark { animation: none; } .script { stroke-dashoffset: 0; } .inkdot { opacity: 1; } }
+    </style>
+  </defs>
+
+  <!-- Mark: quill writing in the air -->
+  <g transform="translate(16,16) scale(2.34)">
+    <g class="feather">
+      <path d="M44.5 2.5 C 30 4.5 15.5 16.5 8.8 33.5 C 8.2 35.2 9.8 36.6 11.4 35.9 C 28.5 28 41.5 15.5 44.5 2.5 Z" fill="url(#quill)"/>
+      <path d="M43 4.5 C 32 12 20 24 11.5 34.2" fill="none" stroke="#e0f2fe" stroke-width="1.4" stroke-linecap="round" opacity=".85"/>
+      <path d="M11.5 34.2 L7.6 40.6" fill="none" stroke="#0284c7" stroke-width="2.4" stroke-linecap="round"/>
+      <path class="spark" d="M46.5 6 L47.7 9.1 L50.8 10.3 L47.7 11.5 L46.5 14.6 L45.3 11.5 L42.2 10.3 L45.3 9.1 Z" fill="#fbbf24"/>
+    </g>
+    <path class="script" d="M8 41.5 C 13.5 44.8 19 40.2 25 42 C 30.5 43.6 36 42.8 43.5 39.5" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linecap="round"/>
+    <circle class="inkdot" cx="45.5" cy="38.8" r="2" fill="#fbbf24"/>
+  </g>
+
+  <!-- Wordmark -->
+  <text x="168" y="46" font-family="'Plus Jakarta Sans', system-ui, sans-serif" font-size="17" font-weight="700" letter-spacing="7" fill="#57534e">THE</text>
+  <text x="166" y="103" font-family="Fraunces, 'Iowan Old Style', Georgia, serif" font-size="58" font-weight="800" letter-spacing="-1" fill="#0b0b0f">Gist Club</text>
+</svg>

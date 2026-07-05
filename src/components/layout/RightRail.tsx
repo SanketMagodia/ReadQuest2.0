@@ -22,6 +22,7 @@ import type { ComponentType, ReactNode } from "react";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import { JoinReadquestRailPitch } from "@/components/auth/UnlockFeatures";
 import { AnnouncementRailStrip } from "@/components/announcements/AnnouncementStrips";
+import { BRAND_SHORT } from "@/lib/brand";
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Tile primitives
@@ -152,7 +153,7 @@ function BrandTile({ authenticated }: { authenticated: boolean }) {
   }
   return (
     <TileShell variant="gradient-frame">
-      <Eyebrow label="Readquest" tone="brand" icon={Sparkles} />
+      <Eyebrow label={BRAND_SHORT} tone="brand" icon={Sparkles} />
       <p className="mt-2 text-base font-semibold leading-snug">
         For readers who live in the margins.
       </p>

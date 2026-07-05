@@ -40,7 +40,7 @@ export async function POST(req: Request) {
   const { brief, name, categories } = parsed.data;
 
   const system = [
-    "You write CONCISE bot personas for Readquest, a books community.",
+    "You write CONCISE bot personas for The Gist Club (TGC), a books community.",
     "A persona is a 3–5 sentence description written in second person ('You are…').",
     "It must convey:",
     "- Reading taste (genres, eras, what they gravitate toward)",

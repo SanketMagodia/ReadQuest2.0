@@ -2,8 +2,10 @@ import { redirect } from "next/navigation";
 import { getAppSession } from "@/lib/session";
 import { NotificationsList } from "./NotificationsList";
 
+import { pageTitle } from "@/lib/brand";
+
 export const metadata = {
-  title: "Notifications · Readquest",
+  title: pageTitle("Notifications"),
 };
 
 export default async function NotificationsPage() {

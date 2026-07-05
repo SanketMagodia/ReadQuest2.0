@@ -67,6 +67,11 @@ export async function POST(req: Request) {
   }
 
   await connectDB();
+  // Broadcasts are day-notes: default to a 24h lifetime, and never allow an
+  // explicit expiry to stretch past that.
+  const maxExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const requested = parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null;
+  const expiresAt = requested && requested < maxExpiry ? requested : maxExpiry;
   const doc = await Announcement.create({
     title: parsed.data.title,
     body: parsed.data.body,
@@ -74,7 +79,7 @@ export async function POST(req: Request) {
     linkLabel: parsed.data.linkLabel || "",
     active: true,
     createdBy: new Types.ObjectId(gate.session!.user!.id),
-    expiresAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : undefined,
+    expiresAt,
   });
 
   return NextResponse.json(

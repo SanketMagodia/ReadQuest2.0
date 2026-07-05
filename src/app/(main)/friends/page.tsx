@@ -1,17 +1,32 @@
 import { Suspense } from "react";
-import { redirect } from "next/navigation";
+import { Users } from "lucide-react";
 import { getAppSession } from "@/lib/session";
 import { FriendsClient } from "./FriendsClient";
+import { SignInRequired } from "@/components/auth/SignInRequired";
+import { pageTitle } from "@/lib/brand";
 
 export const metadata = {
-  title: "Friends · Readquest",
+  title: pageTitle("Friends"),
 };
 
 export default async function FriendsPage() {
   const session = await getAppSession();
   if (!session?.user?.id) {
-    redirect("/login?next=/friends");
+    return (
+      <SignInRequired
+        title="Sign in to connect with readers"
+        description="Add friends, see what they're reading, and message them — all inside TGC."
+        icon={Users}
+        nextPath="/friends"
+        hints={[
+          "Find readers by username",
+          "See what friends are reading now",
+          "Message friends from the chat bubble",
+        ]}
+      />
+    );
   }
+
   return (
     <section className="mx-auto w-full max-w-2xl px-3 py-6 sm:px-0">
       <header className="mb-5">
@@ -21,9 +36,6 @@ export default async function FriendsPage() {
           with.
         </p>
       </header>
-      {/* useSearchParams inside FriendsClient requires a Suspense boundary
-          per the Next.js 16 docs — without it, the route falls back to full
-          client-side rendering during build. */}
       <Suspense fallback={null}>
         <FriendsClient />
       </Suspense>
