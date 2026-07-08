@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { ServiceWorkerRegister } from "@/components/pwa/ServiceWorkerRegister";
+import { GoogleAnalytics } from "@/components/analytics/GoogleAnalytics";
+import { PageViewTracker } from "@/components/analytics/PageViewTracker";
 import {
   BRAND_DESCRIPTION,
   BRAND_NAME,
@@ -130,7 +132,11 @@ export default function RootLayout({
         />
       </head>
       <body className="bg-background text-foreground min-h-dvh antialiased">
-        <Providers>{children}</Providers>
+        <GoogleAnalytics />
+        <Providers>
+          {children}
+          <PageViewTracker />
+        </Providers>
         <ServiceWorkerRegister />
       </body>
     </html>

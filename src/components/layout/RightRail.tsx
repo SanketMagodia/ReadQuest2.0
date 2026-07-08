@@ -443,7 +443,10 @@ export function RightRail() {
   if (!tiles.length) return null;
 
   return (
-    <aside className="sticky top-4 hidden h-fit w-[220px] shrink-0 space-y-3 py-4 layout-wide:block xl:w-[240px]">
+    <aside
+      className="sticky top-0 z-10 hidden max-h-[100dvh] min-h-0 w-[220px] shrink-0 flex-col gap-3 overflow-y-auto overscroll-contain py-4 layout-wide:flex xl:w-[240px]"
+      aria-label="Sidebar"
+    >
       <AnnouncementRailStrip />
       {tiles}
     </aside>
