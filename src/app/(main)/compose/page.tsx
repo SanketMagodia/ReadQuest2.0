@@ -9,6 +9,7 @@ import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
 import { RefreshCw, Sparkles, X, ImagePlus, PenSquare } from "lucide-react";
 import { fileToPostImageDataUrl } from "@/lib/post-image";
 import { SignInRequired } from "@/components/auth/SignInRequired";
+import { trackPostCreated, trackSelectBook } from "@/lib/analytics-events";
 
 type BookRow = {
   id: string;
@@ -142,6 +143,7 @@ export default function ComposePage() {
         return;
       }
       const data = (await res.json()) as { post: { id: string } };
+      trackPostCreated(book.id, Boolean(postImage));
       router.push(`/post/${data.post.id}`);
     } finally {
       setPublishing(false);
@@ -217,6 +219,7 @@ export default function ComposePage() {
                     type="button"
                     onClick={() => {
                       setBook(b);
+                      trackSelectBook(b.id, b.title, "compose_search");
                       setQ("");
                       setResults([]);
                     }}

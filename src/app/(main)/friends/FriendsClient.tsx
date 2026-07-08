@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDm } from "@/components/dm/DmProvider";
+import { trackFriendAction } from "@/lib/analytics-events";
 
 type UserLite = {
   id: string;
@@ -304,7 +305,10 @@ function FriendsList({
       const res = await fetch(`/api/friends/${encodeURIComponent(username)}`, {
         method: "DELETE",
       });
-      if (res.ok) onChange();
+      if (res.ok) {
+        trackFriendAction("remove");
+        onChange();
+      }
     } finally {
       setRemoving(null);
     }
@@ -447,7 +451,10 @@ function RequestsPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action }),
       });
-      if (res.ok) onChange();
+      if (res.ok) {
+        trackFriendAction(action);
+        onChange();
+      }
     } finally {
       setBusy(null);
     }
@@ -651,6 +658,7 @@ function FindPeople({ onSent }: { onSent: () => void }) {
       const data = (await res.json()) as {
         status: RelationshipStatus;
       };
+      trackFriendAction("request");
       setResults((prev) =>
         prev.map((u) =>
           u.username.toLowerCase() === username.toLowerCase()

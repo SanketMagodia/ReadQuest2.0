@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   Circle,
 } from "lucide-react";
+import { trackFollowBook, trackReadlistUpdate } from "@/lib/analytics-events";
 
 type ReadStatus = "want" | "read" | null;
 
@@ -46,10 +47,12 @@ export function BookActions({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ bookId }),
         });
+        trackFollowBook(bookId, true);
       } else {
         await fetch(`/api/follows/book?bookId=${encodeURIComponent(bookId)}`, {
           method: "DELETE",
         });
+        trackFollowBook(bookId, false);
       }
       startTransition(() => router.refresh());
     } catch {
@@ -74,10 +77,12 @@ export function BookActions({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ bookId, status: next }),
         });
+        trackReadlistUpdate(bookId, next);
       } else {
         await fetch(`/api/readlist?bookId=${encodeURIComponent(bookId)}`, {
           method: "DELETE",
         });
+        trackReadlistUpdate(bookId, "remove");
       }
       startTransition(() => router.refresh());
     } catch {

@@ -22,6 +22,10 @@ import {
   X,
 } from "lucide-react";
 import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
+import {
+  trackGenerateSummary,
+  trackViewSummary,
+} from "@/lib/analytics-events";
 
 type Summary = {
   id: string;
@@ -103,6 +107,10 @@ export function SummaryReader({
     void refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    trackViewSummary(bookId, slug);
+  }, [bookId, slug]);
+
   // Track reading progress across the article.
   useEffect(() => {
     const onScroll = () => {
@@ -152,6 +160,7 @@ export function SummaryReader({
           return;
         }
         const j = (await res.json()) as { summary: Summary };
+        trackGenerateSummary(bookId, j.summary.scope);
         await refresh();
         setActiveScope(j.summary.scope);
         setPanelOpen(false);

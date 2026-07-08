@@ -8,6 +8,7 @@ import { AtSign, KeyRound, Eye, EyeOff } from "lucide-react";
 import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
 import { AuthFormShell } from "@/components/auth/AuthFormShell";
 import { BRAND_NAME } from "@/lib/brand";
+import { trackLogin } from "@/lib/analytics-events";
 
 export default function LoginClient() {
   const router = useRouter();
@@ -30,6 +31,7 @@ export default function LoginClient() {
     });
 
     if ((res as unknown as { ok?: boolean })?.ok) {
+      trackLogin("credentials");
       router.push(nextUrl.startsWith("/") ? nextUrl : "/");
       return;
     }
@@ -113,11 +115,12 @@ export default function LoginClient() {
 
         <button
           type="button"
-          onClick={() =>
+          onClick={() => {
+            trackLogin("google");
             void signIn("google", {
               callbackUrl: nextUrl.startsWith("/") ? nextUrl : "/",
-            })
-          }
+            });
+          }}
           className="inline-flex w-full items-center justify-center gap-3 rounded-full border border-border bg-background px-5 py-3 text-sm font-semibold transition hover:bg-hover max-sm:py-3.5"
         >
           <GoogleMark />

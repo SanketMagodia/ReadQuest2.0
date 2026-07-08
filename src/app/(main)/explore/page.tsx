@@ -36,6 +36,7 @@ import { BRAND_NAME } from "@/lib/brand";
 import { ExploreHero } from "@/components/explore/ExploreHero";
 import { NytBestsellers } from "@/components/explore/NytBestsellers";
 import { NytTopPicks } from "@/components/explore/NytTopPicks";
+import { trackSearch } from "@/lib/analytics-events";
 
 type BookRow = {
   id: string;
@@ -233,6 +234,7 @@ export default function ExplorePage() {
 
   function submitSearch(e?: FormEvent) {
     e?.preventDefault();
+    trackSearch({ searchTerm: q, category, location: "explore" });
     void fetchBooks({ reset: true });
   }
 

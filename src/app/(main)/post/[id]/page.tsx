@@ -13,6 +13,7 @@ import { PostImage } from "@/components/posts/PostImage";
 import { DeleteContentButton } from "@/components/posts/DeleteContentButton";
 import { PostActionsMenu } from "@/components/posts/PostActionsMenu";
 import { canDeleteContent } from "@/lib/content-permissions";
+import { trackComment } from "@/lib/analytics-events";
 
 type CommentDTO = {
   id: string;
@@ -110,6 +111,7 @@ export default function ThreadPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content: text, parentId: replyTo?.id ?? null }),
     });
+    trackComment(pid, Boolean(replyTo?.id));
     setBody("");
     setReplyTo(null);
     void reload();

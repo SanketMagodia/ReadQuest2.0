@@ -8,6 +8,7 @@ import { AtSign, Mail, KeyRound, Eye, EyeOff } from "lucide-react";
 import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
 import { AuthFormShell } from "@/components/auth/AuthFormShell";
 import { BRAND_SHORT } from "@/lib/brand";
+import { trackSignUp } from "@/lib/analytics-events";
 export default function RegisterClient() {
   const searchParams = useSearchParams();
   const nextUrl = searchParams?.get("next")?.trim() || "/";
@@ -42,6 +43,7 @@ export default function RegisterClient() {
       setSubmitting(false);
       return;
     }
+    trackSignUp("credentials");
     await signIn("credentials", {
       username: username.toLowerCase(),
       password,

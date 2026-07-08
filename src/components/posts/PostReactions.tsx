@@ -4,6 +4,7 @@ import { useCallback, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { ThumbsUp, ThumbsDown } from "lucide-react";
+import { trackReaction } from "@/lib/analytics-events";
 
 export type ReactionType = "like" | "dislike" | null;
 
@@ -75,6 +76,10 @@ export function PostReactions({
           setLikes(data.likes);
           setDislikes(data.dislikes);
           setMine(data.myReaction);
+          trackReaction(
+            endpoint ? "comment" : "post",
+            data.myReaction ?? "remove"
+          );
         } catch {
           setLikes(prev.likes);
           setDislikes(prev.dislikes);

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BRAND_NAME } from "@/lib/brand";
+import { trackPwaInstall } from "@/lib/analytics-events";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -67,9 +68,13 @@ export function InstallPrompt({ className, variant = "pill" }: Props) {
   const handleInstall = useCallback(async () => {
     if (!deferred) return;
     await deferred.prompt();
+    trackPwaInstall("prompt");
     const choice = await deferred.userChoice;
     if (choice.outcome === "accepted") {
+      trackPwaInstall("accepted");
       setInstalled(true);
+    } else {
+      trackPwaInstall("dismissed");
     }
     setDeferred(null);
   }, [deferred]);
