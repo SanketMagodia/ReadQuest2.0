@@ -1,10 +1,15 @@
-/** GA4 measurement ID — server reads either var; client bundle only inlines NEXT_PUBLIC_*. */
+/** Public GA4 ID (safe to expose — it appears in page source anyway). */
+export const PRODUCTION_GA_MEASUREMENT_ID = "G-KPSM10HVTC";
+
+/** GA4 measurement ID — env first, then production fallback for thegist.club deploys. */
 export function getGaMeasurementId(): string {
-  return (
+  const fromEnv =
     process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim() ||
     process.env.GA_MEASUREMENT_ID?.trim() ||
-    ""
-  );
+    "";
+  if (fromEnv.startsWith("G-")) return fromEnv;
+  if (process.env.NODE_ENV === "production") return PRODUCTION_GA_MEASUREMENT_ID;
+  return "";
 }
 
 /** Load GA in production by default; set NEXT_PUBLIC_GA_DEBUG=true to test locally. */
