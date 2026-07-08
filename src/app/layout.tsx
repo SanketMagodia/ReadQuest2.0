@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { ServiceWorkerRegister } from "@/components/pwa/ServiceWorkerRegister";
-import { GoogleAnalytics } from "@/components/analytics/GoogleAnalytics";
+import { GoogleAnalyticsScripts } from "@/components/analytics/GoogleAnalyticsScripts";
 import { PageViewTracker } from "@/components/analytics/PageViewTracker";
 import {
   BRAND_DESCRIPTION,
@@ -126,13 +126,13 @@ export default function RootLayout({
       className={`${sans.variable} ${display.variable} ${geistMono.variable}`}
     >
       <head>
+        <GoogleAnalyticsScripts />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
       </head>
       <body className="bg-background text-foreground min-h-dvh antialiased">
-        <GoogleAnalytics />
         <Providers>
           {children}
           <PageViewTracker />

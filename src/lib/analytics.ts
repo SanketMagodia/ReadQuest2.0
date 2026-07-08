@@ -1,9 +1,16 @@
-export const GA_MEASUREMENT_ID =
-  process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim() || "";
+/** GA4 measurement ID — server reads either var; client bundle only inlines NEXT_PUBLIC_*. */
+export function getGaMeasurementId(): string {
+  return (
+    process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim() ||
+    process.env.GA_MEASUREMENT_ID?.trim() ||
+    ""
+  );
+}
 
 /** Load GA in production by default; set NEXT_PUBLIC_GA_DEBUG=true to test locally. */
-export function isGoogleAnalyticsEnabled() {
-  if (!GA_MEASUREMENT_ID.startsWith("G-")) return false;
+export function isGoogleAnalyticsEnabled(): boolean {
+  const id = getGaMeasurementId();
+  if (!id.startsWith("G-")) return false;
   if (process.env.NODE_ENV === "production") return true;
   return process.env.NEXT_PUBLIC_GA_DEBUG === "true";
 }
@@ -20,8 +27,9 @@ declare global {
 }
 
 export function pageview(url: string) {
-  if (!isGoogleAnalyticsEnabled() || typeof window.gtag !== "function") return;
-  window.gtag("config", GA_MEASUREMENT_ID, {
+  const id = getGaMeasurementId();
+  if (!isGoogleAnalyticsEnabled() || !id || typeof window.gtag !== "function") return;
+  window.gtag("config", id, {
     page_path: url,
   });
 }
