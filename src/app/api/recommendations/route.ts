@@ -6,7 +6,7 @@ import User from "@/models/User";
 import ReadList from "@/models/ReadList";
 import UserRecommendation from "@/models/UserRecommendation";
 
-const MAX_RECOMMENDATIONS = 8;
+const MAX_RECOMMENDATIONS = 10;
 
 type PopulatedBook = {
   _id: Types.ObjectId;

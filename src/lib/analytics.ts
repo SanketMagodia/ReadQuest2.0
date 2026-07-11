@@ -39,9 +39,11 @@ export function pageview(url: string) {
   });
 }
 
+type GaParamValue = string | number | boolean | undefined;
+
 export function gaEvent(
   action: string,
-  params?: Record<string, string | number | boolean | undefined>
+  params?: Record<string, GaParamValue | Record<string, GaParamValue>[]>
 ) {
   if (!isGoogleAnalyticsEnabled() || typeof window.gtag !== "function") return;
   window.gtag("event", action, params);

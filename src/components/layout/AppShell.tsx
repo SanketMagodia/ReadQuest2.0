@@ -15,6 +15,7 @@ import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./theme-toggle";
+import { StreakBadge } from "@/components/streak/StreakBadge";
 import { TheGistClubLogo } from "@/components/brand/TheGistClubLogo";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import { RightRail } from "./RightRail";
@@ -48,6 +49,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();
   const username = session?.user?.username;
   const role = session?.user?.role;
+  // Signed-in readers get a streak badge (their theme follows their mood);
+  // only logged-out visitors keep the manual light/dark toggle.
+  const loggedIn = Boolean(session?.user?.id);
 
   return (
     <div className="mx-auto flex min-h-full w-full max-w-7xl gap-0 px-3 layout-wide:gap-2 layout-wide:px-2 xl:gap-3 xl:px-3">
@@ -55,7 +59,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <aside className="sticky top-0 z-20 hidden h-[100dvh] min-h-0 shrink-0 flex-col overflow-hidden border-r border-border/50 bg-background/75 py-4 backdrop-blur layout-wide:flex lg:w-48 xl:w-52">
         <div className="mb-4 shrink-0 flex items-center justify-between gap-2 px-3">
           <TheGistClubLogo height={36} priority />
-          <ThemeToggle />
+          {loggedIn ? <StreakBadge /> : <ThemeToggle />}
         </div>
 
         <nav
@@ -158,7 +162,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-1.5">
             <InstallPrompt />
             <NotificationsBell variant="topbar" />
-            <ThemeToggle />
+            {loggedIn ? <StreakBadge /> : <ThemeToggle />}
             <MobileAccountMenu />
           </div>
         </div>

@@ -24,6 +24,7 @@ export async function PATCH(req: Request) {
   if (parsed.data.name !== undefined) u.name = parsed.data.name;
   if (parsed.data.bio !== undefined) u.bio = parsed.data.bio;
   if (parsed.data.image !== undefined) u.image = parsed.data.image || undefined;
+  if (parsed.data.mood !== undefined) u.set("mood", parsed.data.mood);
 
   const { currentPassword, newPassword } = raw as {
     currentPassword?: string;
@@ -52,6 +53,7 @@ export async function PATCH(req: Request) {
     if (parsed.data.name !== undefined) fresh.name = parsed.data.name;
     if (parsed.data.bio !== undefined) fresh.bio = parsed.data.bio;
     if (parsed.data.image !== undefined) fresh.image = parsed.data.image || undefined;
+    if (parsed.data.mood !== undefined) fresh.set("mood", parsed.data.mood);
     fresh.passwordHash = await bcrypt.hash(newPassword, 12);
     await fresh.save();
   } else {
@@ -68,10 +70,31 @@ export async function PATCH(req: Request) {
       name: out?.name ?? u.name,
       bio: out?.bio ?? u.bio,
       image: out?.image ?? u.image,
+      mood: (out as { mood?: string })?.mood ?? "",
     },
     message:
       newPassword ?
         "Profile and password updated."
       : "Saved",
+  });
+}
+
+export async function GET() {
+  const session = await getAppSession();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  await connectDB();
+  const out = await User.findById(session.user.id).lean();
+  if (!out) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  return NextResponse.json({
+    user: {
+      id: out._id.toString(),
+      username: out.username,
+      name: out.name,
+      bio: out.bio,
+      image: out.image,
+      mood: (out as { mood?: string }).mood ?? "",
+    },
   });
 }

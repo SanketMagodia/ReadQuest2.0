@@ -1547,3 +1547,93 @@ h1,
 .info-accordion-body {
   will-change: grid-template-rows;
 }
+
+/* ── Top Shelf scenery (profile page) ─────────────────────────────────── */
+
+/* Light rain falling from the night-mode clouds behind the shelf. */
+.tgc-rain-drop {
+  animation: tgc-rain-fall 1.3s linear infinite;
+}
+
+@keyframes tgc-rain-fall {
+  0% { transform: translateY(0); opacity: 0; }
+  20% { opacity: 0.8; }
+  100% { transform: translateY(34px); opacity: 0; }
+}
+
+/* Gentle breathing glow on the day-mode sun. */
+.tgc-sun {
+  animation: tgc-sun-breathe 5s ease-in-out infinite;
+  transform-origin: center;
+  filter: drop-shadow(0 0 10px rgba(251, 191, 36, 0.45));
+}
+
+@keyframes tgc-sun-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+
+/* Snowflakes drifting down past the window. */
+.tgc-snow {
+  animation: tgc-snow-fall linear infinite;
+}
+
+@keyframes tgc-snow-fall {
+  0% { transform: translateY(-6px) translateX(0); opacity: 0; }
+  15% { opacity: 0.9; }
+  100% { transform: translateY(120px) translateX(6px); opacity: 0; }
+}
+
+/* Fireflies / twinkling stars & bulbs pulsing softly. */
+.tgc-firefly {
+  animation: tgc-firefly-glow 2.4s ease-in-out infinite;
+}
+
+@keyframes tgc-firefly-glow {
+  0%, 100% { opacity: 0.25; transform: translateY(0) scale(0.85); }
+  50% { opacity: 1; transform: translateY(-3px) scale(1.1); }
+}
+
+.tgc-twinkle {
+  animation: tgc-twinkle 3s ease-in-out infinite;
+}
+
+@keyframes tgc-twinkle {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
+/* Steam curling off a coffee cup. */
+.tgc-steam {
+  animation: tgc-steam-rise 2.6s ease-in-out infinite;
+  transform-origin: bottom center;
+}
+
+@keyframes tgc-steam-rise {
+  0% { opacity: 0; transform: translateY(2px) scaleY(0.7); }
+  40% { opacity: 0.6; }
+  100% { opacity: 0; transform: translateY(-8px) scaleY(1.2); }
+}
+
+/* Landscape streaks rushing past a train window. */
+.tgc-speed {
+  animation: tgc-speed-rush 1.1s linear infinite;
+}
+
+@keyframes tgc-speed-rush {
+  0% { transform: translateX(30px); opacity: 0; }
+  30% { opacity: 0.6; }
+  100% { transform: translateX(-40px); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tgc-rain-drop,
+  .tgc-sun,
+  .tgc-snow,
+  .tgc-firefly,
+  .tgc-twinkle,
+  .tgc-steam,
+  .tgc-speed {
+    animation: none;
+  }
+}

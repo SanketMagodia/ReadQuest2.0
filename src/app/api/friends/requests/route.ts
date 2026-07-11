@@ -6,6 +6,7 @@ import connectDB from "@/lib/db";
 import User from "@/models/User";
 import Friendship from "@/models/Friendship";
 import { notifyFriendRequest } from "@/lib/notifications";
+import { ensureMutualFollow } from "@/lib/follows";
 
 type ActorLite = {
   _id: Types.ObjectId;
@@ -153,6 +154,7 @@ export async function POST(req: Request) {
       existing.status = "accepted";
       existing.acceptedAt = new Date();
       await existing.save();
+      await ensureMutualFollow(me, other);
       return NextResponse.json({ ok: true, status: "friends", auto: true });
     }
     return NextResponse.json({

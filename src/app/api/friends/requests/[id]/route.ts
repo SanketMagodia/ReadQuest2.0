@@ -6,6 +6,7 @@ import connectDB from "@/lib/db";
 import User from "@/models/User";
 import Friendship from "@/models/Friendship";
 import { notifyFriendAccepted } from "@/lib/notifications";
+import { ensureMutualFollow } from "@/lib/follows";
 
 const actionSchema = z.object({
   action: z.enum(["accept", "decline", "cancel"]),
@@ -66,6 +67,10 @@ export async function POST(
     row.status = "accepted";
     row.acceptedAt = new Date();
     await row.save();
+
+    // Friends always follow each other so they show up in each other's
+    // following list for updates.
+    await ensureMutualFollow(row.requester, row.recipient);
 
     void (async () => {
       const actor = await User.findById(me)

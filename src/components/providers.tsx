@@ -3,6 +3,7 @@
 import { SessionProvider } from "next-auth/react";
 import { ThemeProvider } from "next-themes";
 import { DmProvider } from "@/components/dm/DmProvider";
+import { MoodProvider } from "@/components/mood/MoodProvider";
 import { AnalyticsIdentity } from "@/components/analytics/AnalyticsIdentity";
 
 export function Providers({
@@ -14,7 +15,9 @@ export function Providers({
     <SessionProvider>
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem storageKey="readquest-theme">
         <AnalyticsIdentity />
-        <DmProvider>{children}</DmProvider>
+        <MoodProvider>
+          <DmProvider>{children}</DmProvider>
+        </MoodProvider>
       </ThemeProvider>
     </SessionProvider>
   );

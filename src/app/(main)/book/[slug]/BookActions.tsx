@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import {
   BookmarkPlus,
   BookmarkCheck,
-  Heart,
-  HeartOff,
+  BookOpen,
+  BookOpenCheck,
   CheckCircle2,
   Circle,
 } from "lucide-react";
@@ -35,7 +35,7 @@ export function BookActions({
 
   async function toggleFollow() {
     if (!authenticated) {
-      setMsg("Sign in to follow this book.");
+      setMsg("Sign in to track what you're reading.");
       return;
     }
     const next = !following;
@@ -112,11 +112,11 @@ export function BookActions({
         >
           {following ? (
             <>
-              <HeartOff size={14} aria-hidden /> Following
+              <BookOpenCheck size={14} aria-hidden /> Currently reading
             </>
           ) : (
             <>
-              <Heart size={14} aria-hidden /> Follow book
+              <BookOpen size={14} aria-hidden /> Currently reading
             </>
           )}
         </button>

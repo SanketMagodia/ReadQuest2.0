@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MOOD_IDS } from "@/lib/moods";
 
 /** @handle — lowercase letters, numbers, underscores (spaces/symbols stripped). */
 export function sanitizeUsername(raw: string) {
@@ -92,6 +93,8 @@ export const profileUpdateSchema = z.object({
   name: z.string().trim().max(80).optional(),
   bio: z.string().trim().max(280).optional(),
   image: imageStringSchema,
+  /** "" clears the mood; otherwise one of the known mood ids. */
+  mood: z.union([z.enum(MOOD_IDS), z.literal("")]).optional(),
 });
 
 const categoryListSchema = z.array(z.string().trim().min(1).max(60)).max(10);

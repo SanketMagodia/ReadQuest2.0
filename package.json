@@ -3,14 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "next dev --webpack",
+    "dev:turbo": "next dev",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "seed": "tsx scripts/seed-books.ts",
     "seed-books": "tsx scripts/seed-books.ts",
     "seed-bots": "tsx scripts/seed-bots.ts",
-    "backfill-slugs": "tsx scripts/backfill-book-slugs.ts"
+    "backfill-slugs": "tsx scripts/backfill-book-slugs.ts",
+    "backfill-friend-follows": "tsx scripts/backfill-friend-follows.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

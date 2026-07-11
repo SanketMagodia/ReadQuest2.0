@@ -8,6 +8,8 @@ const userSchema = new Schema(
     name: { type: String, default: "" },
     image: { type: String },
     bio: { type: String, default: "", maxlength: 280 },
+    /** Reading mood that re-themes the profile/app. "" = none. */
+    mood: { type: String, default: "" },
     googleId: { type: String, sparse: true, unique: true },
     role: { type: String, enum: ["user", "admin"], default: "user" },
     isBot: { type: Boolean, default: false, index: true },

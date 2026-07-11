@@ -217,6 +217,23 @@ export type StreakState = {
   completedToday: boolean;
 };
 
+/** Read-only streak snapshot for displaying another user's profile — never
+ *  mutates (no upsert / reset writes). */
+export async function peekStreak(
+  userId: string
+): Promise<{ current: number; longest: number }> {
+  await connectDB();
+  const s = await UserStreak.findOne({ user: userId }).lean<{
+    current?: number;
+    longest?: number;
+    lastDay?: string;
+  } | null>();
+  if (!s) return { current: 0, longest: 0 };
+  const today = utcDay();
+  const live = s.lastDay && dayDiff(today, s.lastDay) <= 1 ? s.current ?? 0 : 0;
+  return { current: live, longest: s.longest ?? 0 };
+}
+
 export async function getStreakState(userId: string): Promise<StreakState> {
   await connectDB();
   const today = utcDay();
