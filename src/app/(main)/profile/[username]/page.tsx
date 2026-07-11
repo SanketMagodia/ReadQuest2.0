@@ -809,6 +809,42 @@ export default function ProfilePage() {
     }
   }
 
+  // Move a book from Wishlist into "Currently reading": follow the book and
+  // drop it from the wishlist so it flows Wishlist → Currently reading → Read.
+  async function startReading(book: ShelfBook) {
+    if (!isSelf) return;
+    const prevWant = wantToRead;
+    const prevFollowing = following;
+    setWantToRead((prev) => prev.filter((b) => b.id !== book.id));
+    setFollowing((prev) => [book, ...prev.filter((b) => b.id !== book.id)]);
+    setCounts((c) => ({
+      ...c,
+      wantToRead: Math.max(0, c.wantToRead - 1),
+      following: c.following + 1,
+    }));
+    try {
+      const [r1, r2] = await Promise.all([
+        fetch("/api/follows/book", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bookId: book.id }),
+        }),
+        fetch(`/api/readlist?bookId=${encodeURIComponent(book.id)}`, {
+          method: "DELETE",
+        }),
+      ]);
+      if (!r1.ok || !r2.ok) throw new Error("Failed");
+    } catch {
+      setWantToRead(prevWant);
+      setFollowing(prevFollowing);
+      setCounts((c) => ({
+        ...c,
+        wantToRead: c.wantToRead + 1,
+        following: Math.max(0, c.following - 1),
+      }));
+    }
+  }
+
   // Move a book from "Currently reading" onto the Read shelf: mark it read and
   // drop the follow so it leaves the currently-reading row.
   async function finishReading(book: ShelfBook) {
@@ -1565,10 +1601,11 @@ export default function ProfilePage() {
                 ? (b) => (
                     <button
                       type="button"
-                      onClick={() => void updateShelfStatus(b.id, "read")}
-                      className="mt-1.5 w-full rounded-md border border-border bg-card px-1 py-1 text-[10px] font-semibold text-muted transition hover:bg-hover hover:text-foreground"
+                      onClick={() => void startReading(b)}
+                      title="Move to Currently reading"
+                      className="mt-1.5 flex w-full items-center justify-center gap-0.5 rounded-md border border-border bg-card px-1 py-1 text-[10px] font-semibold text-muted transition hover:bg-hover hover:text-foreground"
                     >
-                      Mark read
+                      <Library size={10} aria-hidden /> Start reading
                     </button>
                   )
                 : visitorActions
