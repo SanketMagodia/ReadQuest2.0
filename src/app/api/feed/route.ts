@@ -7,6 +7,7 @@ import Book from "@/models/Book";
 import BookFollow from "@/models/BookFollow";
 import ReadList from "@/models/ReadList";
 import { serializePosts } from "@/lib/serialize";
+import { spreadByAuthor } from "@/lib/feed-rank";
 import "@/models/User";
 
 /**
@@ -31,17 +32,26 @@ export async function GET(req: Request) {
   }
 
   if (mode === "latest" || !session?.user?.id) {
+    const candidateLimit = limit * 6;
     const rows = await Post.find(baseFilter)
       .sort({ _id: -1 })
-      .limit(limit + 1)
+      .limit(candidateLimit + 1)
       .lean();
-    const hasMore = rows.length > limit;
-    const slice = hasMore ? rows.slice(0, limit) : rows;
-    const ids = slice.map((r) => (r._id as Types.ObjectId).toString());
+    const hasMore = rows.length > candidateLimit;
+    const candidateSlice = hasMore ? rows.slice(0, candidateLimit) : rows;
+
+    const ranked = candidateSlice.map((p, i) => ({
+      id: (p._id as Types.ObjectId).toString(),
+      authorId: (p.author as Types.ObjectId).toString(),
+      score: candidateSlice.length - i,
+    }));
+    const spread = spreadByAuthor(ranked, limit);
+    const ids = spread.map((s) => s.id);
     const posts = await serializePosts(ids, { viewerId: session?.user?.id });
+    const oldest = candidateSlice[candidateSlice.length - 1];
     const nextCursor =
-      hasMore && slice.length
-        ? (slice[slice.length - 1]._id as Types.ObjectId).toString()
+      hasMore && oldest
+        ? (oldest._id as Types.ObjectId).toString()
         : null;
     return NextResponse.json({ posts, nextCursor, mode: "latest" });
   }
@@ -128,15 +138,19 @@ export async function GET(req: Request) {
       : 9999;
     score += 2 * Math.exp(-ageH / 24);
 
-    return { id: (p._id as Types.ObjectId).toString(), score, ageH };
+    return {
+      id: (p._id as Types.ObjectId).toString(),
+      authorId: (p.author as Types.ObjectId).toString(),
+      score,
+      ageH,
+    };
   });
 
-  scored.sort((a, b) => {
-    if (b.score !== a.score) return b.score - a.score;
-    return a.ageH - b.ageH;
-  });
-
-  const topIds = scored.slice(0, limit).map((s) => s.id);
+  const spread = spreadByAuthor(
+    scored.map(({ id, authorId, score }) => ({ id, authorId, score })),
+    limit
+  );
+  const topIds = spread.map((s) => s.id);
   const posts = await serializePosts(topIds, { viewerId: userId });
 
   const oldest = candidateSlice[candidateSlice.length - 1];

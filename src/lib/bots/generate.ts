@@ -837,8 +837,9 @@ export async function runBotTick(): Promise<{
   };
 
   try {
-    // 1) Posting pass — backfill each due bot's missed slots at their natural
-    //    scheduled times (backdated) so posts don't all land at `now`.
+    // 1) Posting pass — round-robin across due bots so one bot doesn't drain
+    //    all its catch-up slots before others get a turn. Each round gives every
+    //    bot at most one post; repeat until slots/budget are exhausted.
     const due = await Bot.find({
       enabled: true,
       $or: [{ nextPostAt: { $exists: false } }, { nextPostAt: { $lte: now } }],
@@ -850,32 +851,61 @@ export async function runBotTick(): Promise<{
     const errors: { botId: string; message: string }[] = [];
     let processed = 0;
 
-    for (const doc of due) {
-      if (overBudget() || processed >= MAX_POSTS_PER_TICK) break;
-      const id = (doc._id as Types.ObjectId).toString();
-      const slots = buildCatchUpSlots(doc as unknown as BotDoc, now);
-      try {
-        for (const slot of slots) {
-          if (processed >= MAX_POSTS_PER_TICK || overBudget()) break;
-          await generatePostForBot(id, { postedAt: slot });
+    type BotQueue = {
+      id: string;
+      doc: BotDoc;
+      slots: Date[];
+      slotIndex: number;
+      failed: boolean;
+      touched: boolean;
+    };
+
+    const botQueues: BotQueue[] = due.map((doc) => ({
+      id: (doc._id as Types.ObjectId).toString(),
+      doc: doc as unknown as BotDoc,
+      slots: buildCatchUpSlots(doc as unknown as BotDoc, now),
+      slotIndex: 0,
+      failed: false,
+      touched: false,
+    }));
+
+    let anotherRound = true;
+    while (
+      anotherRound &&
+      processed < MAX_POSTS_PER_TICK &&
+      !overBudget()
+    ) {
+      anotherRound = false;
+      for (const q of botQueues) {
+        if (q.failed || q.slotIndex >= q.slots.length) continue;
+        if (processed >= MAX_POSTS_PER_TICK || overBudget()) break;
+
+        anotherRound = true;
+        const slot = q.slots[q.slotIndex];
+        q.slotIndex += 1;
+        try {
+          await generatePostForBot(q.id, { postedAt: slot });
           processed += 1;
+          q.touched = true;
           await pace();
-        }
-        // generatePostForBot rolls nextPostAt forward from each slot; if the
-        // final roll (or an early exit on budget) left the schedule in the
-        // past, jump to a fresh future slot so the next tick starts clean.
-        const fresh = await Bot.findById(id).select("nextPostAt").lean();
-        if (!fresh?.nextPostAt || new Date(fresh.nextPostAt) <= now) {
-          await Bot.findByIdAndUpdate(id, {
-            nextPostAt: rollNextPostAt(doc as unknown as BotDoc, now),
+        } catch (e) {
+          const message = e instanceof Error ? e.message : "Unknown error";
+          errors.push({ botId: q.id, message });
+          await Bot.findByIdAndUpdate(q.id, {
+            lastError: message.slice(0, 500),
+            nextPostAt: new Date(Date.now() + 15 * 60 * 1000),
           });
+          q.failed = true;
         }
-      } catch (e) {
-        const message = e instanceof Error ? e.message : "Unknown error";
-        errors.push({ botId: id, message });
-        await Bot.findByIdAndUpdate(id, {
-          lastError: message.slice(0, 500),
-          nextPostAt: new Date(Date.now() + 15 * 60 * 1000),
+      }
+    }
+
+    for (const q of botQueues) {
+      if (!q.touched || q.failed) continue;
+      const fresh = await Bot.findById(q.id).select("nextPostAt").lean();
+      if (!fresh?.nextPostAt || new Date(fresh.nextPostAt) <= now) {
+        await Bot.findByIdAndUpdate(q.id, {
+          nextPostAt: rollNextPostAt(q.doc, now),
         });
       }
     }
