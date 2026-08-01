@@ -25,6 +25,8 @@ export async function groqChat(
     model?: string;
     temperature?: number;
     maxTokens?: number;
+    /** Ask the model for a strict JSON object response. */
+    json?: boolean;
   } = {}
 ): Promise<string> {
   const apiKey = process.env.GROQ_API_KEY;
@@ -45,6 +47,7 @@ export async function groqChat(
       temperature: opts.temperature ?? 0.85,
       max_tokens: opts.maxTokens ?? 320,
       messages,
+      ...(opts.json ? { response_format: { type: "json_object" } } : {}),
     }),
   });
 

@@ -909,6 +909,36 @@ h1,
    animation, so no @property/houdini dependency. Idle it reads as a soft
    pastel ring; focusing saturates the ring, lifts the pill, and blooms a
    brand-tinted glow (box-shadows are not clipped by overflow). */
+/* Sticky Explore search dock — sits under the compact top bar (or at the top
+   on wide) and tightens into a frosted strip once the hero has scrolled away. */
+.rq-search-dock {
+  padding-top: 0.15rem;
+  padding-bottom: 0.35rem;
+  transition:
+    padding 280ms cubic-bezier(0.23, 1, 0.32, 1),
+    background-color 280ms ease,
+    border-color 280ms ease,
+    box-shadow 280ms ease,
+    backdrop-filter 280ms ease;
+}
+.rq-search-dock--stuck {
+  padding-top: 0.5rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 10px 28px -22px rgba(15, 23, 42, 0.55);
+}
+.dark .rq-search-dock--stuck {
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  box-shadow: 0 12px 32px -20px rgba(0, 0, 0, 0.65);
+}
+.rq-search--stuck:focus-within {
+  transform: none;
+  box-shadow: var(--shadow-soft);
+}
+
 .rq-search {
   position: relative;
   border-radius: 9999px;
@@ -957,6 +987,100 @@ h1,
 @keyframes rq-spin-slow {
   to {
     transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+/* ── "Recommend me": describe a vibe, get AI picks ─────────────────────────
+   The prompt box reuses the search pill's rotating conic ring, opened up into
+   a rounded card so a whole sentence has room to breathe. */
+.rq-vibe-box {
+  position: relative;
+  border-radius: 24px;
+  padding: 1.5px;
+  overflow: hidden;
+  background: var(--border);
+  box-shadow: var(--shadow-soft);
+  animation: rq-vibe-open 320ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+.rq-vibe-box::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 160%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%) rotate(0deg);
+  background: conic-gradient(
+    from 0deg,
+    var(--brand-3),
+    var(--brand-1),
+    var(--brand-mint),
+    var(--brand-amber),
+    var(--brand-coral),
+    var(--brand-3)
+  );
+  animation: rq-spin-slow 9s linear infinite;
+  opacity: 0.75;
+  will-change: transform;
+}
+.rq-vibe-box:focus-within {
+  box-shadow:
+    0 20px 48px -18px color-mix(in srgb, var(--brand-1) 55%, transparent),
+    var(--shadow-soft);
+}
+@keyframes rq-vibe-open {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Sparkle on the idle "Describe a vibe" tab, hinting it does something. */
+.rq-vibe-sparkle {
+  animation: rq-vibe-twinkle 2.4s ease-in-out infinite;
+}
+@keyframes rq-vibe-twinkle {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+  45% {
+    opacity: 0.75;
+    transform: scale(1.16) rotate(14deg);
+  }
+}
+
+.rq-vibe-results {
+  animation: rq-vibe-rise 420ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+.rq-vibe-card {
+  animation: rq-vibe-rise 460ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+@keyframes rq-vibe-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rq-vibe-box::before,
+  .rq-vibe-sparkle {
+    animation: none !important;
+  }
+  .rq-vibe-box,
+  .rq-vibe-results,
+  .rq-vibe-card {
+    animation: none !important;
   }
 }
 

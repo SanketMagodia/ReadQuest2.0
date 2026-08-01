@@ -11,14 +11,17 @@ import {
 import BookSummary from "@/models/BookSummary";
 import DailyBookPick from "@/models/DailyBookPick";
 import connectDB from "@/lib/db";
+import { getOrCreateBookQuote, type BookQuoteResult } from "@/lib/book-quote";
 
 /**
  * GET — returns the caller's pick for today (creating it if missing) along
- * with their current streak state and whether a cached summary exists.
+ * with their current streak state, whether a cached summary exists, and a
+ * short inspiring line drawn from the picked book.
  *
  *  { pick: DailyPickWithBook | null,
  *    streak: StreakState,
- *    summaryReady: boolean }
+ *    summaryReady: boolean,
+ *    quote: { text, verbatim } | null }
  */
 export async function GET() {
   const session = await getAppSession();
@@ -34,24 +37,28 @@ export async function GET() {
 
   let summaryReady = false;
   let stats = { completedToday: 0, bookReaders: 0 };
+  let quote: BookQuoteResult | null = null;
 
   if (pick) {
     await connectDB();
     const bookObjId = new Types.ObjectId(pick.book.id);
     const today = utcDay();
-    const [existing, completedToday, bookReaders] = await Promise.all([
+    const [existing, completedToday, bookReaders, line] = await Promise.all([
       BookSummary.findOne({ book: bookObjId }).select("_id").lean(),
       DailyBookPick.countDocuments({ day: today, completed: true }),
       DailyBookPick.distinct("user", {
         book: bookObjId,
         completed: true,
       }).then((arr) => arr.length),
+      // Cached after the first reader gets this book, and never throws.
+      getOrCreateBookQuote(pick.book),
     ]);
     summaryReady = !!existing;
     stats = { completedToday, bookReaders };
+    quote = line;
   }
 
-  return NextResponse.json({ pick, streak, summaryReady, stats });
+  return NextResponse.json({ pick, streak, summaryReady, stats, quote });
 }
 
 /**

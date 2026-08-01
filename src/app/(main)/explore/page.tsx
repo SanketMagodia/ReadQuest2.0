@@ -30,13 +30,29 @@ import { useSession } from "next-auth/react";
 import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
 import { Reveal } from "@/components/ui/Reveal";
 import { useInfiniteScroll } from "@/lib/hooks/useInfiniteScroll";
-import { DailyBookCard } from "@/components/feed/DailyBookCard";
+import {
+  DailyBookCard,
+  DailyQuestMini,
+  DailyQuoteStrip,
+  type DailyQuote,
+} from "@/components/feed/DailyBookCard";
+import { ClubHomeCard } from "@/components/clubs/ClubHomeCard";
+import type { ClubSummary } from "@/lib/clubs";
 import { JoinReadquestFeedCard } from "@/components/auth/UnlockFeatures";
 import { BRAND_NAME } from "@/lib/brand";
-import { ExploreHero } from "@/components/explore/ExploreHero";
+import {
+  ExploreHero,
+  ExploreSearchDock,
+} from "@/components/explore/ExploreHero";
 import { NytBestsellers } from "@/components/explore/NytBestsellers";
 import { NytTopPicks } from "@/components/explore/NytTopPicks";
-import { trackSearch } from "@/lib/analytics-events";
+import {
+  VibeResults,
+  VibeResultsSkeleton,
+  type VibePick,
+  type VibeResult,
+} from "@/components/explore/VibeRecommender";
+import { trackSearch, trackVibeRecommend } from "@/lib/analytics-events";
 
 type BookRow = {
   id: string;
@@ -124,10 +140,37 @@ export default function ExplorePage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [communities, setCommunities] = useState<Community[]>([]);
   const [communitiesLoading, setCommunitiesLoading] = useState(true);
+  // "Recommend me" — describe a vibe, get AI picks with a one-line why.
+  const [aiMode, setAiMode] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiResult, setAiResult] = useState<VibeResult | null>(null);
+  const [dailyQuote, setDailyQuote] = useState<DailyQuote | null>(null);
+  const [myClub, setMyClub] = useState<ClubSummary | null>(null);
   const seqRef = useRef(0);
   const seenRef = useRef<Set<string>>(new Set());
   const prevQRef = useRef(q);
   const prevCategoryRef = useRef(category);
+
+  // A club takes over the quest slot on Home, so we need to know early
+  // whether this reader is in one.
+  useEffect(() => {
+    if (status !== "authenticated") {
+      setMyClub(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const res = await fetch("/api/clubs/me", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = (await res.json()) as { club: ClubSummary | null };
+      if (!cancelled) setMyClub(data.club);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [status]);
 
   const fetchBooks = useCallback(
     async ({
@@ -301,6 +344,59 @@ export default function ExplorePage() {
     }
   }
 
+  /** Ask the AI librarian for books matching a described vibe. */
+  async function requestRecommendations() {
+    const vibe = aiPrompt.trim();
+    if (vibe.length < 3 || aiLoading) return;
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const res = await fetch("/api/books/recommend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vibe }),
+      });
+      const data = (await res.json().catch(() => null)) as {
+        echo?: string;
+        picks?: VibePick[];
+        error?: string;
+      } | null;
+      if (!res.ok || !data?.picks?.length) {
+        setAiError(data?.error ?? "Couldn't fetch recommendations. Try again.");
+        return;
+      }
+      setAiResult({ echo: data.echo ?? "", picks: data.picks, vibe });
+      trackVibeRecommend(vibe, data.picks.length);
+      setAiMode(false);
+    } catch {
+      setAiError("Network hiccup — try that once more.");
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
+  /** Open an AI pick: straight to its room, or adopt from Open Library first. */
+  function openVibePick(pick: VibePick) {
+    if (pick.source === "local") {
+      router.push(`/book/${pick.slug || pick.id}`);
+      return;
+    }
+    if (!pick.olKey) return;
+    void adoptAndOpen({
+      source: "openlibrary",
+      olKey: pick.olKey,
+      title: pick.title,
+      authors: pick.authors,
+      thumbnail: pick.thumbnail,
+      categories: pick.categories ?? "",
+      publishedYear: pick.publishedYear,
+      isbn: pick.isbn,
+      numPages: pick.numPages,
+      averageRating: pick.averageRating,
+      ratingsCount: pick.ratingsCount,
+    });
+  }
+
   const loadMore = useCallback(() => {
     if (!nextCursor || loadingMore || initialLoading) return;
     void fetchBooks({ cursor: nextCursor });
@@ -434,26 +530,71 @@ export default function ExplorePage() {
       <Suspense fallback={null}>
         <QuerySync onApply={applyUrlQuery} />
       </Suspense>
-      <ExploreHero
-        firstName={firstName}
+      <ExploreHero firstName={firstName} />
+      <ExploreSearchDock
         q={q}
         onQChange={setQ}
         onSubmit={submitSearch}
         searching={initialLoading}
         category={category}
         onClearFilters={clearFilters}
+        aiMode={aiMode}
+        onToggleAi={() => {
+          setAiError(null);
+          setAiMode((v) => !v);
+        }}
+        aiPrompt={aiPrompt}
+        onAiPromptChange={setAiPrompt}
+        onAiSubmit={() => void requestRecommendations()}
+        aiLoading={aiLoading}
+        aiError={aiError}
       />
+
+      {aiLoading && !aiResult ? <VibeResultsSkeleton /> : null}
+      {aiResult ? (
+        <VibeResults
+          result={aiResult}
+          adoptingKey={adoptingKey}
+          onOpen={openVibePick}
+          onRefine={() => {
+            setAiError(null);
+            setAiMode(true);
+          }}
+          onDismiss={() => {
+            setAiResult(null);
+            setAiPrompt("");
+          }}
+        />
+      ) : null}
 
       {/* Daily quest (or a join CTA for guests) leads Home with the NYT top
           books alongside it — side by side at every width, padded on mobile,
-          full-bleed on desktop, and stretched to equal height. */}
+          full-bleed on desktop, and stretched to equal height. Readers in a
+          club get their club room in that slot instead, and the quest shrinks
+          to a pill beside today's line. */}
       {!isSearching ? (
         <Reveal>
-          <div className="grid grid-cols-[1.5fr_1fr] items-stretch gap-3 layout-wide:-mx-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] lg:gap-4">
-            <div className="h-full">
-              {isGuest ? <JoinReadquestFeedCard /> : <DailyBookCard />}
+          <div className="flex flex-col gap-3 layout-wide:-mx-4 lg:gap-4">
+            {dailyQuote || myClub ? (
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  {dailyQuote ? <DailyQuoteStrip quote={dailyQuote} /> : null}
+                </div>
+                {myClub ? <DailyQuestMini onQuote={setDailyQuote} /> : null}
+              </div>
+            ) : null}
+            <div className="grid grid-cols-[1.5fr_1fr] items-stretch gap-3 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] lg:gap-4">
+              <div className="h-full">
+                {isGuest ? (
+                  <JoinReadquestFeedCard />
+                ) : myClub ? (
+                  <ClubHomeCard club={myClub} />
+                ) : (
+                  <DailyBookCard onQuote={setDailyQuote} />
+                )}
+              </div>
+              <NytTopPicks />
             </div>
-            <NytTopPicks />
           </div>
         </Reveal>
       ) : null}

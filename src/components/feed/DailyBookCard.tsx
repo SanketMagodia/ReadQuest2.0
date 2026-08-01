@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import {
@@ -42,6 +42,16 @@ type DailyResponse = {
     completedToday: number;
     bookReaders: number;
   };
+  quote?: { text: string; verbatim: boolean } | null;
+};
+
+/** The daily line, plus the book it belongs to, for the strip above the row. */
+export type DailyQuote = {
+  text: string;
+  verbatim: boolean;
+  author: string;
+  bookTitle: string;
+  bookSlug: string;
 };
 
 /** "1.2k" style compact formatter. */
@@ -52,10 +62,21 @@ function compact(n: number): string {
   return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
 }
 
-export function DailyBookCard() {
+export function DailyBookCard({
+  onQuote,
+}: {
+  /** Lifts today's line up so the page can render it above the quest row. */
+  onQuote?: (quote: DailyQuote | null) => void;
+} = {}) {
   const { status } = useSession();
   const [data, setData] = useState<DailyResponse | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Held in a ref so an inline parent callback can't retrigger the fetch.
+  const onQuoteRef = useRef(onQuote);
+  useEffect(() => {
+    onQuoteRef.current = onQuote;
+  });
 
   useEffect(() => {
     // Session not resolved yet — keep the skeleton showing rather than
@@ -64,6 +85,7 @@ export function DailyBookCard() {
     if (status === "loading") return;
     if (status !== "authenticated") {
       setLoading(false);
+      onQuoteRef.current?.(null);
       return;
     }
     let cancelled = false;
@@ -73,7 +95,19 @@ export function DailyBookCard() {
         const res = await fetch("/api/feed/daily", { cache: "no-store" });
         if (!res.ok) return;
         const j = (await res.json()) as DailyResponse;
-        if (!cancelled) setData(j);
+        if (cancelled) return;
+        setData(j);
+        onQuoteRef.current?.(
+          j.quote?.text && j.pick
+            ? {
+                text: j.quote.text,
+                verbatim: j.quote.verbatim,
+                author: j.pick.book.authors.split(/[,;]/)[0]?.trim() ?? "",
+                bookTitle: j.pick.book.title,
+                bookSlug: j.pick.book.slug,
+              }
+            : null
+        );
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -270,6 +304,135 @@ export function DailyBookCard() {
         </div>
       </div>
     </article>
+  );
+}
+
+/**
+ * Today's line, set as a quiet pull-quote above the daily quest row.
+ *
+ * Styling is deliberately limited to base tokens (border/foreground/muted).
+ * Moods repaint `--brand-*`, `--gradient-brand`, and `--accent*` app-wide, so
+ * anything tinted here would clash with half the palettes.
+ *
+ * A real line gets quotation marks and is credited to the author — not to the
+ * specific volume, since widely quoted lines from a series are easy to pin to
+ * the wrong book. A distilled takeaway is set plain and credited as "inspired
+ * by", so an invented sentence is never dressed up as the author's words.
+ */
+export function DailyQuoteStrip({ quote }: { quote: DailyQuote }) {
+  const bookLink = (
+    <Link
+      href={`/book/${quote.bookSlug}`}
+      className="underline-offset-2 transition-colors hover:text-foreground hover:underline"
+    >
+      {quote.bookTitle}
+    </Link>
+  );
+
+  return (
+    <aside
+      aria-label="Today's line"
+      className="border-l-2 border-border pl-3 sm:pl-4"
+    >
+      <p className="font-display text-[14px] italic leading-snug text-foreground/70 sm:text-[15px]">
+        {quote.verbatim ? `“${quote.text}”` : quote.text}
+      </p>
+      <p className="mt-1 text-[11px] text-muted">
+        {quote.verbatim && quote.author ? (
+          <>
+            — {quote.author}
+            <span className="layout-compact:hidden">
+              {" "}
+              · today&apos;s quest: {bookLink}
+            </span>
+          </>
+        ) : (
+          <>
+            {quote.verbatim ? "from" : "inspired by"} {bookLink}
+            <span className="layout-compact:hidden"> · today&apos;s quest</span>
+          </>
+        )}
+      </p>
+    </aside>
+  );
+}
+
+/**
+ * The daily quest, shrunk to a pill.
+ *
+ * When a reader is in a club, the club takes the big slot on Home and the quest
+ * steps aside into the quote row — but it still has to fetch the day's pick,
+ * because that request is also what supplies the quote.
+ */
+export function DailyQuestMini({
+  onQuote,
+}: {
+  onQuote?: (quote: DailyQuote | null) => void;
+}) {
+  const { status } = useSession();
+  const [data, setData] = useState<DailyResponse | null>(null);
+
+  const onQuoteRef = useRef(onQuote);
+  useEffect(() => {
+    onQuoteRef.current = onQuote;
+  });
+
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    let cancelled = false;
+    void (async () => {
+      const res = await fetch("/api/feed/daily", { cache: "no-store" });
+      if (!res.ok) return;
+      const j = (await res.json()) as DailyResponse;
+      if (cancelled) return;
+      setData(j);
+      onQuoteRef.current?.(
+        j.quote?.text && j.pick
+          ? {
+              text: j.quote.text,
+              verbatim: j.quote.verbatim,
+              author: j.pick.book.authors.split(/[,;]/)[0]?.trim() ?? "",
+              bookTitle: j.pick.book.title,
+              bookSlug: j.pick.book.slug,
+            }
+          : null
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [status]);
+
+  if (status !== "authenticated" || !data?.pick) return null;
+
+  const done = data.pick.completed;
+  const streak = data.streak.current;
+
+  return (
+    <Link
+      href="/daily"
+      title={
+        done
+          ? "Daily quest done for today"
+          : `Today's quest: ${data.pick.book.title}`
+      }
+      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-semibold transition ${
+        done
+          ? "border-transparent text-white"
+          : "border-border bg-card text-foreground hover:bg-hover"
+      }`}
+      style={done ? { background: "var(--gradient-warm)" } : undefined}
+    >
+      {done ? (
+        <BookOpenCheck size={12} aria-hidden />
+      ) : (
+        <Flame size={12} aria-hidden className="text-amber-500" />
+      )}
+      Daily quest
+      {streak > 0 ? (
+        <span className={done ? "text-white/80" : "text-muted"}>{streak}d</span>
+      ) : null}
+    </Link>
   );
 }
 

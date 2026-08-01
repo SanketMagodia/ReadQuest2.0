@@ -23,6 +23,14 @@ export function trackSearch(params: {
   });
 }
 
+/** "Recommend me" — a described vibe answered with AI book picks. */
+export function trackVibeRecommend(vibe: string, resultCount: number) {
+  gaEvent("ai_recommend", {
+    search_term: vibe.slice(0, 100),
+    result_count: resultCount,
+  });
+}
+
 export function trackSelectBook(bookId: string, title: string, source?: string) {
   gaEvent("select_item", {
     item_list_id: source ?? "books",

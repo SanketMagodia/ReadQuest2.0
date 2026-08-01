@@ -31,6 +31,8 @@ import {
   Clock,
   MessageCircle,
   Loader2,
+  Crown,
+  BookOpen,
 } from "lucide-react";
 import type { PostDTO } from "@/lib/serialize";
 import { PostCard } from "@/components/posts/PostCard";
@@ -46,6 +48,7 @@ import { useMood } from "@/components/mood/MoodProvider";
 import { useDm } from "@/components/dm/DmProvider";
 import { trackFriendAction } from "@/lib/analytics-events";
 import { MOODS, MOOD_MAP, isMoodId, type MoodId } from "@/lib/moods";
+import type { ClubSummary } from "@/lib/clubs";
 
 type PublicUser = {
   id: string;
@@ -512,7 +515,7 @@ function PeopleModal({
 export default function ProfilePage() {
   const params = useParams<{ username: string }>();
   const username = typeof params?.username === "string" ? params.username : "";
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
 
   const [user, setUser] = useState<PublicUser | null>(null);
   const [loadedOnce, setLoadedOnce] = useState(false);
@@ -535,6 +538,8 @@ export default function ProfilePage() {
   // followers/following list sheet.
   const [followerCount, setFollowerCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
+  /** An active club this reader runs, highlighted below the header. */
+  const [ownedClub, setOwnedClub] = useState<ClubSummary | null>(null);
   const [iFollow, setIFollow] = useState<boolean | null>(null);
   const [followBusy, setFollowBusy] = useState(false);
   const [peopleTab, setPeopleTab] = useState<"followers" | "following" | null>(
@@ -654,6 +659,11 @@ export default function ProfilePage() {
       const udoc =
         ujson && "user" in ujson ? (ujson as { user: PublicUser }).user : null;
 
+      setOwnedClub(
+        ujson && "club" in ujson
+          ? (ujson as { club: ClubSummary | null }).club
+          : null
+      );
       setUser(udoc);
       setBio(udoc?.bio ?? "");
       setName(udoc?.name ?? "");
@@ -1322,6 +1332,17 @@ export default function ProfilePage() {
         </div>
       </header>
 
+      {/* ── Club they run ───────────────────────────────────────────────────── */}
+      {ownedClub ? (
+        <div className="mt-5 px-4 sm:px-6">
+          <ProfileClubCard
+            club={ownedClub}
+            isSelf={isSelf}
+            signedIn={status === "authenticated"}
+          />
+        </div>
+      ) : null}
+
       {/* ── Edit form ───────────────────────────────────────────────────────── */}
       {editing && isSelf ? (
         <form
@@ -1832,6 +1853,67 @@ function MoodSwitcher({
 
 /** Read-only mood chip shown to visitors — matches the owner's switcher chip,
  *  with the blurb available on hover. */
+/**
+ * The club this reader runs, given a proper billboard on their profile.
+ * Signed-out visitors still see it — the tap just routes them to sign in,
+ * because clubs are a members-only room.
+ */
+function ProfileClubCard({
+  club,
+  isSelf,
+  signedIn,
+}: {
+  club: ClubSummary;
+  isSelf: boolean;
+  signedIn: boolean;
+}) {
+  const href = signedIn ? `/clubs/${club.slug}` : "/login";
+  return (
+    <Link
+      href={href}
+      className="group flex items-center gap-3 rounded-2xl border border-[var(--brand-1)]/40 bg-[color-mix(in_srgb,var(--brand-1)_7%,var(--card))] p-3.5 shadow-[var(--shadow-soft)] transition hover:-translate-y-0.5 hover:shadow-lg sm:p-4"
+    >
+      <div className="h-[70px] w-[48px] shrink-0 overflow-hidden rounded-md bg-pill ring-1 ring-border/70">
+        {club.currentBook?.thumbnail ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={club.currentBook.thumbnail.replace(/^http:/, "https:")}
+            alt=""
+            loading="lazy"
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <span className="flex h-full w-full items-center justify-center text-muted">
+            <BookOpen size={16} aria-hidden />
+          </span>
+        )}
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <p className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--brand-1)]">
+          <Crown size={11} aria-hidden />
+          {isSelf ? "Your club" : "Runs a club"}
+        </p>
+        <h2 className="mt-0.5 truncate text-[15px] font-bold">{club.name}</h2>
+        <p className="truncate text-[12px] text-muted">
+          {club.currentBook
+            ? `Reading ${club.currentBook.title}`
+            : club.tagline || "No book on the rack yet"}
+        </p>
+      </div>
+
+      <div className="shrink-0 text-right">
+        <p className="font-display text-lg font-bold leading-none">
+          {club.memberCount}
+        </p>
+        <p className="text-[10px] uppercase tracking-wide text-muted">
+          {club.memberCount === 1 ? "member" : "members"}
+        </p>
+      </div>
+    </Link>
+  );
+}
+
 function MoodDisplayTab({ mood, name }: { mood: MoodId; name: string }) {
   const m = MOOD_MAP[mood];
   return (

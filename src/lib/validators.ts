@@ -68,6 +68,27 @@ export const dmMessageSchema = z.object({
   content: z.string().trim().min(1).max(1500),
 });
 
+// ── Reading clubs ───────────────────────────────────────────────────────────
+
+export const clubCreateSchema = z.object({
+  name: z.string().trim().min(2).max(60),
+  tagline: z.string().trim().max(160).optional().default(""),
+  mood: z.string().trim().max(40).optional().default(""),
+});
+
+export const clubUpdateSchema = z.object({
+  name: z.string().trim().min(2).max(60).optional(),
+  tagline: z.string().trim().max(160).optional(),
+  mood: z.string().trim().max(40).optional(),
+  active: z.boolean().optional(),
+  /** Book id for the top rack; null clears it. */
+  currentBookId: z.string().trim().max(40).nullable().optional(),
+});
+
+export const clubMessageSchema = z.object({
+  content: z.string().trim().min(1).max(1500),
+});
+
 export const bookSearchSchema = z.object({
   q: z.string().trim().optional(),
   category: z.string().trim().optional(),

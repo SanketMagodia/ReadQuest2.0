@@ -30,28 +30,45 @@ export function StreakBadge({ className }: { className?: string }) {
   }, []);
 
   const n = current ?? 0;
+  const alive = current !== null && n > 0;
   const label =
     n > 0
       ? `${n}-day daily quest streak${completedToday ? " · done today" : ""}`
       : "Start your daily quest streak";
 
+  /**
+   * A fixed circle, matching the ThemeToggle that occupies this same slot for
+   * signed-out readers. The flame and the count side by side used to widen the
+   * badge with every extra digit, which pushed it out of the sidebar header —
+   * so a live streak shows the number alone and the flame stands in for zero.
+   */
   return (
     <Link
       href="/daily"
       aria-label={label}
       title={label}
       className={cn(
-        "inline-flex h-10 items-center gap-1.5 rounded-full border border-border bg-card px-3 text-sm font-bold text-foreground/80 shadow-[var(--shadow-soft)] transition hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70",
+        "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border shadow-[var(--shadow-soft)] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70",
+        alive && completedToday
+          ? "border-transparent bg-orange-500 text-white hover:brightness-110"
+          : alive
+            ? "border-orange-400/60 bg-orange-500/10 text-orange-600 hover:bg-orange-500/15 dark:text-orange-300"
+            : "border-border bg-card text-muted hover:bg-hover",
         className
       )}
     >
-      <Flame
-        size={16}
-        aria-hidden
-        className={n > 0 ? "text-orange-500" : "text-muted"}
-        fill={n > 0 && completedToday ? "currentColor" : "none"}
-      />
-      <span className="tabular-nums">{current === null ? "–" : n}</span>
+      {alive ? (
+        <span
+          className={cn(
+            "font-bold leading-none tabular-nums",
+            n > 99 ? "text-[10px]" : "text-sm"
+          )}
+        >
+          {n}
+        </span>
+      ) : (
+        <Flame size={18} aria-hidden />
+      )}
     </Link>
   );
 }
