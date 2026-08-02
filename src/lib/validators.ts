@@ -89,6 +89,17 @@ export const clubMessageSchema = z.object({
   content: z.string().trim().min(1).max(1500),
 });
 
+export const clubProgressSchema = z.object({
+  /** Quarter steps through the book on the club's rack. */
+  progress: z.union([
+    z.literal(0),
+    z.literal(25),
+    z.literal(50),
+    z.literal(75),
+    z.literal(100),
+  ]),
+});
+
 export const bookSearchSchema = z.object({
   q: z.string().trim().optional(),
   category: z.string().trim().optional(),

@@ -2,11 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { PenSquare } from "lucide-react";
 import type { PostDTO } from "@/lib/serialize";
 import { PostCard } from "@/components/posts/PostCard";
 import { PostSkeletonList } from "@/components/feed/PostSkeleton";
 import { AnnouncementFeedStrip } from "@/components/announcements/AnnouncementStrips";
 import { useInfiniteScroll } from "@/lib/hooks/useInfiniteScroll";
+import { ComposePrompt } from "@/components/compose/ComposePrompt";
+import { ComposeModal } from "@/components/compose/ComposeModal";
 
 type FeedMode = "for-you" | "latest";
 
@@ -26,6 +29,7 @@ export default function HomePage() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [signals, setSignals] = useState<FeedResponse["signals"]>();
+  const [composeOpen, setComposeOpen] = useState(false);
   const seenIdsRef = useRef<Set<string>>(new Set());
   const requestSeqRef = useRef(0);
 
@@ -120,6 +124,18 @@ export default function HomePage() {
               loading={initialLoading}
             />
           </div>
+
+          {/* Compose left the bottom nav, so the sticky header carries it on
+              phones — otherwise you'd have to scroll back up to post. */}
+          <button
+            type="button"
+            onClick={() => setComposeOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11.5px] font-semibold text-white shadow-[var(--shadow-pop)] transition active:translate-y-px layout-wide:hidden"
+            style={{ background: "var(--gradient-brand)" }}
+          >
+            <PenSquare size={12} aria-hidden />
+            Post
+          </button>
         </div>
         <div
           className="mt-1 -mx-5 flex items-center justify-center gap-3 py-1.5 layout-wide:hidden"
@@ -157,10 +173,14 @@ export default function HomePage() {
           <AnnouncementFeedStrip />
         </div>
 
+        <div className="px-3 sm:px-0">
+          <ComposePrompt onOpen={() => setComposeOpen(true)} />
+        </div>
+
         {initialLoading ? (
           <PostSkeletonList count={6} />
         ) : posts.length === 0 ? (
-          <EmptyFeed mode={mode} />
+          <EmptyFeed mode={mode} onCompose={() => setComposeOpen(true)} />
         ) : (
           <>
             {posts.map((p, i) => (
@@ -189,6 +209,19 @@ export default function HomePage() {
           </>
         )}
       </div>
+
+      <ComposeModal
+        open={composeOpen}
+        onClose={() => setComposeOpen(false)}
+        onPublished={(post) => {
+          setComposeOpen(false);
+          // Show it straight away rather than making the reader hunt for it.
+          if (!seenIdsRef.current.has(post.id)) {
+            seenIdsRef.current.add(post.id);
+            setPosts((prev) => [post, ...prev]);
+          }
+        }}
+      />
     </section>
   );
 }
@@ -227,7 +260,13 @@ function BlendTabButton({
   );
 }
 
-function EmptyFeed({ mode }: { mode: FeedMode }) {
+function EmptyFeed({
+  mode,
+  onCompose,
+}: {
+  mode: FeedMode;
+  onCompose: () => void;
+}) {
   return (
     <div className="rounded-3xl border border-dashed border-border p-10 text-center">
       <p className="text-base font-semibold">Nothing here yet</p>
@@ -243,12 +282,13 @@ function EmptyFeed({ mode }: { mode: FeedMode }) {
         >
           Explore books
         </Link>
-        <Link
-          href="/compose"
+        <button
+          type="button"
+          onClick={onCompose}
           className="rounded-full border border-border px-4 py-2 text-sm font-semibold hover:bg-hover"
         >
           Compose a post
-        </Link>
+        </button>
       </div>
     </div>
   );

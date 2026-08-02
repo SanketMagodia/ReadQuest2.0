@@ -1,19 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import {
-  Compass,
-  PenSquare,
-  Library,
-  BookOpen,
-  UserRound,
-  Users,
-  Shield,
-  LogIn,
-  LogOut,
-} from "lucide-react";
+import Image from "next/image";
+import { Compass, Library, BookOpen, UserRound, Users } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./theme-toggle";
 import { StreakBadge } from "@/components/streak/StreakBadge";
@@ -25,6 +16,7 @@ import { NotificationsBell } from "./NotificationsBell";
 import { MessagesBubble } from "@/components/dm/MessagesBubble";
 import { JoinReadquestSidebarCard } from "@/components/auth/UnlockFeatures";
 import { SidebarFooter } from "@/components/layout/SidebarFooter";
+import { SidebarAccount } from "@/components/layout/SidebarAccount";
 
 import type { LucideIcon } from "lucide-react";
 
@@ -34,11 +26,15 @@ type NavItem = {
   icon: LucideIcon;
 };
 
+/**
+ * Composing lives in a dialog on the feed now, so it no longer takes a nav
+ * slot. Profile and sign-in moved into the account control at the foot of the
+ * sidebar.
+ */
 const navMain: NavItem[] = [
   { href: "/explore", label: "Home", icon: Compass },
   { href: "/feed", label: "Feed", icon: Library },
   { href: "/clubs", label: "Clubs", icon: BookOpen },
-  { href: "/compose", label: "Compose", icon: PenSquare },
   { href: "/friends", label: "Friends", icon: Users },
 ];
 
@@ -50,7 +46,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { data: session } = useSession();
   const username = session?.user?.username;
-  const role = session?.user?.role;
+  const avatar = session?.user?.image ?? "";
   // Signed-in readers get a streak badge (their theme follows their mood);
   // only logged-out visitors keep the manual light/dark toggle.
   const loggedIn = Boolean(session?.user?.id);
@@ -103,53 +99,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           })}
 
           {username ? (
-            <div className="mt-2 space-y-1 border-t border-border/70 pt-4">
-              <NotificationsBell variant="sidebar" />
-              <Link
-                href={`/profile/${username}`}
-                className={cn(
-                  "flex items-center gap-4 rounded-full px-4 py-3 text-[15px] font-semibold transition",
-                  pathname.startsWith("/profile")
-                    ? "bg-pill text-foreground"
-                    : "text-muted hover:bg-hover hover:text-foreground"
-                )}
-              >
-                <UserRound size={20} aria-hidden />
-                Profile
-              </Link>
-              {role === "admin" ? (
-                <Link
-                  href="/admin"
-                  className="flex items-center gap-4 rounded-full px-4 py-3 text-[15px] font-semibold text-fuchsia-600 transition hover:bg-hover dark:text-fuchsia-300"
-                >
-                  <Shield size={20} aria-hidden />
-                  Admin
-                </Link>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => void signOut({ callbackUrl: "/" })}
-                className="flex w-full items-center gap-4 rounded-full px-4 py-3 text-[14px] font-medium text-muted transition hover:bg-hover"
-              >
-                <LogOut size={18} aria-hidden />
-                Sign out
-              </button>
-            </div>
-          ) : (
             <div className="mt-2 border-t border-border/70 pt-4">
-              <Link
-                href="/login"
-                className="flex items-center gap-4 rounded-full px-4 py-3 text-[15px] font-semibold text-sky-700 hover:bg-hover dark:text-sky-300"
-              >
-                <LogIn size={20} aria-hidden />
-                Sign in
-              </Link>
+              <NotificationsBell variant="sidebar" />
             </div>
-          )}
+          ) : null}
         </nav>
 
         <div className="mt-auto shrink-0 space-y-2">
           {!username ? <JoinReadquestSidebarCard /> : null}
+          <SidebarAccount />
           <SidebarFooter />
         </div>
       </aside>
@@ -225,13 +183,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         >
           <span
             className={cn(
-              "flex h-8 w-8 items-center justify-center rounded-full",
-              pathname.startsWith("/profile") ? "bg-pill" : ""
+              "flex h-8 w-8 items-center justify-center overflow-hidden rounded-full",
+              pathname.startsWith("/profile")
+                ? "ring-2 ring-[var(--brand-1)]"
+                : ""
             )}
           >
-            <UserRound size={20} aria-hidden />
+            {avatar ? (
+              <Image
+                src={avatar}
+                alt=""
+                width={32}
+                height={32}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <UserRound size={20} aria-hidden />
+            )}
           </span>
-          You
+          {username ? "You" : "Sign in"}
         </Link>
       </nav>
 

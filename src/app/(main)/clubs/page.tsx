@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Reveal } from "@/components/ui/Reveal";
 import { BRAND_NAME } from "@/lib/brand";
+import { MOOD_MAP, isMoodId } from "@/lib/moods";
 import type { ClubSummary } from "@/lib/clubs";
 
 export default function ClubsPage() {
@@ -221,11 +222,22 @@ function MyClubCard({
 }
 
 function ClubCard({ club }: { club: ClubSummary }) {
+  const mood = club.mood && isMoodId(club.mood) ? MOOD_MAP[club.mood] : null;
   return (
     <Link
       href={`/clubs/${club.slug}`}
-      className="group flex gap-3 rounded-2xl border border-border bg-card p-4 shadow-[var(--shadow-soft)] transition hover:-translate-y-0.5 hover:shadow-lg"
+      className="group relative flex gap-3 overflow-hidden rounded-2xl border border-border bg-card p-4 pl-5 shadow-[var(--shadow-soft)] transition hover:-translate-y-0.5 hover:shadow-lg"
     >
+      {/* Each club wears its own mood colours down the spine. */}
+      <span
+        aria-hidden
+        className="absolute inset-y-0 left-0 w-1.5"
+        style={{
+          background: mood
+            ? `linear-gradient(180deg, ${mood.swatch[0]}, ${mood.swatch[1]})`
+            : "var(--gradient-brand)",
+        }}
+      />
       <div className="h-[84px] w-[56px] shrink-0 overflow-hidden rounded-md bg-pill ring-1 ring-border/70">
         {club.currentBook?.thumbnail ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -242,7 +254,10 @@ function ClubCard({ club }: { club: ClubSummary }) {
         )}
       </div>
       <div className="flex min-w-0 flex-1 flex-col">
-        <h2 className="truncate text-[15px] font-semibold">{club.name}</h2>
+        <h2 className="flex items-center gap-1.5 truncate text-[15px] font-semibold">
+          {mood ? <span aria-hidden>{mood.emoji}</span> : null}
+          <span className="truncate">{club.name}</span>
+        </h2>
         {club.tagline ? (
           <p className="mt-0.5 line-clamp-2 text-[12.5px] leading-snug text-muted">
             {club.tagline}

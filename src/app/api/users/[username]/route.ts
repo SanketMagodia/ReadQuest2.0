@@ -4,8 +4,7 @@ import connectDB from "@/lib/db";
 import User from "@/models/User";
 import { peekStreak } from "@/lib/daily";
 import { getFollowCounts } from "@/lib/follows";
-import Club from "@/models/Club";
-import { serializeClub, type LeanClub } from "@/lib/clubs";
+import { getClubForUser } from "@/lib/clubs";
 
 export async function GET(
   _: Request,
@@ -25,14 +24,13 @@ export async function GET(
     getFollowCounts(userId),
   ]);
 
-  // A club they run and keep active gets a shout-out on their profile.
-  const ownedClub = await Club.findOne({ owner: user._id, active: true })
-    .populate("owner", "username name image")
-    .populate("currentBook", "slug title authors thumbnail")
-    .lean();
+  // Whichever club they're in — running it or just reading along — so visitors
+  // can see where this reader hangs out.
+  const membership = await getClubForUser(userId);
 
   return NextResponse.json({
-    club: ownedClub ? serializeClub(ownedClub as unknown as LeanClub) : null,
+    club: membership?.club ?? null,
+    clubRole: membership?.role ?? null,
     user: {
       id: userId,
       username: user.username,

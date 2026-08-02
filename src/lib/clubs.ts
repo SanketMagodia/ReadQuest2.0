@@ -3,6 +3,7 @@ import connectDB from "@/lib/db";
 import Club from "@/models/Club";
 import ClubMembership from "@/models/ClubMembership";
 import ClubShelfEntry from "@/models/ClubShelfEntry";
+import "@/models/User";
 import { isMoodId } from "@/lib/moods";
 
 type ID = string | Types.ObjectId;
@@ -130,8 +131,12 @@ export async function getMyMembership(userId: ID) {
     } | null>();
 }
 
-/** The reader's club, fully populated, for the home screen. */
-export async function getMyClub(userId: ID) {
+/**
+ * The one club a reader belongs to, fully populated, with their role in it.
+ * Feeds the home screen for the signed-in reader and the club badge on
+ * anybody's profile.
+ */
+export async function getClubForUser(userId: ID) {
   const membership = await getMyMembership(userId);
   if (!membership) return null;
   const club = await Club.findById(membership.club)
@@ -258,6 +263,99 @@ export async function setCurrentBook(clubId: ID, bookId: ID | null) {
       },
     }
   );
+
+  // A new book means everyone starts over.
+  if (!outgoing || !incoming || !outgoing.equals(incoming)) {
+    await ClubMembership.updateMany(
+      { club },
+      { $set: { progress: 0, progressBook: incoming, progressAt: null } }
+    );
+  }
+}
+
+export type ClubMember = {
+  /** The user's Mongo id — preferred for matching the signed-in viewer. */
+  id: string;
+  username: string;
+  name: string;
+  image: string;
+  role: "owner" | "member";
+  progress: number;
+  progressAt: string | null;
+};
+
+type MemberRow = {
+  role?: "owner" | "member";
+  progress?: number;
+  progressAt?: Date | null;
+  user: {
+    _id: Types.ObjectId;
+    username?: string;
+    name?: string;
+    image?: string;
+  } | null;
+};
+
+/** Everyone in the club with how far along they are, furthest first. */
+export async function getClubMembers(clubId: ID, limit = 60) {
+  await connectDB();
+  const rows = await ClubMembership.find({ club: toId(clubId) })
+    .sort({ progress: -1, createdAt: 1 })
+    .limit(limit)
+    .populate("user", "username name image")
+    .lean<MemberRow[]>();
+
+  return rows
+    .filter((r) => r.user)
+    .map<ClubMember>((r) => ({
+      id: r.user?._id?.toString() ?? "",
+      username: r.user?.username ?? "",
+      name: r.user?.name || r.user?.username || "",
+      image: r.user?.image ?? "",
+      role: r.role === "owner" ? "owner" : "member",
+      progress: typeof r.progress === "number" ? r.progress : 0,
+      progressAt: r.progressAt ? new Date(r.progressAt).toISOString() : null,
+    }));
+}
+
+/**
+ * Move a member's marker on the current book.
+ * Returns `{ progress, previous }` or null if they aren't in this club.
+ * Writes through the native collection so a stale hot-reloaded schema can't
+ * strip the newly-added progress paths.
+ */
+export async function setProgress(
+  clubId: ID,
+  userId: ID,
+  progress: number,
+  bookId: Types.ObjectId | null
+) {
+  await connectDB();
+  const club = toId(clubId);
+  const user = toId(userId);
+
+  const existing = await ClubMembership.collection.findOne(
+    { club, user },
+    { projection: { progress: 1 } }
+  );
+  if (!existing) return null;
+
+  const previous =
+    typeof existing.progress === "number" ? existing.progress : 0;
+
+  await ClubMembership.collection.updateOne(
+    { club, user },
+    {
+      $set: {
+        progress,
+        progressBook: bookId,
+        progressAt: new Date(),
+        updatedAt: new Date(),
+      },
+    }
+  );
+
+  return { progress, previous };
 }
 
 /** Books the club has finished, newest first. */

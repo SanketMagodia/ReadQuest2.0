@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAppSession } from "@/lib/session";
-import { getMyClub } from "@/lib/clubs";
+import { getClubForUser } from "@/lib/clubs";
 
 /**
  * GET — the one club the caller belongs to, or null. Drives the home screen
@@ -12,7 +12,7 @@ export async function GET() {
     return NextResponse.json({ club: null, role: null });
   }
   try {
-    const mine = await getMyClub(session.user.id);
+    const mine = await getClubForUser(session.user.id);
     return NextResponse.json({
       club: mine?.club ?? null,
       role: mine?.role ?? null,

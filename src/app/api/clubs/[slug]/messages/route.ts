@@ -12,6 +12,20 @@ const PAGE = 40;
 
 type LeanClubRef = { _id: Types.ObjectId };
 
+type MessageRow = {
+  _id: Types.ObjectId;
+  content: string;
+  createdAt: Date;
+  kind?: "text" | "progress";
+  progress?: number | null;
+  sender: {
+    _id: Types.ObjectId;
+    username?: string;
+    name?: string;
+    image?: string;
+  } | null;
+};
+
 async function loadClub(slug: string) {
   await connectDB();
   return Club.findOne({ slug: slug.toLowerCase() })
@@ -50,19 +64,7 @@ export async function GET(
     .sort({ _id: -1 })
     .limit(PAGE + 1)
     .populate("sender", "username name image")
-    .lean<
-      {
-        _id: Types.ObjectId;
-        content: string;
-        createdAt: Date;
-        sender: {
-          _id: Types.ObjectId;
-          username?: string;
-          name?: string;
-          image?: string;
-        } | null;
-      }[]
-    >();
+    .lean<MessageRow[]>();
 
   const hasMore = rows.length > PAGE;
   const slice = hasMore ? rows.slice(0, PAGE) : rows;
@@ -73,6 +75,8 @@ export async function GET(
     id: m._id.toString(),
     content: m.content,
     createdAt: new Date(m.createdAt).toISOString(),
+    kind: m.kind === "progress" ? ("progress" as const) : ("text" as const),
+    progress: typeof m.progress === "number" ? m.progress : null,
     fromMe: m.sender?._id.toString() === me,
     author: m.sender
       ? {
@@ -147,6 +151,8 @@ export async function POST(
       id: doc._id.toString(),
       content: doc.content,
       createdAt: doc.createdAt.toISOString(),
+      kind: "text" as const,
+      progress: null,
       fromMe: true,
       author: {
         username: session.user.username ?? "",

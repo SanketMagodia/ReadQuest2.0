@@ -67,8 +67,8 @@ export function ClubHomeCard({
         slug={club.slug}
         canPost={canPost}
         signedIn
-        heightClass="min-h-[12rem]"
-        className="mt-3 min-h-0 flex-1"
+        heightClass="h-[16rem] max-h-[16rem]"
+        className="mt-3"
       />
     </article>
   );

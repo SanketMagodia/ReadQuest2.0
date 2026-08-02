@@ -21,12 +21,13 @@ import {
 import { useMood } from "@/components/mood/MoodProvider";
 import { MOODS, MOOD_MAP, isMoodId, type MoodId } from "@/lib/moods";
 import { ClubChat } from "@/components/clubs/ClubChat";
-import type { ClubBookLite, ClubSummary } from "@/lib/clubs";
+import { ClubProgress } from "@/components/clubs/ClubProgress";
+import type { ClubBookLite, ClubMember, ClubSummary } from "@/lib/clubs";
 
 type ClubDetail = {
   club: ClubSummary;
   shelf: ClubBookLite[];
-  members: { username: string; name: string; image: string }[];
+  members: ClubMember[];
   viewer: {
     isMember: boolean;
     isOwner: boolean;
@@ -39,8 +40,10 @@ export default function ClubRoomPage() {
   const params = useParams<{ slug: string }>();
   const slug = String(params?.slug ?? "");
   const router = useRouter();
-  const { status } = useSession();
-  const { previewMood, setOwnMood } = useMood();
+  const { data: session, status } = useSession();
+  const { ownMood, previewMood, setOwnMood } = useMood();
+  const myUsername = session?.user?.username ?? "";
+  const myUserId = session?.user?.id ?? "";
 
   const [data, setData] = useState<ClubDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -48,6 +51,8 @@ export default function ClubRoomPage() {
   const [error, setError] = useState<string | null>(null);
   const [askMood, setAskMood] = useState(false);
   const [noticeOpen, setNoticeOpen] = useState(true);
+  /** Bumped after a progress update so the room pulls the new event in. */
+  const [progressKey, setProgressKey] = useState(0);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/clubs/${slug}`, { cache: "no-store" });
@@ -156,7 +161,7 @@ export default function ClubRoomPage() {
   const showMoodNotice = clubMood && !viewer.isOwner && noticeOpen;
 
   return (
-    <section className="mx-auto flex w-full max-w-4xl flex-col gap-4 px-2 pb-12 pt-4 sm:px-4">
+    <section className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-2 pb-12 pt-4 sm:px-4">
       <Link
         href="/clubs"
         className="inline-flex w-fit items-center gap-1.5 text-[12px] font-semibold text-muted transition hover:text-foreground"
@@ -189,112 +194,151 @@ export default function ClubRoomPage() {
       ) : null}
 
       {/* ── Header + top rack ─────────────────────────────────────────────── */}
-      <header className="rounded-2xl border border-border bg-card p-4 sm:p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
-              <Users size={11} aria-hidden />
-              {club.memberCount} {club.memberCount === 1 ? "member" : "members"}
-              {!club.active ? " · inactive" : ""}
-            </p>
-            <h1 className="mt-1 font-display text-xl font-bold sm:text-2xl">
-              {club.name}
-            </h1>
-            {club.tagline ? (
-              <p className="mt-1 max-w-prose text-[13px] text-muted">
-                {club.tagline}
-              </p>
-            ) : null}
-            {club.owner ? (
-              <p className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted">
-                <Crown size={11} aria-hidden className="text-amber-500" />
-                run by{" "}
-                <Link
-                  href={`/profile/${club.owner.username}`}
-                  className="font-semibold hover:underline"
-                >
-                  {club.owner.name}
-                </Link>
-              </p>
-            ) : null}
-          </div>
-
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            {viewer.isOwner ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-pill px-3 py-1.5 text-[11px] font-semibold text-muted">
-                <Crown size={12} aria-hidden /> You own this
-              </span>
-            ) : viewer.isMember ? (
-              <button
-                type="button"
-                onClick={() => void leave()}
-                disabled={busy}
-                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-4 py-2 text-xs font-semibold transition hover:bg-hover disabled:opacity-50"
-              >
-                {busy ? (
-                  <Loader2 size={13} className="animate-spin" aria-hidden />
-                ) : (
-                  <LogOut size={13} aria-hidden />
-                )}
-                Leave club
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => void join()}
-                disabled={busy}
-                className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold text-white shadow-[var(--shadow-pop)] transition active:translate-y-px disabled:opacity-50"
-                style={{ background: "var(--gradient-brand)" }}
-              >
-                {busy ? (
-                  <Loader2 size={13} className="animate-spin" aria-hidden />
-                ) : (
-                  <UserPlus size={13} aria-hidden />
-                )}
-                Join club
-              </button>
-            )}
-          </div>
+      <header className="overflow-hidden rounded-3xl border border-border bg-card">
+        {/* A splash of the club's colours, tinted by the book it's reading. */}
+        <div
+          className="relative h-24 sm:h-28"
+          style={{ background: "var(--gradient-brand)" }}
+        >
+          {club.currentBook?.thumbnail ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={club.currentBook.thumbnail.replace(/^http:/, "https:")}
+              alt=""
+              aria-hidden
+              className="absolute inset-0 h-full w-full scale-110 object-cover opacity-35 blur-xl"
+            />
+          ) : null}
+          <span
+            aria-hidden
+            className="absolute -left-6 -top-8 h-28 w-28 rounded-full bg-white/20 blur-2xl"
+          />
+          <span
+            aria-hidden
+            className="absolute right-6 top-2 h-20 w-20 rounded-full bg-black/10 blur-2xl"
+          />
+          {clubMood ? (
+            <span className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-black/25 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur-sm">
+              <span aria-hidden>{MOOD_MAP[clubMood as MoodId].emoji}</span>
+              {MOOD_MAP[clubMood as MoodId].label}
+            </span>
+          ) : null}
         </div>
 
-        {error ? (
-          <p className="mt-3 rounded-xl bg-red-500/10 px-3 py-2 text-[12px] text-red-600 dark:text-red-300">
-            {error}
-          </p>
-        ) : null}
-
-        {/* Top rack — exactly one book. */}
-        <div className="mt-4 flex items-center gap-3 rounded-xl bg-pill/50 p-3">
-          <div className="h-[86px] w-[58px] shrink-0 overflow-hidden rounded-md bg-pill ring-1 ring-border/70">
-            {club.currentBook?.thumbnail ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={club.currentBook.thumbnail.replace(/^http:/, "https:")}
-                alt=""
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <span className="flex h-full w-full items-center justify-center text-muted">
-                <BookOpen size={18} aria-hidden />
-              </span>
-            )}
+        {/* `relative` matters: the banner above is positioned, so without it
+            the cover paints underneath the banner instead of over it. */}
+        <div className="relative px-4 pb-4 sm:px-5 sm:pb-5">
+          {/* Cover overlaps the band, the way a profile avatar does. */}
+          <div className="-mt-12 flex items-end gap-3 sm:-mt-14">
+            <div className="h-[96px] w-[66px] shrink-0 overflow-hidden rounded-lg bg-pill shadow-lg ring-4 ring-card sm:h-[116px] sm:w-[80px]">
+              {club.currentBook?.thumbnail ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={club.currentBook.thumbnail.replace(/^http:/, "https:")}
+                  alt={club.currentBook.title}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <span className="flex h-full w-full items-center justify-center text-muted">
+                  <BookOpen size={22} aria-hidden />
+                </span>
+              )}
+            </div>
+            <MemberStack members={members} total={club.memberCount} />
           </div>
-          <div className="min-w-0 flex-1">
+
+          <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
+                <Users size={11} aria-hidden />
+                {club.memberCount}{" "}
+                {club.memberCount === 1 ? "member" : "members"}
+                {!club.active ? " · inactive" : ""}
+              </p>
+              <h1 className="mt-1 font-display text-xl font-bold sm:text-2xl">
+                {club.name}
+              </h1>
+              {club.tagline ? (
+                <p className="mt-1 max-w-prose text-[13px] text-muted">
+                  {club.tagline}
+                </p>
+              ) : null}
+              {club.owner ? (
+                <p className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted">
+                  <Crown size={11} aria-hidden className="text-amber-500" />
+                  run by{" "}
+                  <Link
+                    href={`/profile/${club.owner.username}`}
+                    className="font-semibold hover:underline"
+                  >
+                    {club.owner.name}
+                  </Link>
+                </p>
+              ) : null}
+            </div>
+
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              {viewer.isOwner ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-pill px-3 py-1.5 text-[11px] font-semibold text-muted">
+                  <Crown size={12} aria-hidden /> You own this
+                </span>
+              ) : viewer.isMember ? (
+                <button
+                  type="button"
+                  onClick={() => void leave()}
+                  disabled={busy}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-4 py-2 text-xs font-semibold transition hover:bg-hover disabled:opacity-50"
+                >
+                  {busy ? (
+                    <Loader2 size={13} className="animate-spin" aria-hidden />
+                  ) : (
+                    <LogOut size={13} aria-hidden />
+                  )}
+                  Leave club
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void join()}
+                  disabled={busy}
+                  className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold text-white shadow-[var(--shadow-pop)] transition active:translate-y-px disabled:opacity-50"
+                  style={{ background: "var(--gradient-brand)" }}
+                >
+                  {busy ? (
+                    <Loader2 size={13} className="animate-spin" aria-hidden />
+                  ) : (
+                    <UserPlus size={13} aria-hidden />
+                  )}
+                  Join club
+                </button>
+              )}
+            </div>
+          </div>
+
+          {error ? (
+            <p className="mt-3 rounded-xl bg-red-500/10 px-3 py-2 text-[12px] text-red-600 dark:text-red-300">
+              {error}
+            </p>
+          ) : null}
+
+          {/* Top rack — exactly one book. The cover is up on the banner, so
+            this is just the title line. */}
+          <div className="mt-3.5 rounded-xl bg-pill/50 px-3 py-2.5">
             <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
-              On the rack
+              📖 On the rack
             </p>
             {club.currentBook ? (
-              <>
+              <p className="mt-0.5 truncate text-[14.5px] font-bold">
                 <Link
                   href={`/book/${club.currentBook.slug}`}
-                  className="mt-0.5 block truncate text-[15px] font-bold hover:underline"
+                  className="hover:underline"
                 >
                   {club.currentBook.title}
                 </Link>
-                <p className="truncate text-[12px] text-muted">
+                <span className="ml-1.5 text-[12px] font-normal text-muted">
                   {club.currentBook.authors.split(/[,;]/)[0]}
-                </p>
-              </>
+                </span>
+              </p>
             ) : (
               <p className="mt-0.5 text-[13px] text-muted">
                 {viewer.isOwner
@@ -303,30 +347,76 @@ export default function ClubRoomPage() {
               </p>
             )}
           </div>
+
+          {/* Members can take the club's palette with them. Inside the room
+            everyone already sees it; this makes it stick everywhere else. */}
+          {viewer.isMember && clubMood ? (
+            ownMood === clubMood ? (
+              <p className="mt-3 inline-flex items-center gap-1.5 text-[11.5px] text-muted">
+                <Check size={12} aria-hidden className="text-[var(--brand-1)]" />
+                You&apos;re wearing this club&apos;s mood everywhere.
+              </p>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void adoptMood()}
+                className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-[11.5px] font-semibold transition hover:bg-hover"
+                title={`Set ${MOOD_MAP[clubMood as MoodId].label} as your own mood`}
+              >
+                <Palette size={12} aria-hidden className="text-[var(--brand-1)]" />
+                Use this mood as mine
+              </button>
+            )
+          ) : null}
         </div>
       </header>
+
+      {/* ── The room: chat on the left, everyone's progress on the right ──── */}
+      <div className="grid items-start gap-4 lg:grid-cols-10">
+        <div className="lg:col-span-7">
+          <h2 className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
+            💬 Club room
+          </h2>
+          <ClubChat
+            slug={slug}
+            canPost={viewer.isMember}
+            signedIn={status === "authenticated"}
+            refreshKey={progressKey}
+            heightClass="h-[32rem] max-h-[32rem]"
+          />
+          {!viewer.isMember && viewer.inAnotherClub ? (
+            <p className="mt-2 px-1 text-[11px] text-muted">
+              You&apos;re in another club. Leave it first if you want to join this
+              conversation.
+            </p>
+          ) : null}
+        </div>
+
+        {members.length ? (
+          <aside className="lg:col-span-3">
+            <h2 className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
+              🏁 Reading together
+            </h2>
+            <ClubProgress
+              slug={slug}
+              members={members}
+              myUserId={myUserId}
+              myUsername={myUsername}
+              isMember={viewer.isMember}
+              hasBook={Boolean(club.currentBook)}
+              onChanged={(next, opts) => {
+                setData((d) => (d ? { ...d, members: next } : d));
+                // Only re-pull the room when a new progress event was written.
+                if (opts?.changed) setProgressKey((k) => k + 1);
+              }}
+            />
+          </aside>
+        ) : null}
+      </div>
 
       {viewer.isOwner ? (
         <OwnerPanel club={club} onChanged={load} />
       ) : null}
-
-      {/* ── Chat ──────────────────────────────────────────────────────────── */}
-      <div>
-        <h2 className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
-          Club room
-        </h2>
-        <ClubChat
-          slug={slug}
-          canPost={viewer.isMember}
-          signedIn={status === "authenticated"}
-        />
-        {!viewer.isMember && viewer.inAnotherClub ? (
-          <p className="mt-2 px-1 text-[11px] text-muted">
-            You&apos;re in another club. Leave it first if you want to join this
-            conversation.
-          </p>
-        ) : null}
-      </div>
 
       {shelf.length ? (
         <div>
@@ -355,25 +445,6 @@ export default function ClubRoomPage() {
                 <p className="mt-1 line-clamp-2 text-[10px] leading-tight text-muted">
                   {b.title}
                 </p>
-              </Link>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      {members.length ? (
-        <div>
-          <h2 className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
-            Members
-          </h2>
-          <div className="flex flex-wrap gap-2">
-            {members.map((m) => (
-              <Link
-                key={m.username}
-                href={`/profile/${m.username}`}
-                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-[11px] font-semibold transition hover:bg-hover"
-              >
-                {m.name}
               </Link>
             ))}
           </div>
@@ -419,6 +490,51 @@ export default function ClubRoomPage() {
   );
 }
 
+/** Overlapping member avatars — a quick read on how busy the club is. */
+function MemberStack({
+  members,
+  total,
+}: {
+  members: ClubMember[];
+  total: number;
+}) {
+  const shown = members.slice(0, 5);
+  const extra = Math.max(0, total - shown.length);
+  if (!shown.length) return null;
+
+  return (
+    <div className="flex items-center gap-2 pb-1">
+      <div className="flex -space-x-2">
+        {shown.map((m) => (
+          <Link
+            key={m.username}
+            href={`/profile/${m.username}`}
+            title={m.name}
+            className="transition hover:-translate-y-0.5"
+          >
+            {m.image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={m.image}
+                alt={m.name}
+                loading="lazy"
+                className="h-7 w-7 rounded-full object-cover ring-2 ring-card"
+              />
+            ) : (
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-pill text-[10px] font-bold text-muted ring-2 ring-card">
+                {m.name.slice(0, 1).toUpperCase()}
+              </span>
+            )}
+          </Link>
+        ))}
+      </div>
+      {extra > 0 ? (
+        <span className="text-[11px] font-semibold text-muted">+{extra}</span>
+      ) : null}
+    </div>
+  );
+}
+
 /** Owner-only controls: the book on the rack, the club mood, active flag. */
 function OwnerPanel({
   club,
@@ -454,7 +570,7 @@ function OwnerPanel({
   return (
     <div className="rounded-2xl border border-dashed border-border bg-card/60 p-4">
       <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
-        Owner controls
+        🎛️ Club control room
       </p>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -514,7 +630,8 @@ function OwnerPanel({
         <p className="mt-2 text-[12px] text-red-500 dark:text-red-400">{error}</p>
       ) : null}
       <p className="mt-2 text-[11px] text-muted">
-        Swapping the book files the current one on the club shelf.
+        Swapping the book files the current one on the club shelf and resets
+        everyone&apos;s reading progress to 0%.
       </p>
     </div>
   );

@@ -25,6 +25,14 @@ const clubMembershipSchema = new Schema(
     role: { type: String, enum: ["owner", "member"], default: "member" },
     /** Drives the unread dot on the club chat. */
     lastReadAt: { type: Date, default: () => new Date() },
+    /** How far this member is through the book on the rack, in steps of 25. */
+    progress: { type: Number, default: 0, min: 0, max: 100 },
+    /**
+     * Which book the progress refers to. Stored so a rack swap can reset
+     * everyone rather than carrying stale percentages onto a new read.
+     */
+    progressBook: { type: Schema.Types.ObjectId, ref: "Book", default: null },
+    progressAt: { type: Date },
   },
   { timestamps: true }
 );

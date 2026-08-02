@@ -33,6 +33,7 @@ import {
   Loader2,
   Crown,
   BookOpen,
+  Users,
 } from "lucide-react";
 import type { PostDTO } from "@/lib/serialize";
 import { PostCard } from "@/components/posts/PostCard";
@@ -538,8 +539,11 @@ export default function ProfilePage() {
   // followers/following list sheet.
   const [followerCount, setFollowerCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
-  /** An active club this reader runs, highlighted below the header. */
-  const [ownedClub, setOwnedClub] = useState<ClubSummary | null>(null);
+  /** The club this reader belongs to, badged below the header. */
+  const [profileClub, setProfileClub] = useState<ClubSummary | null>(null);
+  const [profileClubRole, setProfileClubRole] = useState<
+    "owner" | "member" | null
+  >(null);
   const [iFollow, setIFollow] = useState<boolean | null>(null);
   const [followBusy, setFollowBusy] = useState(false);
   const [peopleTab, setPeopleTab] = useState<"followers" | "following" | null>(
@@ -659,11 +663,12 @@ export default function ProfilePage() {
       const udoc =
         ujson && "user" in ujson ? (ujson as { user: PublicUser }).user : null;
 
-      setOwnedClub(
-        ujson && "club" in ujson
-          ? (ujson as { club: ClubSummary | null }).club
-          : null
-      );
+      const cjson = ujson as {
+        club?: ClubSummary | null;
+        clubRole?: "owner" | "member" | null;
+      } | null;
+      setProfileClub(cjson?.club ?? null);
+      setProfileClubRole(cjson?.clubRole ?? null);
       setUser(udoc);
       setBio(udoc?.bio ?? "");
       setName(udoc?.name ?? "");
@@ -1332,11 +1337,12 @@ export default function ProfilePage() {
         </div>
       </header>
 
-      {/* ── Club they run ───────────────────────────────────────────────────── */}
-      {ownedClub ? (
+      {/* ── The club they're in ─────────────────────────────────────────────── */}
+      {profileClub ? (
         <div className="mt-5 px-4 sm:px-6">
           <ProfileClubCard
-            club={ownedClub}
+            club={profileClub}
+            role={profileClubRole}
             isSelf={isSelf}
             signedIn={status === "authenticated"}
           />
@@ -1854,24 +1860,40 @@ function MoodSwitcher({
 /** Read-only mood chip shown to visitors — matches the owner's switcher chip,
  *  with the blurb available on hover. */
 /**
- * The club this reader runs, given a proper billboard on their profile.
- * Signed-out visitors still see it — the tap just routes them to sign in,
- * because clubs are a members-only room.
+ * The club this reader belongs to, badged on their profile. Owners get the
+ * louder treatment since the club is theirs; members get the same card in a
+ * quieter frame. Signed-out visitors still see it — the tap just routes them
+ * to sign in, because a club room is members-only.
  */
 function ProfileClubCard({
   club,
+  role,
   isSelf,
   signedIn,
 }: {
   club: ClubSummary;
+  role: "owner" | "member" | null;
   isSelf: boolean;
   signedIn: boolean;
 }) {
   const href = signedIn ? `/clubs/${club.slug}` : "/login";
+  const isOwner = role === "owner";
+  const label = isOwner
+    ? isSelf
+      ? "Your club"
+      : "Runs a club"
+    : isSelf
+      ? "You're in this club"
+      : "Reads with";
+
   return (
     <Link
       href={href}
-      className="group flex items-center gap-3 rounded-2xl border border-[var(--brand-1)]/40 bg-[color-mix(in_srgb,var(--brand-1)_7%,var(--card))] p-3.5 shadow-[var(--shadow-soft)] transition hover:-translate-y-0.5 hover:shadow-lg sm:p-4"
+      className={`group flex items-center gap-3 rounded-2xl border p-3.5 shadow-[var(--shadow-soft)] transition hover:-translate-y-0.5 hover:shadow-lg sm:p-4 ${
+        isOwner
+          ? "border-[var(--brand-1)]/40 bg-[color-mix(in_srgb,var(--brand-1)_7%,var(--card))]"
+          : "border-border bg-card"
+      }`}
     >
       <div className="h-[70px] w-[48px] shrink-0 overflow-hidden rounded-md bg-pill ring-1 ring-border/70">
         {club.currentBook?.thumbnail ? (
@@ -1890,9 +1912,17 @@ function ProfileClubCard({
       </div>
 
       <div className="min-w-0 flex-1">
-        <p className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--brand-1)]">
-          <Crown size={11} aria-hidden />
-          {isSelf ? "Your club" : "Runs a club"}
+        <p
+          className={`inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] ${
+            isOwner ? "text-[var(--brand-1)]" : "text-muted"
+          }`}
+        >
+          {isOwner ? (
+            <Crown size={11} aria-hidden />
+          ) : (
+            <Users size={11} aria-hidden />
+          )}
+          {label}
         </p>
         <h2 className="mt-0.5 truncate text-[15px] font-bold">{club.name}</h2>
         <p className="truncate text-[12px] text-muted">

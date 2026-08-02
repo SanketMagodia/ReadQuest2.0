@@ -10,6 +10,7 @@ import { isMoodId } from "@/lib/moods";
 import {
   ALREADY_IN_CLUB,
   findClubBySlug,
+  getClubMembers,
   getClubShelf,
   serializeClub,
   setClubActive,
@@ -22,15 +23,6 @@ import {
  * chained `.populate()` here was enough to blow tsc's type-instantiation budget.
  */
 type MembershipRef = { club: Types.ObjectId };
-
-type MemberRow = {
-  user: {
-    _id: Types.ObjectId;
-    username?: string;
-    name?: string;
-    image?: string;
-  } | null;
-};
 
 type ClubEditable = {
   _id: Types.ObjectId;
@@ -72,19 +64,7 @@ export async function GET(
   }
 
   const shelf = await getClubShelf(club._id);
-  const memberRows = await ClubMembership.find({ club: club._id })
-    .sort({ createdAt: 1 })
-    .limit(24)
-    .populate("user", "username name image")
-    .lean<MemberRow[]>();
-
-  const members = memberRows
-    .filter((m) => m.user)
-    .map((m) => ({
-      username: m.user?.username ?? "",
-      name: m.user?.name || m.user?.username || "",
-      image: m.user?.image ?? "",
-    }));
+  const members = await getClubMembers(club._id);
 
   return NextResponse.json({
     club: serializeClub(club),
