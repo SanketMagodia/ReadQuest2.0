@@ -9,6 +9,8 @@ import {
 } from "react";
 import { BookOpen, Feather, RefreshCw, Search, Sparkles, Star, X } from "lucide-react";
 import { VibePromptBox } from "@/components/explore/VibeRecommender";
+import { useMood } from "@/components/mood/MoodProvider";
+import { MoodAtmosphere } from "@/components/mood/MoodAtmosphere";
 
 /**
  * Explore hero — replaces the old flat "welcome / Explore stories" rectangle.
@@ -52,9 +54,17 @@ const SPARK_ICONS = {
 } as const;
 
 export function ExploreHero({ firstName }: { firstName: string }) {
+  const { activeMood } = useMood();
+
   return (
     <header className="rq-hero -mx-2 px-4 pt-6 pb-1 sm:-mx-4 sm:px-6 sm:pt-10 layout-wide:-mx-4">
-      <div className="rq-hero-aurora" aria-hidden>
+      {/* With a mood set, the header becomes that weather instead of showing
+          the book — see MoodAtmosphere. */}
+      {activeMood ? <MoodAtmosphere mood={activeMood} /> : null}
+      <div
+        className={`rq-hero-aurora ${activeMood ? "rq-hero-aurora--muted" : ""}`}
+        aria-hidden
+      >
         <span />
         <span />
         <span />
@@ -75,7 +85,7 @@ export function ExploreHero({ firstName }: { firstName: string }) {
       </div>
 
       <div className="relative flex items-center justify-between gap-4">
-        <div className="min-w-0 flex-1">
+        <div className={`min-w-0 flex-1 ${activeMood ? "rq-hero-copy" : ""}`}>
           <p
             className="rq-enter inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.24em] text-muted sm:text-[11px]"
             style={{ animationDelay: "60ms" }}
@@ -129,22 +139,24 @@ export function ExploreHero({ firstName }: { firstName: string }) {
           </p>
         </div>
 
-        <div
-          className="rq-enter hidden shrink-0 pr-2 sm:block lg:pr-8"
-          style={{ animationDelay: "300ms" }}
-          aria-hidden
-        >
-          <div className="rq-book3d">
-            <div className="rq-book3d-shadow" />
-            <div className="rq-book3d-tilt">
-              <div className="rq-book3d-page rq-book3d-page--left" />
-              <div className="rq-book3d-page rq-book3d-page--right" />
-              <div className="rq-book3d-leaf" style={{ "--d": "0s" } as React.CSSProperties} />
-              <div className="rq-book3d-leaf" style={{ "--d": "1.1s" } as React.CSSProperties} />
-              <div className="rq-book3d-leaf" style={{ "--d": "2.2s" } as React.CSSProperties} />
+        {activeMood ? null : (
+          <div
+            className="rq-enter hidden shrink-0 pr-2 sm:block lg:pr-8"
+            style={{ animationDelay: "300ms" }}
+            aria-hidden
+          >
+            <div className="rq-book3d">
+              <div className="rq-book3d-shadow" />
+              <div className="rq-book3d-tilt">
+                <div className="rq-book3d-page rq-book3d-page--left" />
+                <div className="rq-book3d-page rq-book3d-page--right" />
+                <div className="rq-book3d-leaf" style={{ "--d": "0s" } as React.CSSProperties} />
+                <div className="rq-book3d-leaf" style={{ "--d": "1.1s" } as React.CSSProperties} />
+                <div className="rq-book3d-leaf" style={{ "--d": "2.2s" } as React.CSSProperties} />
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
     </header>
   );

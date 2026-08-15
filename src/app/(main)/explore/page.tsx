@@ -148,6 +148,7 @@ export default function ExplorePage() {
   const [aiResult, setAiResult] = useState<VibeResult | null>(null);
   const [dailyQuote, setDailyQuote] = useState<DailyQuote | null>(null);
   const [myClub, setMyClub] = useState<ClubSummary | null>(null);
+  const showsClub = !isGuest && Boolean(myClub);
   const seqRef = useRef(0);
   const seenRef = useRef<Set<string>>(new Set());
   const prevQRef = useRef(q);
@@ -568,10 +569,10 @@ export default function ExplorePage() {
       ) : null}
 
       {/* Daily quest (or a join CTA for guests) leads Home with the NYT top
-          books alongside it — side by side at every width, padded on mobile,
-          full-bleed on desktop, and stretched to equal height. Readers in a
-          club get their club room in that slot instead, and the quest shrinks
-          to a pill beside today's line. */}
+          books alongside it — side by side, padded on mobile, full-bleed on
+          desktop, and stretched to equal height. Readers in a club get their
+          club room in that slot instead, the quest shrinks to a pill beside
+          today's line, and the pair stacks on phones. */}
       {!isSearching ? (
         <Reveal>
           <div className="flex flex-col gap-3 layout-wide:-mx-4 lg:gap-4">
@@ -583,8 +584,16 @@ export default function ExplorePage() {
                 {myClub ? <DailyQuestMini onQuote={setDailyQuote} /> : null}
               </div>
             ) : null}
-            <div className="grid grid-cols-[1.5fr_1fr] items-stretch gap-3 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] lg:gap-4">
-              <div className="h-full">
+            <div
+              className={`grid items-stretch gap-3 lg:gap-4 ${
+                showsClub
+                  ? // On phones the club shrinks to a cover-sized tile, so it
+                    // only needs a 30% sliver and Top 5 takes the rest.
+                    "grid-cols-[minmax(0,3fr)_minmax(0,7fr)] layout-wide:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]"
+                  : "grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]"
+              }`}
+            >
+              <div className="h-full min-w-0">
                 {isGuest ? (
                   <JoinReadquestFeedCard />
                 ) : myClub ? (

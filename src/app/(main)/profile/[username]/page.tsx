@@ -46,6 +46,7 @@ import { PostSkeletonList } from "@/components/feed/PostSkeleton";
 import { Reveal } from "@/components/ui/Reveal";
 import { resizeAvatar } from "@/lib/image";
 import { useMood } from "@/components/mood/MoodProvider";
+import { Moon, Sun, VeiledSun } from "@/components/mood/scenery";
 import { useDm } from "@/components/dm/DmProvider";
 import { trackFriendAction } from "@/lib/analytics-events";
 import { MOODS, MOOD_MAP, isMoodId, type MoodId } from "@/lib/moods";
@@ -2418,33 +2419,6 @@ function DayScene() {
 
 /* ── Mood scene primitives (minimalist, AMOLED-friendly) ───────────────── */
 
-function Sun({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 64 64" className={`tgc-sun absolute h-16 w-16 text-amber-400 ${className ?? ""}`}>
-      <circle cx="32" cy="32" r="12" fill="currentColor" />
-      <g stroke="currentColor" strokeWidth="3" strokeLinecap="round">
-        <path d="M32 6v9M32 49v9M6 32h9M49 32h9M13.6 13.6l6.4 6.4M44 44l6.4 6.4M50.4 13.6L44 20M20 44l-6.4 6.4" />
-      </g>
-    </svg>
-  );
-}
-
-function Moon({ className }: { className?: string }) {
-  return (
-    <span
-      className={`absolute rounded-full ${className ?? ""}`}
-      style={{
-        background: "radial-gradient(circle at 36% 34%, #f7f3df 0%, #ddd7ba 65%, #c9c2a2 100%)",
-        boxShadow: "0 0 26px 8px rgba(245,240,214,0.22)",
-      }}
-    >
-      <span className="absolute left-[28%] top-[42%] h-2 w-2 rounded-full bg-stone-400/40" />
-      <span className="absolute left-[60%] top-[24%] h-1.5 w-1.5 rounded-full bg-stone-400/40" />
-      <span className="absolute left-[52%] top-[64%] h-1.5 w-1.5 rounded-full bg-stone-400/30" />
-    </span>
-  );
-}
-
 function Stars({ pts }: { pts: [string, string][] }) {
   return (
     <>
@@ -2760,6 +2734,191 @@ function SpeedLines({ className }: { className?: string }) {
   );
 }
 
+/* ── Window, weather and cabin props ───────────────────────────────────── */
+
+/**
+ * Deterministic star scatter. Generated once at module scope so the sky stays
+ * put instead of reshuffling on every re-render.
+ */
+function scatterStars(count: number, seed: number) {
+  let s = seed;
+  const rand = () => {
+    s = (s * 1103515245 + 12345) % 2147483648;
+    return s / 2147483648;
+  };
+  return Array.from({ length: count }, () => {
+    const weight = rand();
+    return {
+      top: `${3 + rand() * 76}%`,
+      left: `${2 + rand() * 95}%`,
+      size: weight < 0.18 ? 3.5 : weight < 0.55 ? 2.5 : 1.5,
+      delay: `${(rand() * 3.4).toFixed(2)}s`,
+      duration: `${(2.2 + rand() * 2.8).toFixed(2)}s`,
+    };
+  });
+}
+
+type ScatteredStar = ReturnType<typeof scatterStars>[number];
+
+const MIDNIGHT_STARS = scatterStars(32, 20260815);
+
+/** Stars of mixed sizes twinkling out of sync with each other. */
+function TwinkleStars({ stars }: { stars: ScatteredStar[] }) {
+  return (
+    <>
+      {stars.map((st, i) => (
+        <span
+          key={i}
+          className="tgc-twinkle absolute rounded-full bg-amber-50"
+          style={{
+            top: st.top,
+            left: st.left,
+            height: st.size,
+            width: st.size,
+            animationDelay: st.delay,
+            animationDuration: st.duration,
+            boxShadow:
+              st.size > 2 ? "0 0 5px 1px rgba(255,247,214,0.7)" : undefined,
+          }}
+        />
+      ))}
+    </>
+  );
+}
+
+/** Reflections that read as a pane of glass over whatever sits behind it. */
+function GlassPane() {
+  return (
+    <>
+      <span
+        className="absolute inset-0"
+        style={{
+          background:
+            "linear-gradient(114deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.05) 18%, transparent 38%, transparent 58%, rgba(255,255,255,0.10) 72%, transparent 88%)",
+        }}
+      />
+      <span
+        className="absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(120% 80% at 12% 0%, rgba(255,255,255,0.14), transparent 62%)",
+        }}
+      />
+    </>
+  );
+}
+
+/** Frame bar between window panes. */
+const WINDOW_BAR: React.CSSProperties = {
+  background: "linear-gradient(180deg, #6a5d8a 0%, #372f52 100%)",
+  boxShadow: "0 1px 2px rgba(0,0,0,0.55)",
+};
+
+/** Dense rain sweeping the full height of a scene. */
+function Downpour({
+  count = 32,
+  fall = 190,
+  className,
+}: {
+  count?: number;
+  fall?: number;
+  className?: string;
+}) {
+  return (
+    <div aria-hidden className={`absolute overflow-hidden ${className ?? ""}`}>
+      {Array.from({ length: count }).map((_, i) => (
+        <span
+          key={i}
+          className="tgc-downpour absolute top-0 w-px rounded-full"
+          style={
+            {
+              left: `${(i * 37) % 100}%`,
+              height: `${9 + (i % 4) * 5}px`,
+              background:
+                "linear-gradient(180deg, transparent, rgba(203,232,255,0.85))",
+              opacity: 0.3 + (i % 3) * 0.22,
+              animationDelay: `${((i * 13) % 17) * 0.09}s`,
+              animationDuration: `${0.62 + (i % 5) * 0.11}s`,
+              "--tgc-fall": `${fall}px`,
+            } as React.CSSProperties
+          }
+        />
+      ))}
+    </div>
+  );
+}
+
+/** A log cabin in the woods — the forest counterpart to the café storefront. */
+function WoodCabin({ className }: { className?: string }) {
+  return (
+    <div className={`absolute ${className ?? ""}`}>
+      {/* lamplight spilling out of the windows */}
+      <span
+        className="absolute inset-x-[18%] bottom-[6%] h-[52%] blur-[10px]"
+        style={{
+          background:
+            "radial-gradient(circle at 50% 60%, rgba(253,204,110,0.55), transparent 70%)",
+        }}
+      />
+      {/* smoke curling out of the chimney */}
+      <span aria-hidden className="absolute left-[68%] top-[-6%] h-6 w-6">
+        {[0, 1, 2].map((i) => (
+          <span
+            key={i}
+            className="tgc-smoke absolute bottom-0 left-1 h-2.5 w-2.5 rounded-full bg-slate-200/40"
+            style={{ animationDelay: `${i * 1.4}s` }}
+          />
+        ))}
+      </span>
+      <svg
+        viewBox="0 0 140 116"
+        aria-hidden
+        className="relative w-full drop-shadow-[0_6px_9px_rgba(0,0,0,0.5)]"
+      >
+        {/* chimney */}
+        <rect x="92" y="14" width="14" height="26" rx="2" fill="#6d4a30" />
+        <rect x="89" y="11" width="20" height="7" rx="2" fill="#5a3b25" />
+        {/* roof */}
+        <path d="M70 8 L136 54 H4 Z" fill="#3f2e1e" />
+        <path d="M70 8 L136 54 H120 L70 19 Z" fill="#4c3826" />
+        <rect x="2" y="52" width="136" height="6" rx="3" fill="#33251a" />
+        {/* log wall */}
+        <rect x="18" y="58" width="104" height="54" rx="3" fill="#8a5e39" />
+        {[64, 71, 78, 85, 92, 99, 106].map((y) => (
+          <line
+            key={y}
+            x1="18"
+            y1={y}
+            x2="122"
+            y2={y}
+            stroke="#6f4a2c"
+            strokeWidth="1.4"
+          />
+        ))}
+        {/* glowing windows */}
+        <rect x="28" y="66" width="26" height="22" rx="2" fill="#ffd071" stroke="#5a3b25" strokeWidth="2.5" />
+        <line x1="41" y1="66" x2="41" y2="88" stroke="#5a3b25" strokeWidth="1.6" />
+        <line x1="28" y1="77" x2="54" y2="77" stroke="#5a3b25" strokeWidth="1.6" />
+        <rect x="90" y="66" width="24" height="22" rx="2" fill="#ffd071" stroke="#5a3b25" strokeWidth="2.5" />
+        <line x1="102" y1="66" x2="102" y2="88" stroke="#5a3b25" strokeWidth="1.6" />
+        <line x1="90" y1="77" x2="114" y2="77" stroke="#5a3b25" strokeWidth="1.6" />
+        {/* door */}
+        <rect x="62" y="72" width="22" height="40" rx="2" fill="#5c3d24" />
+        <rect x="65" y="76" width="16" height="12" rx="1.5" fill="#ffce74" opacity="0.8" />
+        <circle cx="80" cy="95" r="1.8" fill="#e8c98d" />
+        {/* stacked firewood by the wall */}
+        <g fill="#6f4a2c">
+          <circle cx="128" cy="104" r="4" />
+          <circle cx="136" cy="104" r="4" />
+          <circle cx="132" cy="97" r="4" />
+        </g>
+        {/* step */}
+        <rect x="58" y="110" width="30" height="5" rx="2" fill="#4a3121" />
+      </svg>
+    </div>
+  );
+}
+
 /**
  * Mood scenery painted behind the Top Shelf. Each mood is a small set of
  * minimalist props; an empty mood falls back to the theme-aware day/night
@@ -2771,15 +2930,30 @@ function MoodScene({ mood }: { mood: "" | MoodId }) {
     case "rainy-nook":
       return (
         <div aria-hidden className={layer}>
+          {/* an overcast day: cloud cover pushing the whole scene into grey */}
+          <span
+            className="absolute inset-0"
+            style={{
+              background:
+                "linear-gradient(180deg, rgba(24,34,52,0.66) 0%, rgba(45,58,80,0.46) 42%, rgba(71,85,105,0.20) 100%)",
+            }}
+          />
+          {/* the sun, barely making it through the cloud bank */}
+          <VeiledSun className="left-[16%] top-1 h-16 w-16 blur-[7px]" />
           {/* dim warm window glow low behind the books */}
           <span
             className="absolute bottom-0 left-6 h-24 w-40 rounded-[40%] blur-md"
-            style={{ background: "radial-gradient(circle, rgba(251,191,36,0.28), transparent 70%)" }}
+            style={{ background: "radial-gradient(circle, rgba(251,191,36,0.3), transparent 70%)" }}
           />
-          <Moon className="left-6 top-1 h-12 w-12" />
-          <CloudPuff rain className="left-2 top-3 w-20 text-slate-500/70" />
-          <CloudPuff rain className="left-[38%] top-0 w-24 text-slate-600/70" />
-          <CloudPuff rain className="right-2 top-5 w-20 text-slate-500/70" />
+          {/* a low, unbroken bank of cloud right across the top */}
+          <CloudPuff rain className="-left-3 top-2 w-24 text-slate-600/85" />
+          <CloudPuff rain className="left-[20%] top-0 w-28 text-slate-700/85" />
+          <CloudPuff rain className="left-[46%] top-3 w-24 text-slate-600/85" />
+          <CloudPuff rain className="right-1 top-0 w-28 text-slate-700/85" />
+          <CloudPuff className="right-[30%] top-9 w-20 text-slate-500/60" />
+          <CloudPuff className="left-[8%] top-11 w-16 text-slate-500/50" />
+          {/* the downpour itself, falling across the whole scene */}
+          <Downpour className="inset-0" count={36} fall={210} />
           {/* quiet wet road running along the base of the shelf */}
           <svg
             viewBox="0 0 300 26"
@@ -2800,21 +2974,78 @@ function MoodScene({ mood }: { mood: "" | MoodId }) {
     case "beach-drift":
       return (
         <div aria-hidden className={layer}>
+          {/* bright midday sky, bluest up top and warm around the sun */}
+          <span
+            className="absolute inset-x-0 top-0 h-32"
+            style={{
+              background:
+                "linear-gradient(180deg, rgba(56,189,248,0.34) 0%, rgba(125,211,252,0.18) 52%, transparent 100%)",
+            }}
+          />
+          <span
+            className="absolute -left-8 -top-8 h-40 w-56"
+            style={{
+              background:
+                "radial-gradient(circle at 34% 36%, rgba(254,240,138,0.5), rgba(254,240,138,0) 68%)",
+            }}
+          />
+          {/* thin cirrus strokes brushed across the blue */}
+          {[
+            { top: "9%", left: "26%", w: "16%" },
+            { top: "15%", left: "34%", w: "10%" },
+            { top: "22%", left: "58%", w: "20%" },
+            { top: "30%", left: "68%", w: "12%" },
+            { top: "13%", left: "76%", w: "14%" },
+          ].map((s, i) => (
+            <span
+              key={i}
+              className="absolute h-[3px] rounded-full bg-white/70"
+              style={{ top: s.top, left: s.left, width: s.w }}
+            />
+          ))}
           <Sun className="left-5 top-0" />
           <BirdV className="left-[44%] top-3 w-6 text-slate-500/80" />
           <BirdV className="left-[56%] top-8 w-4 text-slate-500/60" />
           <PalmTree className="bottom-0 right-2 hidden w-[84px] sm:block" />
           <PalmTree flip className="bottom-0 right-16 hidden w-[58px] opacity-90 sm:block" />
           <PalmTree className="bottom-0 right-0 w-[64px] sm:hidden" />
-          {/* a thin band of sand along the base of the shelf */}
+          {/* sand along the base, with the sea washing in from the left */}
           <svg
-            viewBox="0 0 300 24"
+            viewBox="0 0 300 26"
             preserveAspectRatio="none"
-            className="absolute inset-x-0 bottom-0 h-5 w-full"
+            className="absolute inset-x-0 bottom-0 h-[26px] w-full"
           >
-            <path d="M0 11 Q40 5 80 10 T160 9 T240 10 T300 8 V24 H0 Z" fill="#f4dcaf" />
-            <path d="M0 15 Q60 10 120 14 T240 13 T300 13 V24 H0 Z" fill="#e8c98d" opacity="0.9" />
+            <path d="M0 11 Q40 5 80 10 T160 9 T240 10 T300 8 V26 H0 Z" fill="#f4dcaf" />
+            <path d="M0 15 Q60 10 120 14 T240 13 T300 13 V26 H0 Z" fill="#e8c98d" opacity="0.9" />
+            {/* water */}
+            <path d="M0 6 Q28 6 50 12 Q70 18 82 26 H0 Z" fill="#2f9ec4" />
+            <path d="M0 12 Q24 13 40 18 Q52 22 58 26 H0 Z" fill="#7fd0e8" opacity="0.7" />
+            {/* foam along the waterline */}
+            <path
+              d="M0 6 Q28 6 50 12 Q70 18 82 26"
+              fill="none"
+              stroke="#ffffff"
+              strokeWidth="1.8"
+              opacity="0.85"
+            />
           </svg>
+          {/* light catching the surface of the water */}
+          {[
+            { bottom: "9px", left: "3%", w: "22px" },
+            { bottom: "5px", left: "10%", w: "14px" },
+            { bottom: "13px", left: "1%", w: "12px" },
+          ].map((s, i) => (
+            <span
+              key={i}
+              className="tgc-shimmer absolute h-[2px] rounded-full bg-white/75"
+              style={{
+                bottom: s.bottom,
+                left: s.left,
+                width: s.w,
+                animationDelay: `${i * 1.1}s`,
+              }}
+            />
+          ))}
         </div>
       );
     case "snow-window":
@@ -2886,19 +3117,68 @@ function MoodScene({ mood }: { mood: "" | MoodId }) {
     case "midnight-lamp":
       return (
         <div aria-hidden className={layer}>
-          <Stars pts={[["18%", "70%"], ["30%", "84%"], ["12%", "58%"], ["40%", "76%"], ["22%", "92%"]]} />
-          <Moon className="right-8 top-1 h-9 w-9" />
-          {/* a small warm table lamp on the shelf, left side */}
+          {/* one big window taking the whole wall behind the shelf */}
+          <div className="absolute inset-0">
+            <div
+              className="absolute inset-0 rounded-lg"
+              style={{
+                background:
+                  "linear-gradient(180deg, #4c4266 0%, #2c2444 55%, #1d1830 100%)",
+                boxShadow:
+                  "0 14px 32px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.16)",
+              }}
+            />
+            {/* the night outside */}
+            <div className="absolute inset-[9px] overflow-hidden rounded-[5px] sm:inset-[11px]">
+              <div
+                className="absolute inset-0"
+                style={{
+                  background:
+                    "linear-gradient(180deg, #080d24 0%, #161a3c 52%, #2b2452 100%)",
+                }}
+              />
+              <TwinkleStars stars={MIDNIGHT_STARS} />
+              <Moon className="right-[13%] top-[9%] h-10 w-10" />
+              {/* far-off rooftops give the sky a horizon to sit on */}
+              <Skyline className="inset-x-0 bottom-0 h-10 opacity-80" color="#120f24" />
+              <GlassPane />
+            </div>
+            {/* muntins splitting the glass into six panes */}
+            <span
+              className="absolute bottom-[9px] left-1/3 top-[9px] w-[5px] -translate-x-1/2 rounded-sm sm:bottom-[11px] sm:top-[11px]"
+              style={WINDOW_BAR}
+            />
+            <span
+              className="absolute bottom-[9px] left-2/3 top-[9px] w-[5px] -translate-x-1/2 rounded-sm sm:bottom-[11px] sm:top-[11px]"
+              style={WINDOW_BAR}
+            />
+            <span
+              className="absolute left-[9px] right-[9px] top-1/2 h-[5px] -translate-y-1/2 rounded-sm sm:left-[11px] sm:right-[11px]"
+              style={WINDOW_BAR}
+            />
+          </div>
+          {/* the lamp stands in the room, in front of the glass */}
           <TableLamp className="bottom-0 left-5 w-12" />
         </div>
       );
     case "forest-cabin":
       return (
         <div aria-hidden className={layer}>
+          {/* deep-woods dusk settling over the treeline */}
+          <span
+            className="absolute inset-0"
+            style={{
+              background:
+                "linear-gradient(180deg, rgba(5,30,22,0.5) 0%, rgba(5,30,22,0.18) 58%, transparent 100%)",
+            }}
+          />
           <PineTree className="bottom-0 left-3 w-12" color="#1f5137" />
           <PineTree className="bottom-0 left-14 w-16" color="#25603f" />
-          <PineTree className="bottom-0 right-4 w-14" color="#1c4a31" />
+          <PineTree className="bottom-0 left-[30%] w-10 opacity-90" color="#1a4530" />
+          <PineTree className="bottom-0 left-[44%] w-14" color="#1c4a31" />
           <span className="absolute bottom-6 left-0 h-8 w-full bg-white/10 blur-md" />
+          {/* the cabin tucked into the right edge, like the café storefront */}
+          <WoodCabin className="bottom-0 -right-6 w-32 sm:-right-8 sm:w-40" />
           <Fireflies />
         </div>
       );
@@ -2907,7 +3187,7 @@ function MoodScene({ mood }: { mood: "" | MoodId }) {
         <div aria-hidden className={layer}>
           {/* warm sunset — bright sun with orange rays, clouds kept clear of it */}
           <SunRays className="w-40 text-orange-300/70" style={{ left: -22, top: -58 }} />
-          <Sun className="left-9 top-0 h-11 w-11 text-amber-400" />
+          <Sun className="left-9 top-0" sizeClass="h-11 w-11" />
           <CloudPuff className="left-[26%] top-1 w-24 text-orange-100" />
           <CloudPuff className="right-5 top-1 w-24 text-amber-100/90" />
           <CloudPuff className="left-1/2 top-9 w-16 text-orange-50" />
@@ -2922,11 +3202,48 @@ function MoodScene({ mood }: { mood: "" | MoodId }) {
     case "train-window":
       return (
         <div aria-hidden className={layer}>
-          <Sun className="right-6 top-0 h-11 w-11 text-orange-400" />
-          <CloudPuff className="left-4 top-3 w-16 text-slate-300/70" />
-          <Hills className="inset-x-0 bottom-0 h-16" color="#2f7d57" />
-          <div className="absolute inset-x-2 bottom-8 text-slate-200/60 dark:text-slate-100/30">
-            <SpeedLines className="inset-0" />
+          {/* the carriage window: countryside running past outside the glass */}
+          <div className="absolute inset-0">
+            <div
+              className="absolute inset-0 rounded-[16px]"
+              style={{
+                background:
+                  "linear-gradient(180deg, #d5dbe3 0%, #a8b2bf 55%, #8b95a3 100%)",
+                boxShadow:
+                  "0 12px 26px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.55)",
+              }}
+            />
+            <div className="absolute inset-[10px] overflow-hidden rounded-[10px]">
+              {/* blue daytime sky over the fields */}
+              <div
+                className="absolute inset-0"
+                style={{
+                  background:
+                    "linear-gradient(180deg, #9ed8f5 0%, #c6e7f8 48%, #e8f4fb 100%)",
+                }}
+              />
+              <Sun className="right-6 top-0" sizeClass="h-11 w-11" toneClass="text-orange-400" />
+              <CloudPuff className="left-4 top-3 w-16 text-white/90" />
+              <CloudPuff className="left-[48%] top-1 w-12 text-white/75" />
+              <Hills className="inset-x-0 bottom-0 h-16" color="#2f7d57" />
+              <div className="absolute inset-x-2 bottom-8 text-white/70">
+                <SpeedLines className="inset-0" />
+              </div>
+              <GlassPane />
+            </div>
+            {/* vertical mullions across the pane */}
+            {[25, 50, 75].map((x) => (
+              <span
+                key={x}
+                className="absolute bottom-[10px] top-[10px] w-[5px] -translate-x-1/2 rounded-sm"
+                style={{
+                  left: `${x}%`,
+                  background:
+                    "linear-gradient(180deg, #e2e8f0 0%, #93a0b0 100%)",
+                  boxShadow: "0 1px 2px rgba(15,23,42,0.45)",
+                }}
+              />
+            ))}
           </div>
         </div>
       );
@@ -2938,7 +3255,7 @@ function MoodScene({ mood }: { mood: "" | MoodId }) {
             className="absolute inset-x-0 top-0 h-24"
             style={{ background: "linear-gradient(180deg, rgba(168,85,247,0.28) 0%, rgba(249,115,22,0.22) 60%, transparent 100%)" }}
           />
-          <Sun className="left-[42%] top-4 h-10 w-10 text-orange-400" />
+          <Sun className="left-[42%] top-4" sizeClass="h-10 w-10" toneClass="text-orange-400" />
           <StringLights className="inset-x-0 top-0 text-amber-200/70" />
           <Skyline className="inset-x-0 bottom-0 h-16" />
         </div>

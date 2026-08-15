@@ -1296,6 +1296,288 @@ h1,
   );
 }
 
+/* ── Mood atmosphere ───────────────────────────────────────────────────────
+   The reader's mood as ambient weather across the top of Explore. It bleeds
+   past the header on every side and is masked to nothing at the edges, so it
+   reads as the page itself changing rather than a panel sitting on it. Lives
+   at z-index -1 inside `.rq-hero`'s isolation context, under all content. */
+
+.rq-atmos {
+  position: absolute;
+  inset: -56px -8% -60px -8%;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: var(--atmos-o, 0.55);
+  /* Two masks intersected: one fades the weather out top-to-bottom, the other
+     pulls it off the left and right edges. Without the second, the sky wash
+     would stop dead at the container sides and read as a rectangle. */
+  -webkit-mask-image:
+    linear-gradient(
+      180deg,
+      transparent 0%,
+      rgba(0, 0, 0, 0.65) 12%,
+      #000 34%,
+      #000 72%,
+      rgba(0, 0, 0, 0.5) 90%,
+      transparent 100%
+    ),
+    linear-gradient(90deg, transparent 0%, #000 8%, #000 92%, transparent 100%);
+  mask-image:
+    linear-gradient(
+      180deg,
+      transparent 0%,
+      rgba(0, 0, 0, 0.65) 12%,
+      #000 34%,
+      #000 72%,
+      rgba(0, 0, 0, 0.5) 90%,
+      transparent 100%
+    ),
+    linear-gradient(90deg, transparent 0%, #000 8%, #000 92%, transparent 100%);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
+
+/* With a mood painting the header, the copy can land on top of rain, cloud or
+   a lit shopfront. Rather than dimming the scene to suit the text, we lift the
+   text off the scene: a frosted pane that blurs only what sits directly behind
+   the words and dissolves to nothing before it reaches the landmark. The
+   weather stays fully visible either side of it — the same trick a weather app
+   uses to keep the temperature readable over a photographic sky. */
+.rq-hero-copy {
+  position: relative;
+}
+.rq-hero-copy::before {
+  content: "";
+  position: absolute;
+  inset: -18px -14% -12px -22px;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: 30px;
+  -webkit-backdrop-filter: blur(9px) saturate(1.1);
+  backdrop-filter: blur(9px) saturate(1.1);
+  background: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--bg) 74%, transparent) 0%,
+    color-mix(in srgb, var(--bg) 54%, transparent) 50%,
+    transparent 90%
+  );
+  -webkit-mask-image: linear-gradient(100deg, #000 0%, #000 46%, transparent 88%);
+  mask-image: linear-gradient(100deg, #000 0%, #000 46%, transparent 88%);
+}
+
+/* The aurora and the atmosphere both wash the same area — step the aurora
+   back so the weather reads clearly instead of the two fighting. */
+.rq-hero-aurora--muted {
+  opacity: 0.22;
+}
+.dark .rq-hero-aurora--muted {
+  opacity: 0.16;
+}
+
+.rq-atmos-sky {
+  position: absolute;
+  inset: 0;
+}
+
+/* Sun / moon, sitting where the 3D book does when no mood is set. */
+.rq-atmos-cloud {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(14px);
+  animation: rq-atmos-drift 34s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+/* Far silhouette (skyline / hills / treeline) along the bottom edge. */
+.rq-atmos-ridge {
+  position: absolute;
+  left: -2%;
+  bottom: 0;
+  width: 104%;
+  height: 44%;
+  opacity: 0.6;
+}
+
+/* The landmark that names the mood, standing roughly where the 3D book does.
+   Sized by height, not width — the artworks range from a narrow street lamp to
+   a wide rooftop, and only a shared height keeps them visually consistent.
+   `right: 10%` parks it inside the horizontal mask's solid band so it is never
+   sliced in half by the edge fade. */
+.rq-atmos-landmark {
+  position: absolute;
+  right: 10%;
+  bottom: 10%;
+  display: block;
+  height: clamp(104px, 13vw, 172px);
+  opacity: 0.92;
+  filter: drop-shadow(0 6px 11px rgba(0, 0, 0, 0.3));
+}
+.rq-atmos-landmark > svg {
+  display: block;
+  height: 100%;
+  width: auto;
+}
+/* The train spans the header and marquees. Its artwork is two identical
+   sections wide, so shifting it left by exactly half loops seamlessly. */
+.rq-atmos-landmark--train {
+  right: auto;
+  left: 0;
+  bottom: 8%;
+  width: 208%;
+  height: auto;
+  opacity: 0.88;
+  filter: none;
+  animation: rq-atmos-train 34s linear infinite;
+  will-change: transform;
+}
+.rq-atmos-landmark--train > svg {
+  height: auto;
+  width: 100%;
+}
+@keyframes rq-atmos-train {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* Chimney smoke, trailing behind the moving locomotive. */
+.rq-atmos-puff {
+  opacity: 0;
+  transform-box: view-box;
+  transform-origin: center;
+  animation: rq-atmos-puff 3.6s ease-out infinite;
+}
+@keyframes rq-atmos-puff {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.5);
+  }
+  25% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(30px, -26px) scale(1.7);
+  }
+}
+
+.rq-atmos-rain {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, transparent, rgba(203, 232, 255, 0.95));
+  animation: rq-atmos-rain-fall linear infinite;
+  will-change: transform;
+}
+
+.rq-atmos-snow {
+  position: absolute;
+  top: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  animation: rq-atmos-snow-fall linear infinite;
+  will-change: transform;
+}
+
+.rq-atmos-star {
+  position: absolute;
+  border-radius: 50%;
+  background: #fff7e0;
+  box-shadow: 0 0 5px 1px rgba(255, 247, 224, 0.6);
+  animation: rq-atmos-twinkle ease-in-out infinite;
+}
+
+.rq-atmos-fly {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #fde68a;
+  box-shadow: 0 0 9px 3px rgba(253, 230, 138, 0.55);
+  animation: rq-atmos-float ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.rq-atmos-wave {
+  position: absolute;
+  height: 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.8);
+  animation: rq-atmos-sway ease-in-out infinite;
+  will-change: transform;
+}
+
+.rq-atmos-steam {
+  position: absolute;
+  bottom: 12%;
+  width: 3px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.75), transparent);
+  transform-origin: bottom center;
+  animation: rq-atmos-rise ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+@keyframes rq-atmos-drift {
+  to { transform: translate3d(7%, -8%, 0); }
+}
+
+@keyframes rq-atmos-rain-fall {
+  0% { transform: translate3d(10px, -40px, 0); opacity: 0; }
+  15% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { transform: translate3d(-10px, 300px, 0); opacity: 0; }
+}
+
+@keyframes rq-atmos-snow-fall {
+  0% { transform: translate3d(0, -20px, 0); opacity: 0; }
+  15% { opacity: 0.9; }
+  100% { transform: translate3d(22px, 290px, 0); opacity: 0; }
+}
+
+@keyframes rq-atmos-twinkle {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 1; }
+}
+
+@keyframes rq-atmos-float {
+  0%, 100% { opacity: 0.15; transform: translateY(0) scale(0.85); }
+  50% { opacity: 1; transform: translateY(-15px) scale(1.1); }
+}
+
+@keyframes rq-atmos-sway {
+  0%, 100% { transform: translateX(0); opacity: 0.35; }
+  50% { transform: translateX(12px); opacity: 0.9; }
+}
+
+@keyframes rq-atmos-rise {
+  0% { opacity: 0; transform: translateY(12px) scaleY(0.6); }
+  40% { opacity: 0.5; }
+  100% { opacity: 0; transform: translateY(-38px) scaleY(1.25); }
+}
+
+@media (max-width: 640px) {
+  .rq-atmos-landmark {
+    bottom: 12%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rq-atmos-cloud,
+  .rq-atmos-rain,
+  .rq-atmos-snow,
+  .rq-atmos-star,
+  .rq-atmos-fly,
+  .rq-atmos-wave,
+  .rq-atmos-steam,
+  .rq-atmos-landmark--train,
+  .rq-atmos-puff {
+    animation: none !important;
+  }
+}
+
 /* ───────────────────────────────────────────────────────────────────────────
    "The Gist Club" logo: a gradient quill writing a flowing line in the air
    (the ink stroke draws itself in a loop), paired with an editorial
@@ -1750,6 +2032,40 @@ h1,
   100% { transform: translateX(-40px); opacity: 0; }
 }
 
+/* Heavy rain crossing the whole rainy-nook scene. Each streak sets its own
+   --tgc-fall so the distance matches the height it has to cover. */
+.tgc-downpour {
+  animation: tgc-downpour-fall linear infinite;
+}
+
+@keyframes tgc-downpour-fall {
+  0% { transform: translate3d(6px, -24px, 0); opacity: 0; }
+  12% { opacity: 1; }
+  88% { opacity: 1; }
+  100% { transform: translate3d(-6px, var(--tgc-fall, 180px), 0); opacity: 0; }
+}
+
+/* Woodsmoke drifting off the cabin chimney. */
+.tgc-smoke {
+  animation: tgc-smoke-rise 4.2s ease-in-out infinite;
+}
+
+@keyframes tgc-smoke-rise {
+  0% { opacity: 0; transform: translate(0, 4px) scale(0.5); }
+  30% { opacity: 0.5; }
+  100% { opacity: 0; transform: translate(-11px, -26px) scale(1.6); }
+}
+
+/* Sunlight catching the water at the edge of the beach. */
+.tgc-shimmer {
+  animation: tgc-shimmer-slide 5.5s ease-in-out infinite;
+}
+
+@keyframes tgc-shimmer-slide {
+  0%, 100% { transform: translateX(0); opacity: 0.5; }
+  50% { transform: translateX(7px); opacity: 0.95; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tgc-rain-drop,
   .tgc-sun,
@@ -1757,7 +2073,10 @@ h1,
   .tgc-firefly,
   .tgc-twinkle,
   .tgc-steam,
-  .tgc-speed {
+  .tgc-speed,
+  .tgc-downpour,
+  .tgc-smoke,
+  .tgc-shimmer {
     animation: none;
   }
 }

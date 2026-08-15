@@ -255,7 +255,7 @@ export default function ClubRoomPage() {
                 {club.memberCount === 1 ? "member" : "members"}
                 {!club.active ? " · inactive" : ""}
               </p>
-              <h1 className="mt-1 font-display text-xl font-bold sm:text-2xl">
+              <h1 className="mt-1 break-words font-display text-xl font-bold sm:text-2xl">
                 {club.name}
               </h1>
               {club.tagline ? (
@@ -373,7 +373,7 @@ export default function ClubRoomPage() {
 
       {/* ── The room: chat on the left, everyone's progress on the right ──── */}
       <div className="grid items-start gap-4 lg:grid-cols-10">
-        <div className="lg:col-span-7">
+        <div className="min-w-0 lg:col-span-7">
           <h2 className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
             💬 Club room
           </h2>
@@ -393,7 +393,7 @@ export default function ClubRoomPage() {
         </div>
 
         {members.length ? (
-          <aside className="lg:col-span-3">
+          <aside className="min-w-0 lg:col-span-3">
             <h2 className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
               🏁 Reading together
             </h2>
@@ -686,7 +686,7 @@ function BookPicker({
           onChange={(e) => setQ(e.target.value)}
           autoFocus
           placeholder="Search our library…"
-          className="w-full bg-transparent text-[13px] outline-none placeholder:text-muted/70"
+          className="w-full min-w-0 bg-transparent text-[13px] outline-none placeholder:text-muted/70"
         />
         {loading ? (
           <Loader2 size={13} className="animate-spin text-muted" aria-hidden />

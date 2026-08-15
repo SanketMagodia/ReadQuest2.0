@@ -236,7 +236,7 @@ export function ClubChat({
             rows={1}
             placeholder="Say something to the club…"
             maxLength={1500}
-            className="max-h-24 min-h-[2rem] flex-1 resize-none rounded-2xl border border-border bg-background px-3 py-1.5 text-[13px] outline-none focus:ring-2 focus:ring-[var(--ring)]/70"
+            className="max-h-24 min-h-[2rem] min-w-0 flex-1 resize-none rounded-2xl border border-border bg-background px-2.5 py-1.5 text-[13px] outline-none focus:ring-2 focus:ring-[var(--ring)]/70 sm:px-3"
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -340,7 +340,10 @@ function ProgressEvent({ message: m }: { message: ClubChatMessage }) {
     <div className="my-1.5 flex justify-center px-2">
       <span
         className={cn(
-          "inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold",
+          // `min-w-0` is load-bearing: the label below is `truncate`, so this
+          // pill's automatic minimum size would otherwise be the full message
+          // width — which beats `max-w-full` and drags the whole page wide.
+          "inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold",
           done
             ? "border-transparent text-white"
             : "border-border bg-pill/60 text-muted"
