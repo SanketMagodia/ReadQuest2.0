@@ -7,7 +7,7 @@ import {
   type ChangeEvent,
   type FormEvent,
 } from "react";
-import { BookOpen, Feather, RefreshCw, Search, Sparkles, Star, X } from "lucide-react";
+import { RefreshCw, Search, Sparkles, X } from "lucide-react";
 import { VibePromptBox } from "@/components/explore/VibeRecommender";
 import { useMood } from "@/components/mood/MoodProvider";
 import { MoodAtmosphere } from "@/components/mood/MoodAtmosphere";
@@ -17,8 +17,8 @@ import { MoodAtmosphere } from "@/components/mood/MoodAtmosphere";
  *
  * Borderless and full-bleed so it melts into the page background (which we
  * must not change): a blurred aurora drifts behind the type, the headline
- * cycles through gradient words with a self-drawing squiggle, a pure-CSS 3D
- * book floats beside it turning its own pages, sparks drift upward.
+ * cycles through gradient words with a self-drawing squiggle, and a pure-CSS
+ * 3D book floats beside it turning its own pages.
  *
  * Search lives in `ExploreSearchDock` (a sibling under the Explore section) so
  * `position: sticky` can pin it for the whole page scroll, not only while the
@@ -27,31 +27,6 @@ import { MoodAtmosphere } from "@/components/mood/MoodAtmosphere";
  */
 
 const ROTATING_WORDS = ["stories", "worlds", "ideas", "voices", "legends"];
-
-/** Scatter of drifting glyphs; positions/delays are hand-tuned constants. */
-const SPARKS: Array<{
-  top: string;
-  left: string;
-  delay: string;
-  size: number;
-  icon: "star" | "sparkle" | "feather" | "book";
-  hideOnMobile?: boolean;
-}> = [
-  { top: "12%", left: "4%", delay: "0s", size: 11, icon: "sparkle" },
-  { top: "62%", left: "9%", delay: "2.6s", size: 9, icon: "star" },
-  { top: "20%", left: "44%", delay: "4.1s", size: 10, icon: "feather", hideOnMobile: true },
-  { top: "70%", left: "38%", delay: "6.2s", size: 9, icon: "book", hideOnMobile: true },
-  { top: "8%", left: "72%", delay: "1.4s", size: 10, icon: "star", hideOnMobile: true },
-  { top: "58%", left: "88%", delay: "5.1s", size: 11, icon: "sparkle" },
-  { top: "30%", left: "94%", delay: "7.6s", size: 9, icon: "feather" },
-];
-
-const SPARK_ICONS = {
-  star: Star,
-  sparkle: Sparkles,
-  feather: Feather,
-  book: BookOpen,
-} as const;
 
 export function ExploreHero({ firstName }: { firstName: string }) {
   const { activeMood } = useMood();
@@ -69,23 +44,13 @@ export function ExploreHero({ firstName }: { firstName: string }) {
         <span />
         <span />
       </div>
-      <div aria-hidden className="pointer-events-none absolute inset-0">
-        {SPARKS.map((s, i) => {
-          const Icon = SPARK_ICONS[s.icon];
-          return (
-            <span
-              key={i}
-              className={`rq-hero-spark ${s.hideOnMobile ? "hidden sm:inline-flex" : ""}`}
-              style={{ top: s.top, left: s.left, "--d": s.delay } as React.CSSProperties}
-            >
-              <Icon size={s.size} strokeWidth={2.2} />
-            </span>
-          );
-        })}
-      </div>
+      {/* Sits after the scene so it washes over it, but still behind the copy.
+          Full-bleed and feathered on every edge — a panel behind the text alone
+          reads as a card pasted onto the banner. */}
+      {activeMood ? <div className="rq-hero-scrim" aria-hidden /> : null}
 
       <div className="relative flex items-center justify-between gap-4">
-        <div className={`min-w-0 flex-1 ${activeMood ? "rq-hero-copy" : ""}`}>
+        <div className="min-w-0 flex-1">
           <p
             className="rq-enter inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.24em] text-muted sm:text-[11px]"
             style={{ animationDelay: "60ms" }}

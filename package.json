@@ -7,7 +7,7 @@
     "dev:turbo": "next dev",
     "build": "next build --webpack",
     "start": "next start",
-    "lint": "eslint",
+    "lint": "node --max-old-space-size=6144 ./node_modules/eslint/bin/eslint.js",
     "seed": "tsx scripts/seed-books.ts",
     "seed-books": "tsx scripts/seed-books.ts",
     "seed-bots": "tsx scripts/seed-bots.ts",
