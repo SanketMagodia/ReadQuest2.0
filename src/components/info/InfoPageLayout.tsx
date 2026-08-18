@@ -52,7 +52,7 @@ export function InfoPageLayout({
   return (
     <article className="info-page mx-auto w-full max-w-2xl px-3 py-5 sm:px-0 sm:py-8">
       <Link
-        href="/explore"
+        href="/"
         className="info-back mb-4 inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-card/60 px-3 py-1.5 text-[12px] font-semibold text-muted backdrop-blur-sm transition hover:border-border hover:text-foreground"
       >
         <ArrowLeft size={14} aria-hidden />

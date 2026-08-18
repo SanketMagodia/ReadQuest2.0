@@ -3,8 +3,8 @@ import type { LucideIcon } from "lucide-react";
 import {
   BookOpen,
   Flame,
+  Library,
   MessageCircle,
-  Sparkles,
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -24,7 +24,7 @@ export const UNLOCK_FEATURES = [
     hint: "See what your circle is reading",
   },
   {
-    icon: Sparkles,
+    icon: Library,
     short: "Your feed",
     title: "Personalised feed",
     hint: "Tuned to your books and taste",
@@ -162,7 +162,6 @@ export function JoinReadquestFeedCard() {
     >
       <div>
         <p className="inline-flex items-center gap-1 rounded-full bg-background/55 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.16em] text-sky-600 backdrop-blur-sm dark:text-sky-300">
-          <Sparkles size={10} strokeWidth={2.4} aria-hidden />
           Free to join
         </p>
         <h2 className="mt-2 text-[17px] font-extrabold leading-[1.12] tracking-tight layout-wide:text-[20px]">

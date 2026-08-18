@@ -8,7 +8,6 @@ import {
   Calendar,
   BookOpenText,
   Star,
-  Sparkles,
   Newspaper,
   ExternalLink,
 } from "lucide-react";
@@ -218,7 +217,7 @@ export default async function BookPage({
 
       <nav className="flex flex-wrap items-center gap-2">
         <Link
-          href="/explore"
+          href="/"
           aria-label="Back to Explore"
           className="inline-flex h-9 items-center gap-2 rounded-full border border-border bg-card px-3 text-xs font-semibold text-foreground/80 transition hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70"
         >
@@ -309,11 +308,6 @@ export default async function BookPage({
             className="group inline-flex w-fit items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white shadow-[var(--shadow-pop)] transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70"
             style={{ background: "var(--gradient-brand)" }}
           >
-            <Sparkles
-              size={14}
-              aria-hidden
-              className="transition group-hover:rotate-12"
-            />
             Read summary
             <span aria-hidden className="text-white/80">→</span>
           </Link>

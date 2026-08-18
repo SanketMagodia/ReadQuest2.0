@@ -7,7 +7,7 @@ import {
   type ChangeEvent,
   type FormEvent,
 } from "react";
-import { RefreshCw, Search, Sparkles, X } from "lucide-react";
+import { RefreshCw, Search, X } from "lucide-react";
 import { VibePromptBox } from "@/components/explore/VibeRecommender";
 import { useMood } from "@/components/mood/MoodProvider";
 import { MoodAtmosphere } from "@/components/mood/MoodAtmosphere";
@@ -55,11 +55,6 @@ export function ExploreHero({ firstName }: { firstName: string }) {
             className="rq-enter inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.24em] text-muted sm:text-[11px]"
             style={{ animationDelay: "60ms" }}
           >
-            <Sparkles
-              size={12}
-              aria-hidden
-              className="text-amber-500 dark:text-amber-300"
-            />
             {firstName ? `welcome back, ${firstName}` : "your next read awaits"}
           </p>
 
@@ -240,11 +235,6 @@ export function ExploreSearchDock({
             }`}
             style={aiMode ? { background: "var(--gradient-brand)" } : undefined}
           >
-            <Sparkles
-              size={12}
-              aria-hidden
-              className={aiMode ? "" : "rq-vibe-sparkle text-[var(--brand-1)]"}
-            />
             Recommend me
           </button>
         </div>

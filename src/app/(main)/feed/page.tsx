@@ -1,7 +1,7 @@
 import { Library } from "lucide-react";
 import { getAppSession } from "@/lib/session";
 import { SignInRequired } from "@/components/auth/SignInRequired";
-import FeedPage from "../page";
+import FeedPage from "./FeedTimeline";
 
 export default async function FeedRoute() {
   const session = await getAppSession();

@@ -13,7 +13,6 @@ import {
   LogOut,
   Palette,
   Search,
-  Sparkles,
   UserPlus,
   Users,
   X,
@@ -594,7 +593,6 @@ function OwnerPanel({
               : "Show in the clubs list again"
           }
         >
-          <Sparkles size={12} aria-hidden />
           {club.active ? "Mark inactive" : "Mark active"}
         </button>
       </div>

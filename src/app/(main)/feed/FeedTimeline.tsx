@@ -1,0 +1,295 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { PenSquare } from "lucide-react";
+import type { PostDTO } from "@/lib/serialize";
+import { PostCard } from "@/components/posts/PostCard";
+import { PostSkeletonList } from "@/components/feed/PostSkeleton";
+import { AnnouncementFeedStrip } from "@/components/announcements/AnnouncementStrips";
+import { useInfiniteScroll } from "@/lib/hooks/useInfiniteScroll";
+import { ComposePrompt } from "@/components/compose/ComposePrompt";
+import { ComposeModal } from "@/components/compose/ComposeModal";
+
+type FeedMode = "for-you" | "latest";
+
+type FeedResponse = {
+  posts: PostDTO[];
+  nextCursor: string | null;
+  mode: FeedMode;
+  signals?: { following: number; readlist: number; categories: number };
+};
+
+const PAGE_SIZE = 10;
+
+export default function FeedTimeline() {
+  const [mode, setMode] = useState<FeedMode>("for-you");
+  const [posts, setPosts] = useState<PostDTO[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [signals, setSignals] = useState<FeedResponse["signals"]>();
+  const [composeOpen, setComposeOpen] = useState(false);
+  const seenIdsRef = useRef<Set<string>>(new Set());
+  const requestSeqRef = useRef(0);
+
+  const fetchFeed = useCallback(
+    async (m: FeedMode, cursor: string | null) => {
+      const seq = ++requestSeqRef.current;
+      const params = new URLSearchParams();
+      params.set("mode", m);
+      params.set("limit", String(PAGE_SIZE));
+      if (cursor) params.set("cursor", cursor);
+      const res = await fetch(`/api/feed?${params}`, { cache: "no-store" });
+      if (!res.ok) return null;
+      const data = (await res.json()) as FeedResponse;
+      if (seq !== requestSeqRef.current) return null;
+      return data;
+    },
+    []
+  );
+
+  const reset = useCallback(
+    async (m: FeedMode) => {
+      seenIdsRef.current = new Set();
+      setInitialLoading(true);
+      setPosts([]);
+      setNextCursor(null);
+      const data = await fetchFeed(m, null);
+      if (!data) {
+        setInitialLoading(false);
+        return;
+      }
+      data.posts.forEach((p) => seenIdsRef.current.add(p.id));
+      setPosts(data.posts);
+      setNextCursor(data.nextCursor);
+      setSignals(data.signals);
+      setInitialLoading(false);
+    },
+    [fetchFeed]
+  );
+
+  useEffect(() => {
+    void reset(mode);
+  }, [mode, reset]);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !nextCursor) return;
+    setLoadingMore(true);
+    const data = await fetchFeed(mode, nextCursor);
+    if (!data) {
+      setLoadingMore(false);
+      return;
+    }
+    const fresh = data.posts.filter((p) => !seenIdsRef.current.has(p.id));
+    fresh.forEach((p) => seenIdsRef.current.add(p.id));
+    setPosts((prev) => [...prev, ...fresh]);
+    setNextCursor(data.nextCursor);
+    setLoadingMore(false);
+  }, [fetchFeed, mode, nextCursor, loadingMore]);
+
+  const sentinelRef = useInfiniteScroll({
+    onLoadMore: loadMore,
+    hasMore: Boolean(nextCursor),
+    loading: loadingMore || initialLoading,
+  });
+
+  const triggerIndex = useMemo(() => Math.max(0, posts.length - 5), [posts.length]);
+
+  const isPersonalized = mode === "for-you" && (signals?.following ?? 0) + (signals?.readlist ?? 0) > 0;
+
+  return (
+    <section className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-0 sm:px-3 layout-wide:max-w-none layout-wide:px-0">
+      <header className="sticky top-12 z-20 -mx-1 border-b border-border/60 bg-background px-5 py-3 layout-wide:top-0 layout-wide:-mx-0 layout-wide:border-border/60 layout-wide:bg-background layout-wide:px-3 layout-wide:py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted">
+            Timeline
+          </p>
+          <div
+            className="hidden items-center gap-3 layout-wide:flex"
+            role="tablist"
+            aria-label="Feed mode"
+          >
+            <BlendTabButton
+              active={mode === "for-you"}
+              onClick={() => setMode("for-you")}
+              label="For you"
+              loading={initialLoading}
+            />
+            <span aria-hidden className="h-4 w-px bg-border/70" />
+            <BlendTabButton
+              active={mode === "latest"}
+              onClick={() => setMode("latest")}
+              label="Latest"
+              loading={initialLoading}
+            />
+          </div>
+
+          {/* Compose left the bottom nav, so the sticky header carries it on
+              phones — otherwise you'd have to scroll back up to post. */}
+          <button
+            type="button"
+            onClick={() => setComposeOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11.5px] font-semibold text-white shadow-[var(--shadow-pop)] transition active:translate-y-px layout-wide:hidden"
+            style={{ background: "var(--gradient-brand)" }}
+          >
+            <PenSquare size={12} aria-hidden />
+            Post
+          </button>
+        </div>
+        <div
+          className="mt-1 -mx-5 flex items-center justify-center gap-3 py-1.5 layout-wide:hidden"
+          role="tablist"
+          aria-label="Feed mode"
+        >
+          <BlendTabButton
+            active={mode === "for-you"}
+            onClick={() => setMode("for-you")}
+            label="For you"
+            loading={initialLoading}
+          />
+          <span aria-hidden className="h-4 w-px bg-border/70" />
+          <BlendTabButton
+            active={mode === "latest"}
+            onClick={() => setMode("latest")}
+            label="Latest"
+            loading={initialLoading}
+          />
+        </div>
+
+        {mode === "for-you" && !isPersonalized && !initialLoading ? (
+          <p className="mt-2 text-xs text-muted">
+            Follow books from{" "}
+            <Link href="/" className="font-semibold text-foreground underline">
+              Explore
+            </Link>{" "}
+            to personalize this feed.
+          </p>
+        ) : null}
+      </header>
+
+      <div className="flex flex-col gap-3 px-0 layout-wide:px-3">
+        <div className="layout-compact:block hidden">
+          <AnnouncementFeedStrip />
+        </div>
+
+        <div className="px-3 sm:px-0">
+          <ComposePrompt onOpen={() => setComposeOpen(true)} />
+        </div>
+
+        {initialLoading ? (
+          <PostSkeletonList count={6} />
+        ) : posts.length === 0 ? (
+          <EmptyFeed mode={mode} onCompose={() => setComposeOpen(true)} />
+        ) : (
+          <>
+            {posts.map((p, i) => (
+              <div
+                key={p.id}
+                ref={i === triggerIndex ? sentinelRef : undefined}
+                className="animate-fade"
+                style={{ animationDelay: `${Math.min(i * 35, 240)}ms` }}
+              >
+                <PostCard
+                  post={p}
+                  onDeleted={(postId) =>
+                    setPosts((prev) => prev.filter((row) => row.id !== postId))
+                  }
+                />
+              </div>
+            ))}
+
+            {nextCursor ? (
+              <PostSkeletonList count={2} />
+            ) : (
+              <p className="py-8 text-center text-xs text-muted">
+                You&apos;ve reached the end. New posts will appear here soon.
+              </p>
+            )}
+          </>
+        )}
+      </div>
+
+      <ComposeModal
+        open={composeOpen}
+        onClose={() => setComposeOpen(false)}
+        onPublished={(post) => {
+          setComposeOpen(false);
+          // Show it straight away rather than making the reader hunt for it.
+          if (!seenIdsRef.current.has(post.id)) {
+            seenIdsRef.current.add(post.id);
+            setPosts((prev) => [post, ...prev]);
+          }
+        }}
+      />
+    </section>
+  );
+}
+
+function BlendTabButton({
+  active,
+  onClick,
+  label,
+  loading,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  loading?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={`relative inline-flex items-center justify-center px-0 py-1 text-center text-[13px] font-semibold transition ${
+        active ? "text-foreground" : "text-muted hover:text-foreground"
+      }`}
+    >
+      <span className={loading ? "animate-pulse blur-[0.6px] opacity-80" : ""}>
+        {label}
+      </span>
+      {active ? (
+        <span
+          aria-hidden
+          className="absolute -bottom-1 left-0 right-0 h-0.5 rounded-full bg-[var(--brand-1)]"
+        />
+      ) : null}
+    </button>
+  );
+}
+
+function EmptyFeed({
+  mode,
+  onCompose,
+}: {
+  mode: FeedMode;
+  onCompose: () => void;
+}) {
+  return (
+    <div className="rounded-3xl border border-dashed border-border p-10 text-center">
+      <p className="text-base font-semibold">Nothing here yet</p>
+      <p className="mt-2 text-sm text-muted">
+        {mode === "for-you"
+          ? "Follow books or share your first quote to start your feed."
+          : "No posts yet — be the first to share a line."}
+      </p>
+      <div className="mt-5 flex flex-wrap justify-center gap-2">
+        <Link
+          href="/"
+          className="rounded-full bg-foreground px-4 py-2 text-sm font-semibold text-background"
+        >
+          Explore books
+        </Link>
+        <button
+          type="button"
+          onClick={onCompose}
+          className="rounded-full border border-border px-4 py-2 text-sm font-semibold hover:bg-hover"
+        >
+          Compose a post
+        </button>
+      </div>
+    </div>
+  );
+}

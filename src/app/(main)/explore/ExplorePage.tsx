@@ -1,0 +1,1299 @@
+﻿"use client";
+
+import Image from "next/image";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
+import {
+  ArrowDownUp,
+  ChevronDown,
+  ExternalLink,
+  Flame,
+  Globe,
+  ListFilter,
+  MessageSquare,
+  Plus,
+  RefreshCw,
+  Sparkles,
+  Users,
+} from "lucide-react";
+import { useSession } from "next-auth/react";
+import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
+import { Reveal } from "@/components/ui/Reveal";
+import { useInfiniteScroll } from "@/lib/hooks/useInfiniteScroll";
+import {
+  DailyBookCard,
+  DailyQuestMini,
+  DailyQuoteStrip,
+  type DailyQuote,
+} from "@/components/feed/DailyBookCard";
+import { ClubHomeCard } from "@/components/clubs/ClubHomeCard";
+import type { ClubSummary } from "@/lib/clubs";
+import { JoinReadquestFeedCard } from "@/components/auth/UnlockFeatures";
+import { BRAND_NAME } from "@/lib/brand";
+import {
+  ExploreHero,
+  ExploreSearchDock,
+} from "@/components/explore/ExploreHero";
+import { NytBestsellers } from "@/components/explore/NytBestsellers";
+import { NytTopPicks } from "@/components/explore/NytTopPicks";
+import {
+  VibeResults,
+  VibeResultsSkeleton,
+  type VibePick,
+  type VibeResult,
+} from "@/components/explore/VibeRecommender";
+import { trackSearch, trackVibeRecommend } from "@/lib/analytics-events";
+
+type BookRow = {
+  id: string;
+  slug?: string;
+  title: string;
+  authors?: string;
+  categories?: string;
+  thumbnail?: string;
+  publishedYear?: number;
+  averageRating?: number;
+};
+
+type OLResult = {
+  source: "openlibrary";
+  olKey: string;
+  title: string;
+  authors: string;
+  thumbnail: string;
+  categories: string;
+  publishedYear?: number;
+  isbn?: string;
+  numPages?: number;
+  averageRating?: number;
+  ratingsCount?: number;
+};
+
+type Category = { label: string; count: number };
+
+type SortKey = "recent" | "title" | "rating";
+
+const SORT_LABELS: Record<SortKey, string> = {
+  recent: "Newest",
+  title: "AΓÇôZ",
+  rating: "Top rated",
+};
+
+type Community = {
+  id: string;
+  slug: string;
+  title: string;
+  authors: string;
+  thumbnail: string;
+  category: string;
+  postCount: number;
+  commentCount: number;
+  engagedUsers: number;
+  lastActivityAt: string;
+};
+
+const PAGE_SIZE = 24;
+
+/**
+ * Reads `?q=` from the URL and pushes it up to the page. Lives behind a
+ * Suspense boundary (Next.js 16 requires `useSearchParams` to be wrapped) so
+ * clicking the right-rail Discover chips ΓÇö which link to /explore?q=ΓÇª while
+ * the reader is already here ΓÇö actually runs the search.
+ */
+function QuerySync({ onApply }: { onApply: (q: string) => void }) {
+  const searchParams = useSearchParams();
+  const urlQ = searchParams.get("q") ?? "";
+  useEffect(() => {
+    onApply(urlQ);
+  }, [urlQ, onApply]);
+  return null;
+}
+
+export default function ExplorePage() {
+  const router = useRouter();
+  const { data: session, status } = useSession();
+  const isGuest = status === "unauthenticated";
+  const firstName =
+    (session?.user?.name || session?.user?.username || "")
+      .trim()
+      .split(/\s+/)[0] || "";
+  const [q, setQ] = useState("");
+  const [category, setCategory] = useState("");
+  const [sort, setSort] = useState<SortKey>("recent");
+  const [books, setBooks] = useState<BookRow[]>([]);
+  const [olResults, setOlResults] = useState<OLResult[]>([]);
+  const [adoptingKey, setAdoptingKey] = useState<string | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [openCreate, setOpenCreate] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [communities, setCommunities] = useState<Community[]>([]);
+  const [communitiesLoading, setCommunitiesLoading] = useState(true);
+  // "Recommend me" ΓÇö describe a vibe, get AI picks with a one-line why.
+  const [aiMode, setAiMode] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiResult, setAiResult] = useState<VibeResult | null>(null);
+  const [dailyQuote, setDailyQuote] = useState<DailyQuote | null>(null);
+  const [myClub, setMyClub] = useState<ClubSummary | null>(null);
+  const showsClub = !isGuest && Boolean(myClub);
+  const seqRef = useRef(0);
+  const seenRef = useRef<Set<string>>(new Set());
+  const prevQRef = useRef(q);
+  const prevCategoryRef = useRef(category);
+
+  // A club takes over the quest slot on Home, so we need to know early
+  // whether this reader is in one.
+  useEffect(() => {
+    if (status !== "authenticated") {
+      setMyClub(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const res = await fetch("/api/clubs/me", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = (await res.json()) as { club: ClubSummary | null };
+      if (!cancelled) setMyClub(data.club);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [status]);
+
+  const fetchBooks = useCallback(
+    async ({
+      cursor,
+      reset,
+      qOverride,
+      categoryOverride,
+      sortOverride,
+    }: {
+      cursor?: string | null;
+      reset?: boolean;
+      qOverride?: string;
+      categoryOverride?: string;
+      sortOverride?: SortKey;
+    } = {}) => {
+      const seq = ++seqRef.current;
+      const params = new URLSearchParams();
+      const qVal = qOverride ?? q;
+      const catVal = categoryOverride ?? category;
+      const sortVal = sortOverride ?? sort;
+      if (qVal.trim()) params.set("q", qVal.trim());
+      if (catVal.trim()) params.set("category", catVal.trim());
+      if (sortVal !== "recent") params.set("sort", sortVal);
+      params.set("limit", String(PAGE_SIZE));
+      if (cursor && !reset) params.set("cursor", cursor);
+
+      if (reset) {
+        setInitialLoading(true);
+        setBooks([]);
+        setNextCursor(null);
+        seenRef.current = new Set();
+      } else {
+        setLoadingMore(true);
+      }
+
+      const res = await fetch(`/api/books?${params}`, { cache: "no-store" });
+      if (seq !== seqRef.current) return;
+      const data = (await res.json().catch(() => ({}))) as {
+        books?: BookRow[];
+        openLibrary?: OLResult[];
+        nextCursor?: string | null;
+      };
+      const fresh = (data.books ?? []).filter((b) => !seenRef.current.has(b.id));
+      fresh.forEach((b) => seenRef.current.add(b.id));
+      if (reset) {
+        setBooks(fresh);
+        setOlResults(data.openLibrary ?? []);
+      } else {
+        setBooks((prev) => [...prev, ...fresh]);
+      }
+      setNextCursor(data.nextCursor ?? null);
+      if (reset) setInitialLoading(false);
+      else setLoadingMore(false);
+    },
+    [q, category, sort]
+  );
+
+  function handleSortChange(next: SortKey) {
+    if (next === sort) return;
+    setSort(next);
+    void fetchBooks({ reset: true, sortOverride: next });
+  }
+
+  useEffect(() => {
+    void fetchBooks({ reset: true });
+    void (async () => {
+      const res = await fetch("/api/books/categories", { cache: "no-store" });
+      if (res.ok) {
+        const d = (await res.json()) as { categories?: Category[] };
+        setCategories(d.categories ?? []);
+      }
+    })();
+    void (async () => {
+      setCommunitiesLoading(true);
+      const res = await fetch("/api/books/communities?limit=6", {
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const d = (await res.json()) as { communities?: Community[] };
+        setCommunities(d.communities ?? []);
+      }
+      setCommunitiesLoading(false);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Search as the user types (debounced).
+  useEffect(() => {
+    if (prevQRef.current === q) return;
+    prevQRef.current = q;
+    if (q.trim()) setInitialLoading(true);
+    const t = setTimeout(() => {
+      void fetchBooks({ reset: true });
+    }, 280);
+    return () => clearTimeout(t);
+  }, [q, fetchBooks]);
+
+  // Category chips apply immediately.
+  useEffect(() => {
+    if (prevCategoryRef.current === category) return;
+    prevCategoryRef.current = category;
+    void fetchBooks({ reset: true });
+  }, [category, fetchBooks]);
+
+  function submitSearch(e?: FormEvent) {
+    e?.preventDefault();
+    trackSearch({ searchTerm: q, category, location: "explore" });
+    void fetchBooks({ reset: true });
+  }
+
+  function clearFilters() {
+    setQ("");
+    setCategory("");
+    setSort("recent");
+    prevQRef.current = "";
+    prevCategoryRef.current = "";
+    void fetchBooks({
+      reset: true,
+      qOverride: "",
+      categoryOverride: "",
+      sortOverride: "recent",
+    });
+  }
+
+  // Apply a `?q=` arriving from the URL (e.g. the right-rail Discover chips
+  // link here while the user is already on Explore). The debounced search
+  // effect picks up the resulting state change and fetches.
+  const applyUrlQuery = useCallback((next: string) => {
+    setQ((prev) => (prev === next ? prev : next));
+  }, []);
+
+  /**
+   * Adopt an Open Library result into our database, then navigate to it.
+   * Idempotent: if a sibling adopted the same book a moment ago we land on
+   * the existing one instead of duplicating.
+   */
+  async function adoptAndOpen(result: OLResult) {
+    if (adoptingKey) return;
+    setAdoptingKey(result.olKey);
+    try {
+      const res = await fetch("/api/books/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          olKey: result.olKey,
+          title: result.title,
+          authors: result.authors,
+          thumbnail: result.thumbnail,
+          categories: result.categories,
+          publishedYear: result.publishedYear,
+          isbn: result.isbn,
+          numPages: result.numPages,
+          averageRating: result.averageRating,
+          ratingsCount: result.ratingsCount,
+        }),
+      });
+      if (!res.ok) {
+        if (res.status === 401) {
+          router.push("/login");
+          return;
+        }
+        setAdoptingKey(null);
+        return;
+      }
+      const data = (await res.json()) as {
+        book: { id: string; slug: string };
+      };
+      router.push(`/book/${data.book.slug || data.book.id}`);
+    } catch {
+      setAdoptingKey(null);
+    }
+  }
+
+  /** Ask the AI librarian for books matching a described vibe. */
+  async function requestRecommendations() {
+    const vibe = aiPrompt.trim();
+    if (vibe.length < 3 || aiLoading) return;
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const res = await fetch("/api/books/recommend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vibe }),
+      });
+      const data = (await res.json().catch(() => null)) as {
+        echo?: string;
+        picks?: VibePick[];
+        error?: string;
+      } | null;
+      if (!res.ok || !data?.picks?.length) {
+        setAiError(data?.error ?? "Couldn't fetch recommendations. Try again.");
+        return;
+      }
+      setAiResult({ echo: data.echo ?? "", picks: data.picks, vibe });
+      trackVibeRecommend(vibe, data.picks.length);
+      setAiMode(false);
+    } catch {
+      setAiError("Network hiccup ΓÇö try that once more.");
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
+  /** Open an AI pick: straight to its room, or adopt from Open Library first. */
+  function openVibePick(pick: VibePick) {
+    if (pick.source === "local") {
+      router.push(`/book/${pick.slug || pick.id}`);
+      return;
+    }
+    if (!pick.olKey) return;
+    void adoptAndOpen({
+      source: "openlibrary",
+      olKey: pick.olKey,
+      title: pick.title,
+      authors: pick.authors,
+      thumbnail: pick.thumbnail,
+      categories: pick.categories ?? "",
+      publishedYear: pick.publishedYear,
+      isbn: pick.isbn,
+      numPages: pick.numPages,
+      averageRating: pick.averageRating,
+      ratingsCount: pick.ratingsCount,
+    });
+  }
+
+  const loadMore = useCallback(() => {
+    if (!nextCursor || loadingMore || initialLoading) return;
+    void fetchBooks({ cursor: nextCursor });
+  }, [nextCursor, loadingMore, initialLoading, fetchBooks]);
+
+  const sentinelRef = useInfiniteScroll({
+    onLoadMore: loadMore,
+    hasMore: Boolean(nextCursor),
+    loading: loadingMore || initialLoading,
+  });
+
+  const triggerIndex = useMemo(
+    () => Math.max(0, books.length - 5),
+    [books.length]
+  );
+
+  const featuredCategories = categories.slice(0, 12);
+  const isSearching = q.trim().length > 0 || category.trim().length > 0;
+
+  // The "results" block ΓÇö books grid, OL fallback, and the section header.
+  // We render it conditionally at one of two positions depending on whether
+  // the user is actively searching, without duplicating the JSX.
+  const resultsSection = (
+    <>
+      <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+        <p className="text-sm font-semibold text-foreground">
+          {category
+            ? `Books in ${category}`
+            : q
+              ? `Results for ΓÇ£${q}ΓÇ¥`
+              : "Everything"}
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <FilterSelect
+            icon={ListFilter}
+            ariaLabel="Filter by genre"
+            value={category}
+            onChange={(v) => setCategory(v)}
+          >
+            <option value="">All genres</option>
+            {categories.map((c) => (
+              <option key={c.label} value={c.label}>
+                {c.label}
+              </option>
+            ))}
+          </FilterSelect>
+          <FilterSelect
+            icon={ArrowDownUp}
+            ariaLabel="Sort books"
+            value={sort}
+            onChange={(v) => handleSortChange(v as SortKey)}
+          >
+            {(Object.keys(SORT_LABELS) as SortKey[]).map((key) => (
+              <option key={key} value={key}>
+                {SORT_LABELS[key]}
+              </option>
+            ))}
+          </FilterSelect>
+          <button
+            type="button"
+            onClick={() => setOpenCreate((v) => !v)}
+            className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-xs font-semibold shadow-[var(--shadow-soft)] hover:bg-hover"
+          >
+            <Plus size={14} aria-hidden />
+            Add a book
+          </button>
+        </div>
+      </div>
+
+      {openCreate ? (
+        <NewBookInline onDone={() => setOpenCreate(false)} />
+      ) : null}
+
+      <div>
+        {initialLoading ? (
+          <BookGridSkeleton />
+        ) : books.length === 0 && olResults.length === 0 ? (
+          <div className="rounded-3xl border border-dashed border-border p-10 text-center">
+            <Sparkles size={20} aria-hidden className="mx-auto text-muted" />
+            <p className="mt-3 text-base font-semibold">No matches</p>
+            <p className="mt-1 text-sm text-muted">
+              Try a different word ΓÇö or be the first to add it.
+            </p>
+            <button
+              type="button"
+              onClick={() => setOpenCreate(true)}
+              className="mt-4 inline-flex rounded-full px-4 py-2 text-sm font-semibold text-white shadow-[var(--shadow-pop)]"
+              style={{ background: "var(--gradient-brand)" }}
+            >
+              Add a book
+            </button>
+          </div>
+        ) : (
+          <>
+            {books.length > 0 ? (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
+                {books.map((b, i) => (
+                  <div
+                    key={b.id}
+                    ref={i === triggerIndex ? sentinelRef : undefined}
+                    className="animate-fade"
+                    style={{ animationDelay: `${Math.min(i * 25, 200)}ms` }}
+                  >
+                    <BookCard
+                      book={b}
+                      onOpen={() => router.push(`/book/${b.slug || b.id}`)}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {nextCursor ? <BookGridSkeleton small /> : null}
+          </>
+        )}
+      </div>
+
+      {olResults.length > 0 ? (
+        <OpenLibrarySection
+          q={q}
+          results={olResults}
+          adoptingKey={adoptingKey}
+          hasLocal={books.length > 0}
+          onAdopt={(r) => void adoptAndOpen(r)}
+        />
+      ) : null}
+    </>
+  );
+
+  return (
+    <section className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-2 pb-12 sm:px-4">
+      <Suspense fallback={null}>
+        <QuerySync onApply={applyUrlQuery} />
+      </Suspense>
+      <ExploreHero firstName={firstName} />
+      <ExploreSearchDock
+        q={q}
+        onQChange={setQ}
+        onSubmit={submitSearch}
+        searching={initialLoading}
+        category={category}
+        onClearFilters={clearFilters}
+        aiMode={aiMode}
+        onToggleAi={() => {
+          setAiError(null);
+          setAiMode((v) => !v);
+        }}
+        aiPrompt={aiPrompt}
+        onAiPromptChange={setAiPrompt}
+        onAiSubmit={() => void requestRecommendations()}
+        aiLoading={aiLoading}
+        aiError={aiError}
+      />
+
+      {aiLoading && !aiResult ? <VibeResultsSkeleton /> : null}
+      {aiResult ? (
+        <VibeResults
+          result={aiResult}
+          adoptingKey={adoptingKey}
+          onOpen={openVibePick}
+          onRefine={() => {
+            setAiError(null);
+            setAiMode(true);
+          }}
+          onDismiss={() => {
+            setAiResult(null);
+            setAiPrompt("");
+          }}
+        />
+      ) : null}
+
+      {/* Daily quest (or a join CTA for guests) leads Home with the NYT top
+          books alongside it ΓÇö side by side, padded on mobile, full-bleed on
+          desktop, and stretched to equal height. Readers in a club get their
+          club room in that slot instead, the quest shrinks to a pill beside
+          today's line, and the pair stacks on phones. */}
+      {!isSearching ? (
+        <Reveal>
+          <div className="flex flex-col gap-3 layout-wide:-mx-4 lg:gap-4">
+            {dailyQuote || myClub ? (
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  {dailyQuote ? <DailyQuoteStrip quote={dailyQuote} /> : null}
+                </div>
+                {myClub ? <DailyQuestMini onQuote={setDailyQuote} /> : null}
+              </div>
+            ) : null}
+            <div
+              className={`grid items-stretch gap-3 lg:gap-4 ${
+                showsClub
+                  ? // On phones the club shrinks to a cover-sized tile, so it
+                    // only needs a 30% sliver and Top 5 takes the rest.
+                    "grid-cols-[minmax(0,3fr)_minmax(0,7fr)] layout-wide:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]"
+                  : "grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]"
+              }`}
+            >
+              <div className="h-full min-w-0">
+                {isGuest ? (
+                  <JoinReadquestFeedCard />
+                ) : myClub ? (
+                  <ClubHomeCard club={myClub} />
+                ) : (
+                  <DailyBookCard onQuote={setDailyQuote} />
+                )}
+              </div>
+              <NytTopPicks />
+            </div>
+          </div>
+        </Reveal>
+      ) : null}
+
+      {/* Curated recommendations from the NYT bestseller lists. */}
+      {!isSearching ? (
+        <Reveal delay={60}>
+          <NytBestsellers />
+        </Reveal>
+      ) : null}
+
+      {/* When the user is searching or has a category active, results jump
+          to the top ΓÇö communities + shelves slide below so the user doesn't
+          have to scroll past discovery content to see what they asked for. */}
+      {isSearching ? resultsSection : null}
+
+      <Reveal>
+        <CommunitiesPanel
+          communities={communities}
+          loading={communitiesLoading}
+          onOpen={(c) => router.push(`/book/${c.slug || c.id}`)}
+        />
+      </Reveal>
+
+      {featuredCategories.length ? (
+        <section aria-label="Categories" className="-mx-2 px-2 sm:mx-0 sm:px-0">
+          <div className="flex items-center justify-between px-1">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
+              Shelves
+            </h2>
+            {category ? (
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="text-xs font-semibold text-muted hover:text-foreground"
+              >
+                Clear
+              </button>
+            ) : null}
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {featuredCategories.map((c, i) => {
+              const active = category.toLowerCase() === c.label.toLowerCase();
+              const palette = [
+                "var(--brand-1)",
+                "var(--brand-2)",
+                "var(--brand-3)",
+                "var(--brand-coral)",
+                "var(--brand-amber)",
+                "var(--brand-mint)",
+              ];
+              const accent = palette[i % palette.length];
+              return (
+                <button
+                  key={c.label}
+                  type="button"
+                  onClick={() => {
+                    const next = active ? "" : c.label;
+                    setCategory(next);
+                    // Picking a shelf moves the results to the top of the
+                    // page ΓÇö carry the reader up there too.
+                    if (next) window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  className={`group inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                    active
+                      ? "border-transparent text-white"
+                      : "border-border bg-card text-foreground/85 hover:bg-hover"
+                  }`}
+                  style={
+                    active
+                      ? { background: accent, boxShadow: "var(--shadow-soft)" }
+                      : undefined
+                  }
+                  aria-pressed={active}
+                >
+                  <span
+                    aria-hidden
+                    className="inline-block h-2 w-2 rounded-full"
+                    style={{ background: active ? "rgba(255,255,255,0.85)" : accent }}
+                  />
+                  {c.label}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+
+      {!isSearching ? (
+        <Reveal delay={40} className="flex flex-col gap-6">
+          {resultsSection}
+        </Reveal>
+      ) : null}
+    </section>
+  );
+}
+
+function OpenLibrarySection({
+  q,
+  results,
+  adoptingKey,
+  hasLocal,
+  onAdopt,
+}: {
+  q: string;
+  results: OLResult[];
+  adoptingKey: string | null;
+  hasLocal: boolean;
+  onAdopt: (r: OLResult) => void;
+}) {
+  return (
+    <section
+      aria-label="Found on Open Library"
+      className="rounded-[28px] border border-dashed border-border bg-card/60 p-5 shadow-[var(--shadow-soft)] sm:p-6"
+    >
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <p className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+            <Globe
+              size={13}
+              aria-hidden
+              className="text-emerald-500 dark:text-emerald-300"
+            />
+            From Open Library
+          </p>
+          <h2 className="mt-1 text-base font-semibold sm:text-lg">
+            {hasLocal
+              ? "Looking for something else?"
+              : `Books matching "${q}"`}
+          </h2>
+          <p className="mt-1 max-w-2xl text-sm text-muted">
+            Not yet in {BRAND_NAME}. Tap one to pull it into our library and open
+            its book room ΓÇö we&apos;ll save the title, cover, and details for
+            everyone.
+          </p>
+        </div>
+        <a
+          href="https://openlibrary.org"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-3 py-1.5 text-[11px] font-semibold text-muted hover:bg-hover"
+        >
+          openlibrary.org
+          <ExternalLink size={11} aria-hidden />
+        </a>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
+        {results.map((r) => (
+          <OpenLibraryCard
+            key={r.olKey}
+            result={r}
+            adopting={adoptingKey === r.olKey}
+            disabled={!!adoptingKey && adoptingKey !== r.olKey}
+            onOpen={() => onAdopt(r)}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function OpenLibraryCard({
+  result,
+  adopting,
+  disabled,
+  onOpen,
+}: {
+  result: OLResult;
+  adopting: boolean;
+  disabled: boolean;
+  onOpen: () => void;
+}) {
+  const author = result.authors.split(/[,;]/)[0]?.trim() ?? "";
+  const primaryCat = result.categories.split(/[,;]/)[0]?.trim() ?? "";
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      disabled={disabled || adopting}
+      className="group relative flex flex-col overflow-hidden rounded-[22px] border border-border bg-card text-left shadow-[var(--shadow-soft)] outline-none transition hover:-translate-y-0.5 hover:shadow-lg focus-visible:ring-2 focus-visible:ring-emerald-400/70 disabled:opacity-60"
+    >
+      <div className="rq-shine relative aspect-[2/3] w-full overflow-hidden bg-pill">
+        {result.thumbnail ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={result.thumbnail.replace(/^http:/, "https:")}
+            alt=""
+            className="h-full w-full object-cover transition group-hover:scale-[1.03]"
+            loading="lazy"
+          />
+        ) : (
+          <div
+            className="flex h-full w-full items-center justify-center p-4 text-center text-sm font-bold text-white"
+            style={{ background: "var(--gradient-cool)" }}
+          >
+            {result.title}
+          </div>
+        )}
+        <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-emerald-500/95 px-2 py-0.5 text-[10px] font-semibold text-white shadow">
+          <Globe size={10} aria-hidden /> Open Library
+        </span>
+        {primaryCat ? (
+          <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-background/90 px-2 py-0.5 text-[10px] font-semibold text-foreground/80 shadow">
+            {primaryCat.length > 16 ? `${primaryCat.slice(0, 16)}ΓÇª` : primaryCat}
+          </span>
+        ) : null}
+        {adopting ? (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-white">
+            <RefreshCw size={20} aria-hidden className="animate-spin" />
+          </div>
+        ) : null}
+      </div>
+      <div className="flex flex-1 flex-col gap-1 p-3">
+        <p className="line-clamp-2 text-[14px] font-semibold leading-snug">
+          {result.title}
+        </p>
+        {author ? (
+          <p className="line-clamp-1 text-[12px] text-muted">{author}</p>
+        ) : null}
+        <div className="mt-auto flex items-center gap-2 pt-2 text-[11px] text-muted">
+          {result.publishedYear ? <span>{result.publishedYear}</span> : null}
+          {result.averageRating ? (
+            <span className="inline-flex items-center gap-1">
+              <span aria-hidden>Γÿà</span>
+              {result.averageRating.toFixed(1)}
+            </span>
+          ) : null}
+          <span className="ml-auto inline-flex items-center gap-0.5 font-semibold text-emerald-600 dark:text-emerald-300">
+            {adopting ? "AddingΓÇª" : "Open"}
+            <ExternalLink size={10} aria-hidden />
+          </span>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function CommunitiesPanel({
+  communities,
+  loading,
+  onOpen,
+}: {
+  communities: Community[];
+  loading: boolean;
+  onOpen: (c: Community) => void;
+}) {
+  if (loading) {
+    return (
+      <section aria-label="Active book communities">
+        <PanelHeader />
+        <div className="-mx-2 mt-3 flex gap-3 overflow-x-auto px-2 pb-2 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 sm:gap-3 lg:grid-cols-3">
+          {Array.from({ length: 6 }, (_, i) => (
+            <div
+              key={i}
+              className="min-w-[260px] shrink-0 rounded-2xl border border-border bg-card p-3 sm:min-w-0"
+            >
+              <div className="flex gap-3">
+                <div className="h-[78px] w-[54px] shrink-0 rounded-lg skeleton-shimmer" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-3 w-3/4 rounded skeleton-shimmer" />
+                  <div className="h-3 w-1/2 rounded skeleton-shimmer" />
+                  <div className="h-3 w-2/3 rounded skeleton-shimmer" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  }
+
+  if (!communities.length) return null;
+
+  return (
+    <section aria-label="Active book communities">
+      <PanelHeader />
+      <div className="-mx-2 mt-3 flex gap-3 overflow-x-auto px-2 pb-2 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-3 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-3">
+        {communities.map((c, i) => (
+          <CommunityCard
+            key={c.id}
+            community={c}
+            rank={i + 1}
+            onOpen={() => onOpen(c)}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function PanelHeader() {
+  return (
+    <div className="flex items-end justify-between gap-3 px-1">
+      <div>
+        <p className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+          <Flame
+            size={13}
+            aria-hidden
+            className="text-amber-500 dark:text-amber-300"
+          />
+          Active book communities
+        </p>
+        <h2 className="mt-1 text-base font-semibold sm:text-lg">
+          Where readers are talking right now
+        </h2>
+      </div>
+    </div>
+  );
+}
+
+function rankAccent(rank: number): string {
+  if (rank === 1) return "var(--brand-amber)";
+  if (rank === 2) return "var(--brand-2)";
+  if (rank === 3) return "var(--brand-coral)";
+  if (rank === 4) return "var(--brand-mint)";
+  if (rank === 5) return "var(--brand-3)";
+  return "var(--brand-1)";
+}
+
+function CommunityCard({
+  community,
+  rank,
+  onOpen,
+}: {
+  community: Community;
+  rank: number;
+  onOpen: () => void;
+}) {
+  const author = community.authors?.split(/[,;]/)[0]?.trim() ?? "";
+  const accent = rankAccent(rank);
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="group relative flex min-w-[260px] shrink-0 items-stretch gap-3 overflow-hidden rounded-2xl border border-border bg-card p-3 text-left shadow-[var(--shadow-soft)] outline-none transition hover:-translate-y-0.5 hover:border-border hover:shadow-lg focus-visible:ring-2 focus-visible:ring-sky-400/70 sm:min-w-0"
+    >
+      <span
+        aria-hidden
+        className="absolute inset-x-0 top-0 h-0.5"
+        style={{ background: accent }}
+      />
+      <div className="rq-shine relative h-[78px] w-[54px] shrink-0 overflow-hidden rounded-lg bg-pill ring-1 ring-border/60">
+        {community.thumbnail ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={community.thumbnail.replace(/^http:/, "https:")}
+            alt=""
+            className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.05]"
+            loading="lazy"
+          />
+        ) : (
+          <div
+            className="flex h-full w-full items-center justify-center p-1 text-center text-[10px] font-bold text-white"
+            style={{ background: "var(--gradient-brand)" }}
+          >
+            {community.title.slice(0, 18)}
+          </div>
+        )}
+        <span
+          aria-hidden
+          className="absolute -top-1 -left-1 flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-black text-white shadow"
+          style={{ background: accent }}
+        >
+          {rank}
+        </span>
+      </div>
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <p className="line-clamp-2 text-[13.5px] font-semibold leading-snug">
+          {community.title}
+        </p>
+        {author ? (
+          <p className="mt-0.5 line-clamp-1 text-[11px] text-muted">
+            by {author}
+          </p>
+        ) : null}
+        {community.category ? (
+          <p className="mt-0.5 line-clamp-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
+            {community.category}
+          </p>
+        ) : null}
+        <div className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-2 text-[11px] text-muted">
+          <span className="inline-flex items-center gap-1 rounded-full bg-pill px-1.5 py-0.5 font-semibold text-foreground/85">
+            <MessageSquare size={11} aria-hidden />
+            <span className="tabular-nums">{community.postCount}</span>
+            <span>posts</span>
+          </span>
+          <span className="inline-flex items-center gap-1 rounded-full bg-pill px-1.5 py-0.5 font-semibold text-foreground/85">
+            <Users size={11} aria-hidden />
+            <span className="tabular-nums">{community.engagedUsers}</span>
+            <span>{community.engagedUsers === 1 ? "reader" : "readers"}</span>
+          </span>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function BookCard({ book, onOpen }: { book: BookRow; onOpen: () => void }) {
+  const author = book.authors?.split(";")[0].slice(0, 40);
+  const primaryCat = book.categories?.split(",")[0]?.trim();
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="group flex h-full w-full flex-col overflow-hidden rounded-[22px] border border-border bg-card text-left shadow-[var(--shadow-soft)] outline-none transition hover:-translate-y-1 hover:shadow-lg focus-visible:ring-2 focus-visible:ring-sky-400/70"
+    >
+      <div className="rq-shine relative w-full overflow-hidden bg-pill aspect-[2/3]">
+        {book.thumbnail ? (
+          <Image
+            src={book.thumbnail.replace(/^http:/, "https:")}
+            alt=""
+            fill
+            className="object-cover transition group-hover:scale-[1.03]"
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 220px"
+          />
+        ) : (
+          <div
+            className="flex h-full w-full items-center justify-center p-4 text-center text-base font-bold text-white"
+            style={{ background: "var(--gradient-brand)" }}
+          >
+            {book.title}
+          </div>
+        )}
+        {primaryCat ? (
+          <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-background/90 px-2 py-0.5 text-[10px] font-semibold text-foreground/80 shadow">
+            {primaryCat}
+          </span>
+        ) : null}
+      </div>
+      <div className="flex flex-1 flex-col gap-1 p-3">
+        <p className="line-clamp-2 text-[14px] font-semibold leading-snug">
+          {book.title}
+        </p>
+        {author ? (
+          <p className="line-clamp-1 text-[12px] text-muted">{author}</p>
+        ) : null}
+        <div className="mt-auto flex items-center gap-2 pt-2 text-[11px] text-muted">
+          {book.publishedYear ? <span>{book.publishedYear}</span> : null}
+          {book.averageRating ? (
+            <span className="inline-flex items-center gap-1">
+              <span aria-hidden>Γÿà</span>
+              {book.averageRating.toFixed(1)}
+            </span>
+          ) : null}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function FilterSelect({
+  icon: Icon,
+  ariaLabel,
+  value,
+  onChange,
+  children,
+}: {
+  icon: typeof ListFilter;
+  ariaLabel: string;
+  value: string;
+  onChange: (value: string) => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="relative">
+      <Icon
+        size={13}
+        aria-hidden
+        className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted"
+      />
+      <select
+        aria-label={ariaLabel}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="max-w-[10rem] cursor-pointer appearance-none truncate rounded-full border border-border bg-card py-2 pl-7 pr-7 text-xs font-semibold text-foreground/85 shadow-[var(--shadow-soft)] hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70"
+      >
+        {children}
+      </select>
+      <ChevronDown
+        size={13}
+        aria-hidden
+        className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted"
+      />
+    </div>
+  );
+}
+
+function BookGridSkeleton({ small = false }: { small?: boolean }) {
+  const count = small ? 4 : 8;
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
+      {Array.from({ length: count }, (_, i) => (
+        <div
+          key={i}
+          className="overflow-hidden rounded-[22px] border border-border bg-card"
+        >
+          <div className="aspect-[2/3] skeleton-shimmer" />
+          <div className="space-y-2 p-3">
+            <div className="h-3 w-3/4 rounded skeleton-shimmer" />
+            <div className="h-3 w-1/2 rounded skeleton-shimmer" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function NewBookInline({ onDone }: { onDone: () => void }) {
+  const [title, setTitle] = useState("");
+  const [authors, setAuthors] = useState("");
+  const [cats, setCats] = useState("");
+  const [description, setDescription] = useState("");
+  const [thumbnail, setThumbnail] = useState("");
+  const [alert, setAlert] = useState<{
+    type: "error" | "success";
+    message: string;
+    existingBookId?: string;
+  } | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setAlert(null);
+    setSaving(true);
+    const res = await fetch("/api/books", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title,
+        authors,
+        categories: cats,
+        description,
+        thumbnail: thumbnail.trim() || undefined,
+      }),
+    });
+    if (res.ok) {
+      const data = (await res.json()) as { book: { id: string; slug?: string } };
+      onDone();
+      window.location.href = `/book/${data.book.slug || data.book.id}`;
+      return;
+    }
+    if (res.status === 401) {
+      setAlert({ type: "error", message: "Sign in to add a book." });
+    } else if (res.status === 409) {
+      const data = (await res.json()) as {
+        error?: string;
+        existingBookId?: string;
+      };
+      setAlert({
+        type: "error",
+        message:
+          data.error ?? "A book with this title and author already exists.",
+        existingBookId: data.existingBookId,
+      });
+    } else if (res.status === 400) {
+      const data = (await res.json()) as Record<string, string[] | undefined>;
+      setAlert({
+        type: "error",
+        message: data.thumbnail?.[0] ?? "Check the form fields and try again.",
+      });
+    } else {
+      setAlert({ type: "error", message: "Something went wrong. Try again." });
+    }
+    setSaving(false);
+  }
+
+  return (
+    <div
+      className="rounded-[28px] border border-border bg-card p-5 shadow-[var(--shadow-soft)] sm:p-6"
+    >
+      {saving ? <LoadingIndicator label="Saving bookΓÇª" /> : null}
+      <form
+        onSubmit={(e) => void submit(e)}
+        className={`grid gap-4 sm:grid-cols-2 ${saving ? "pointer-events-none opacity-40" : ""}`}
+      >
+        <div className="sm:col-span-2 flex items-center justify-between">
+          <p className="text-base font-semibold">Add a new book</p>
+          <button
+            type="button"
+            onClick={onDone}
+            className="rounded-full border border-border px-3 py-1 text-xs font-semibold hover:bg-hover"
+          >
+            Close
+          </button>
+        </div>
+
+        <FormField label="Title">
+          <input
+            required
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className={inputCls}
+            placeholder="e.g. Pachinko"
+          />
+        </FormField>
+        <FormField label="Author(s)">
+          <input
+            value={authors}
+            onChange={(e) => setAuthors(e.target.value)}
+            className={inputCls}
+            placeholder="e.g. Min Jin Lee"
+          />
+        </FormField>
+        <FormField label="Categories (comma separated)">
+          <input
+            value={cats}
+            onChange={(e) => setCats(e.target.value)}
+            className={inputCls}
+            placeholder="Fiction, Historical"
+          />
+        </FormField>
+        <FormField label="Cover image URL (optional)">
+          <input
+            type="url"
+            value={thumbnail}
+            onChange={(e) => setThumbnail(e.target.value)}
+            className={inputCls}
+            placeholder="https://ΓÇª"
+          />
+        </FormField>
+        <FormField label="Synopsis" wide>
+          <textarea
+            rows={3}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            className={`${inputCls} resize-y`}
+            placeholder="What is it about? Why does it matter?"
+          />
+        </FormField>
+
+        {alert ? (
+          <div
+            role="alert"
+            className="sm:col-span-2 rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-xs font-medium text-red-700 dark:text-red-300"
+          >
+            <p>{alert.message}</p>
+            {alert.existingBookId ? (
+              <Link
+                href={`/book/${alert.existingBookId}`}
+                className="mt-2 inline-block font-semibold underline"
+              >
+                View existing book
+              </Link>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="sm:col-span-2 flex flex-wrap gap-3">
+          <button
+            type="submit"
+            className="rounded-full px-5 py-2 text-sm font-semibold text-white shadow-[var(--shadow-pop)]"
+            style={{ background: "var(--gradient-brand)" }}
+          >
+            Save book
+          </button>
+          <button
+            type="button"
+            onClick={onDone}
+            className="rounded-full border border-border px-5 py-2 text-sm font-semibold hover:bg-hover"
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+const inputCls =
+  "w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70";
+
+function FormField({
+  label,
+  wide,
+  children,
+}: {
+  label: string;
+  wide?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className={`block space-y-1 ${wide ? "sm:col-span-2" : ""}`}>
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}

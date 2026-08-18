@@ -17,7 +17,6 @@ import {
   CheckCircle2,
   Flame,
   RefreshCw,
-  Sparkles,
 } from "lucide-react";
 import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
 import { Flipbook } from "./Flipbook";
@@ -480,12 +479,7 @@ function ErrorPanel({ message }: { message: string }) {
 function CallToSignIn() {
   return (
     <div className="rounded-3xl border border-border bg-card p-8 text-center shadow-[var(--shadow-soft)]">
-      <Sparkles
-        size={28}
-        aria-hidden
-        className="mx-auto text-amber-500 dark:text-amber-300"
-      />
-      <h2 className="mt-3 text-xl font-bold">Sign in to start your streak</h2>
+      <h2 className="text-xl font-bold">Sign in to start your streak</h2>
       <p className="mt-2 text-sm text-muted">
         The daily quest picks a book just for you and rewards you for showing
         up.

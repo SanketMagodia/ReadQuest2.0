@@ -6,8 +6,6 @@ import {
   BookOpen,
   Globe,
   RefreshCw,
-  Sparkles,
-  Wand2,
   X,
 } from "lucide-react";
 
@@ -115,9 +113,7 @@ export function VibePromptBox({
           >
             {loading ? (
               <RefreshCw size={13} aria-hidden className="animate-spin" />
-            ) : (
-              <Sparkles size={13} aria-hidden />
-            )}
+            ) : null}
             {loading ? "Finding…" : "Recommend"}
           </button>
         </div>
@@ -169,7 +165,6 @@ export function VibeResults({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
-            <Sparkles size={13} aria-hidden className="text-[var(--brand-1)]" />
             Recommended for you
           </p>
           {result.echo ? (
@@ -187,7 +182,7 @@ export function VibeResults({
             onClick={onRefine}
             className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-[11px] font-semibold text-muted transition hover:bg-hover hover:text-foreground"
           >
-            <Wand2 size={12} aria-hidden /> Refine
+            Refine
           </button>
           <button
             type="button"

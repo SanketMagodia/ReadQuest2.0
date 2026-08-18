@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useSession } from "next-auth/react";
-import { ImagePlus, PenSquare, Sparkles, UserRound } from "lucide-react";
+import { ImagePlus, PenSquare, UserRound } from "lucide-react";
 
 /**
  * The "what are you reading?" row that sits at the top of the feed. It isn't a
@@ -68,7 +68,6 @@ export function ComposePrompt({ onOpen }: { onOpen: () => void }) {
           onClick={onOpen}
           className="inline-flex items-center gap-1 transition hover:text-foreground"
         >
-          <Sparkles size={12} aria-hidden className="text-amber-500" />
           Write with AI
         </button>
       </div>

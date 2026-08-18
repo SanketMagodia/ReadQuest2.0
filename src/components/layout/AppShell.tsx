@@ -32,13 +32,14 @@ type NavItem = {
  * sidebar.
  */
 const navMain: NavItem[] = [
-  { href: "/explore", label: "Home", icon: Compass },
+  { href: "/", label: "Home", icon: Compass },
   { href: "/feed", label: "Feed", icon: Library },
   { href: "/clubs", label: "Clubs", icon: BookOpen },
   { href: "/friends", label: "Friends", icon: Users },
 ];
 
 function navActive(pathname: string, href: string): boolean {
+  if (href === "/") return pathname === "/";
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 

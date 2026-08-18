@@ -8,7 +8,6 @@ import {
   BookOpenCheck,
   CheckCircle2,
   Flame,
-  Sparkles,
   Trophy,
   Users,
 } from "lucide-react";
@@ -149,11 +148,6 @@ export function DailyBookCard({
       <div className="relative flex min-h-0 flex-1 flex-col rounded-[22px] bg-card/95 p-4 layout-compact:rounded-[14px] layout-compact:p-3 sm:p-5">
         <div className="flex items-center justify-between gap-2 layout-compact:gap-1.5">
           <p className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted layout-compact:rounded-full layout-compact:bg-[color-mix(in_srgb,var(--brand-1)_14%,transparent)] layout-compact:px-2 layout-compact:py-0.5 layout-compact:text-[9px] layout-compact:tracking-[0.14em]">
-            <Sparkles
-              size={10}
-              aria-hidden
-              className="text-amber-500 dark:text-amber-300 layout-compact:h-[10px] layout-compact:w-[10px]"
-            />
             Daily quest
           </p>
           <StreakBadge

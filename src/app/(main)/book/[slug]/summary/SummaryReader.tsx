@@ -15,10 +15,8 @@ import {
   ArrowLeft,
   BookOpen,
   RefreshCw,
-  Sparkles,
   User as UserIcon,
   Users,
-  Wand2,
   X,
 } from "lucide-react";
 import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
@@ -362,11 +360,6 @@ export function SummaryReader({
                 }}
                 className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold shadow-[var(--shadow-soft)] hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70"
               >
-                <Wand2
-                  size={12}
-                  aria-hidden
-                  className="text-amber-500 dark:text-amber-300"
-                />
                 {data?.hasPersonal ? "Re-personalize" : "Make it personal"}
               </button>
               {data?.hasPersonal ? (
@@ -434,7 +427,6 @@ export function SummaryReader({
                   }}
                   className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 font-semibold hover:bg-hover"
                 >
-                  <Wand2 size={12} aria-hidden />
                   {data?.hasPersonal ? "Re-personalize" : "Make it personal"}
                 </button>
                 <Link
@@ -471,11 +463,6 @@ function CustomPromptPanel({
     <div className="space-y-3 rounded-2xl border border-dashed border-border bg-pill/40 p-4">
       <div className="flex items-center justify-between gap-2">
         <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
-          <Sparkles
-            size={12}
-            aria-hidden
-            className="text-amber-500 dark:text-amber-300"
-          />
           Personalize your summary
         </p>
         <button
@@ -520,9 +507,7 @@ function CustomPromptPanel({
         >
           {generating ? (
             <RefreshCw size={12} aria-hidden className="animate-spin" />
-          ) : (
-            <Sparkles size={12} aria-hidden />
-          )}
+          ) : null}
           {generating ? "Writing…" : "Generate my version"}
         </button>
         {!authenticated ? (
@@ -555,12 +540,7 @@ function EmptyState({
 }) {
   return (
     <div className="rounded-3xl border border-dashed border-border bg-card/60 p-8 text-center sm:p-12">
-      <Sparkles
-        size={28}
-        aria-hidden
-        className="mx-auto text-amber-500 dark:text-amber-300"
-      />
-      <h2 className="mt-3 text-xl font-bold">No summary yet</h2>
+      <h2 className="text-xl font-bold">No summary yet</h2>
       <p className="mt-2 text-sm text-muted">
         Generate a long-form reader&apos;s summary in seconds. The first version
         is saved for everyone; you can also make a personal one with your own
@@ -577,9 +557,7 @@ function EmptyState({
           >
             {busy ? (
               <RefreshCw size={14} aria-hidden className="animate-spin" />
-            ) : (
-              <Sparkles size={14} aria-hidden />
-            )}
+            ) : null}
             {busy ? "Writing…" : "Generate summary"}
           </button>
           <button
@@ -587,7 +565,7 @@ function EmptyState({
             onClick={onCustomize}
             className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-5 py-2.5 text-sm font-semibold hover:bg-hover"
           >
-            <Wand2 size={14} aria-hidden /> Personalize instead
+            Personalize instead
           </button>
         </div>
       ) : (

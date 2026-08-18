@@ -14,7 +14,6 @@ import {
   Library,
   Pencil,
   CalendarDays,
-  Sparkles,
   Camera,
   Trash2,
   X,
@@ -34,6 +33,7 @@ import {
   Crown,
   BookOpen,
   Users,
+  type LucideIcon,
 } from "lucide-react";
 import type { PostDTO } from "@/lib/serialize";
 import { PostCard } from "@/components/posts/PostCard";
@@ -1103,7 +1103,7 @@ export default function ProfilePage() {
       <div className="mx-auto max-w-xl px-4 py-20 text-center">
         <p className="text-lg font-semibold">Profile not found</p>
         <Link
-          href="/explore"
+          href="/"
           className="mt-3 inline-flex rounded-full border border-border px-4 py-2 text-sm font-semibold hover:bg-hover"
         >
           Back to Explore
@@ -1540,7 +1540,7 @@ export default function ProfilePage() {
                           </>
                         ) : (
                           <>
-                            <Sparkles size={10} aria-hidden /> Recommend
+                            Recommend
                           </>
                         )}
                       </button>
@@ -1670,7 +1670,7 @@ export default function ProfilePage() {
           </div>
         ) : (
           <EmptyShelf
-            icon={<Sparkles size={18} aria-hidden />}
+            icon={<Grid3X3 size={18} aria-hidden />}
             title="No posts yet"
             hint={
               isSelf
@@ -2074,7 +2074,7 @@ function SectionHeader({
   hint,
   action,
 }: {
-  icon: typeof Sparkles;
+  icon: LucideIcon;
   title: string;
   count: number;
   hint?: string;
@@ -3305,7 +3305,7 @@ function TopShelfShowcase({
     return (
       <div className="mx-1 rounded-3xl border border-dashed border-border p-8 text-center">
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-pill text-foreground">
-          <Sparkles size={18} aria-hidden />
+          <Bookmark size={18} aria-hidden />
         </div>
         <p className="font-display mt-3 text-base font-bold">Your Top Shelf is empty</p>
         <p className="mt-1 text-sm text-muted">
@@ -3578,7 +3578,7 @@ function ShelfBlock({
         icon={<Bookmark size={18} aria-hidden />}
         title={emptyTitle}
         hint={emptyHint}
-        cta={isSelf ? { href: "/explore", label: "Browse books" } : null}
+        cta={isSelf ? { href: "/", label: "Browse books" } : null}
       />
     );
   }

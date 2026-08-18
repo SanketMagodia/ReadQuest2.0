@@ -347,7 +347,7 @@ function FeedGrowTile() {
       <Eyebrow label="Grow your feed" tone="cool" icon={Sprout} />
       <p className="mt-2 text-[13px] leading-relaxed text-foreground/85">
         Follow a few books from{" "}
-        <Link href="/explore" className="font-semibold underline-offset-4 hover:underline">
+        <Link href="/" className="font-semibold underline-offset-4 hover:underline">
           Explore
         </Link>{" "}
         and your top posts will feel made for you within a day.
@@ -367,18 +367,19 @@ function tilesFor(pathname: string, authenticated: boolean): ReactNode[] {
     return [];
 
   // 2) Per-route compositions.
-  if (pathname === "/" || pathname.startsWith("/?")) {
+  // "/" is now the explore/home page; "/feed" is the social timeline.
+  if (pathname === "/" || pathname.startsWith("/?") || pathname.startsWith("/explore")) {
     return [
-      <TodaysPromptTile key="prompt" />,
-      <GeneralTipTile key="tip" />,
+      <ExploreDiscoverTile key="discover" />,
+      <ExploreCommunitiesTile key="comm" />,
       <InstallPrompt key="install" variant="card" />,
     ];
   }
 
-  if (pathname.startsWith("/explore")) {
+  if (pathname.startsWith("/feed")) {
     return [
-      <ExploreDiscoverTile key="discover" />,
-      <ExploreCommunitiesTile key="comm" />,
+      <TodaysPromptTile key="prompt" />,
+      <GeneralTipTile key="tip" />,
       <InstallPrompt key="install" variant="card" />,
     ];
   }

@@ -8,7 +8,7 @@ import {
   useState,
   type FormEvent,
 } from "react";
-import { Loader2, Lock, PartyPopper, Send, Sparkles } from "lucide-react";
+import { Loader2, Lock, PartyPopper, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type ClubChatMessage = {
@@ -188,12 +188,7 @@ export function ClubChat({
           </div>
         ) : messages.length === 0 ? (
           <div className="m-auto max-w-[15rem] text-center">
-            <Sparkles
-              size={20}
-              aria-hidden
-              className="mx-auto text-[var(--brand-1)]"
-            />
-            <p className="mt-1.5 text-[13px] font-semibold">Quiet in here</p>
+            <p className="text-[13px] font-semibold">Quiet in here</p>
             <p className="mt-0.5 text-[12px] text-muted">
               {canPost
                 ? "Say the first thing — what page are you on?"

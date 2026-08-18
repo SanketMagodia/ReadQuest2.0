@@ -10,7 +10,6 @@ import {
   Loader2,
   Plus,
   Search,
-  Sparkles,
   Users,
   X,
 } from "lucide-react";
@@ -186,7 +185,7 @@ function MyClubCard({
           </>
         ) : (
           <>
-            <Sparkles size={11} aria-hidden /> You&apos;re in this club
+            You&apos;re in this club
           </>
         )}
       </p>

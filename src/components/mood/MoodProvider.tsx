@@ -54,8 +54,12 @@ function paintMood(mood: MoodValue) {
   el.setAttribute("data-mood", mood);
 }
 
+// Default moods for unauthenticated visitors — matched to their light/dark pref.
+const GUEST_DARK_MOOD: MoodId = "midnight-lamp";
+const GUEST_LIGHT_MOOD: MoodId = "beach-drift";
+
 export function MoodProvider({ children }: { children: ReactNode }) {
-  const { theme, setTheme } = useTheme();
+  const { theme, resolvedTheme, setTheme } = useTheme();
   const { status } = useSession();
   const [ownMood, setOwnMood] = useState<MoodValue>("");
   const [preview, setPreview] = useState<MoodValue | null>(null);
@@ -71,9 +75,16 @@ export function MoodProvider({ children }: { children: ReactNode }) {
   }, [theme, activeMood]);
 
   // Load the signed-in reader's saved mood so the whole app reflects it.
+  // Guests get a default palette (Midnight Lamp for dark, Beach Drift for light)
+  // that updates whenever they flip the theme toggle.
   useEffect(() => {
     if (status !== "authenticated") {
-      setOwnMood("");
+      // Wait until next-themes has resolved the actual light/dark preference
+      // before choosing a palette — avoids a flash on initial render.
+      if (!resolvedTheme) return;
+      const guestMood: MoodValue =
+        resolvedTheme === "dark" ? GUEST_DARK_MOOD : GUEST_LIGHT_MOOD;
+      setOwnMood(guestMood);
       return;
     }
     let alive = true;
@@ -88,7 +99,7 @@ export function MoodProvider({ children }: { children: ReactNode }) {
     return () => {
       alive = false;
     };
-  }, [status]);
+  }, [status, resolvedTheme]);
 
   // Paint the active mood's palette + force its light/dark mode. When no mood
   // is active, drop the palette and restore the user's own theme choice.

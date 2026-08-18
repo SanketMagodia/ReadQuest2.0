@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import type { ChangeEvent, FormEvent } from "react";
-import { RefreshCw, Sparkles, X, ImagePlus, Loader2 } from "lucide-react";
+import { RefreshCw, X, ImagePlus, Loader2 } from "lucide-react";
 import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
 import { fileToPostImageDataUrl } from "@/lib/post-image";
 import { trackPostCreated, trackSelectBook } from "@/lib/analytics-events";
@@ -296,11 +296,6 @@ export function ComposerForm({
             aria-pressed={aiOpen}
             className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold transition hover:bg-hover"
           >
-            <Sparkles
-              size={13}
-              aria-hidden
-              className="text-amber-500 dark:text-amber-300"
-            />
             {aiOpen ? "Close AI helper" : "Generate with AI"}
           </button>
         </div>
@@ -327,9 +322,7 @@ export function ComposerForm({
               >
                 {aiBusy ? (
                   <RefreshCw size={13} aria-hidden className="animate-spin" />
-                ) : (
-                  <Sparkles size={13} aria-hidden />
-                )}
+                ) : null}
                 {content ? "Regenerate" : "Generate"}
               </button>
               {content ? (
