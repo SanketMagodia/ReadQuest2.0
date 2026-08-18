@@ -38,7 +38,12 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
 
       {/* Top bar */}
       <header className="mx-auto flex w-full max-w-6xl shrink-0 items-center justify-between px-4 pt-4 sm:px-8 sm:pt-8 lg:pt-8">
-        <TheGistClubLogo height={38} priority />
+        <span className="sm:hidden">
+          <TheGistClubLogo height={36} priority />
+        </span>
+        <span className="hidden sm:inline-flex">
+          <TheGistClubLogo height={53} priority />
+        </span>
         <div className="inline-flex items-center gap-2">
           <ThemeToggle />
           <Link

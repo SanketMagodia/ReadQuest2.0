@@ -48,6 +48,7 @@ import { resizeAvatar } from "@/lib/image";
 import { useMood } from "@/components/mood/MoodProvider";
 import { Moon, Sun, VeiledSun } from "@/components/mood/scenery";
 import { useDm } from "@/components/dm/DmProvider";
+import { MobileAccountMenu } from "@/components/layout/MobileAccountMenu";
 import { trackFriendAction } from "@/lib/analytics-events";
 import { MOODS, MOOD_MAP, isMoodId, type MoodId } from "@/lib/moods";
 import type { ClubSummary } from "@/lib/clubs";
@@ -1136,44 +1137,53 @@ export default function ProfilePage() {
       ) : null}
 
       {/* ── Cover banner with the reader's own book covers fanned in ───────── */}
-      <div
-        className="relative h-36 overflow-hidden rounded-b-[28px] sm:h-48"
-        style={{ background: "var(--gradient-brand)" }}
-      >
+      <div className="relative">
+        {/* Account actions live here on phones — the top bar gave up its avatar
+            so the bell could sit at the right edge. Kept outside the cover
+            below, whose `overflow-hidden` would clip the open menu. */}
+        <div className="absolute left-3 top-3 z-30 layout-wide:hidden">
+          <MobileAccountMenu trigger="hamburger" />
+        </div>
+
         <div
-          aria-hidden
-          className="absolute inset-0 bg-[radial-gradient(circle_at_30%_40%,rgba(255,255,255,0.35),transparent_55%),radial-gradient(circle_at_80%_70%,rgba(255,255,255,0.25),transparent_55%)]"
-        />
-        {bannerBooks.length ? (
+          className="relative h-36 overflow-hidden rounded-b-[28px] sm:h-48"
+          style={{ background: "var(--gradient-brand)" }}
+        >
           <div
             aria-hidden
-            className="absolute inset-y-0 right-3 flex items-center sm:right-8"
-          >
-            {bannerBooks.map((b, i) => (
-              <div
-                key={b.id}
-                className="relative h-[88px] w-[60px] shrink-0 overflow-hidden rounded-md shadow-[0_10px_24px_rgba(0,0,0,0.35)] ring-1 ring-white/30 sm:h-[122px] sm:w-[84px]"
-                style={{
-                  transform: `rotate(${(i % 2 === 0 ? -1 : 1) * (7 - i * 1.5)}deg) translateY(${i % 2 === 0 ? -4 : 8}px)`,
-                  marginLeft: i === 0 ? 0 : "-18px",
-                  zIndex: bannerBooks.length - i,
-                }}
-              >
-                <Image
-                  src={(b.thumbnail || "").replace(/^http:/, "https:")}
-                  alt=""
-                  fill
-                  sizes="84px"
-                  className="object-cover"
-                />
-              </div>
-            ))}
-          </div>
-        ) : null}
-        <div
-          aria-hidden
-          className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/25 to-transparent"
-        />
+            className="absolute inset-0 bg-[radial-gradient(circle_at_30%_40%,rgba(255,255,255,0.35),transparent_55%),radial-gradient(circle_at_80%_70%,rgba(255,255,255,0.25),transparent_55%)]"
+          />
+          {bannerBooks.length ? (
+            <div
+              aria-hidden
+              className="absolute inset-y-0 right-3 flex items-center sm:right-8"
+            >
+              {bannerBooks.map((b, i) => (
+                <div
+                  key={b.id}
+                  className="relative h-[88px] w-[60px] shrink-0 overflow-hidden rounded-md shadow-[0_10px_24px_rgba(0,0,0,0.35)] ring-1 ring-white/30 sm:h-[122px] sm:w-[84px]"
+                  style={{
+                    transform: `rotate(${(i % 2 === 0 ? -1 : 1) * (7 - i * 1.5)}deg) translateY(${i % 2 === 0 ? -4 : 8}px)`,
+                    marginLeft: i === 0 ? 0 : "-18px",
+                    zIndex: bannerBooks.length - i,
+                  }}
+                >
+                  <Image
+                    src={(b.thumbnail || "").replace(/^http:/, "https:")}
+                    alt=""
+                    fill
+                    sizes="84px"
+                    className="object-cover"
+                  />
+                </div>
+              ))}
+            </div>
+          ) : null}
+          <div
+            aria-hidden
+            className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/25 to-transparent"
+          />
+        </div>
       </div>
 
       {/* ── Identity header ─────────────────────────────────────────────────── */}

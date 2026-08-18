@@ -6,6 +6,7 @@ import {
   Library,
   MessageCircle,
   Users,
+  UsersRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BRAND_SHORT } from "@/lib/brand";
@@ -22,6 +23,12 @@ export const UNLOCK_FEATURES = [
     short: "Friends",
     title: "Make friends",
     hint: "See what your circle is reading",
+  },
+  {
+    icon: UsersRound,
+    short: "Clubs",
+    title: "Join a reading club",
+    hint: "One book, a chat, progress together",
   },
   {
     icon: Library,
@@ -154,25 +161,42 @@ export function JoinReadquestSidebarCard() {
 export function JoinReadquestFeedCard() {
   return (
     <article
-      className="flex h-full min-h-[13rem] flex-col overflow-hidden rounded-2xl border border-border/70 p-3.5 shadow-[var(--shadow-soft)] layout-compact:shadow-none layout-wide:min-h-[18rem] layout-wide:rounded-3xl layout-wide:p-5"
+      className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-border/70 p-2.5 shadow-[var(--shadow-soft)] layout-compact:shadow-none sm:p-3.5 layout-wide:min-h-[18rem] layout-wide:rounded-3xl layout-wide:p-5"
       style={{
         background:
           "linear-gradient(155deg, color-mix(in srgb, var(--brand-1) 13%, var(--card)), color-mix(in srgb, var(--brand-2) 8%, var(--card)) 55%, var(--card))",
       }}
     >
       <div>
-        <p className="inline-flex items-center gap-1 rounded-full bg-background/55 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.16em] text-sky-600 backdrop-blur-sm dark:text-sky-300">
+        <p className="inline-flex items-center gap-1 rounded-full bg-background/55 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-[0.16em] text-sky-600 backdrop-blur-sm dark:text-sky-300 sm:px-2 sm:text-[9px]">
           Free to join
         </p>
-        <h2 className="mt-2 text-[17px] font-extrabold leading-[1.12] tracking-tight layout-wide:text-[20px]">
-          You&apos;re missing the good part
+        <h2 className="mt-1 text-[14px] font-extrabold leading-[1.15] tracking-tight sm:mt-2 sm:text-[17px] layout-wide:text-[20px]">
+          This is just the lobby
         </h2>
-        <p className="mt-1 text-[11px] leading-snug text-muted layout-wide:text-[12px]">
-          Create a free account to make it yours.
+        <p className="mt-0.5 hidden text-[11px] leading-snug text-muted sm:block layout-wide:mt-1 layout-wide:text-[12px]">
+          Clubs, a daily quest, and a feed of people who read like you.
         </p>
       </div>
 
-      <ul className="mt-3 grid flex-1 content-start gap-1.5 layout-wide:grid-cols-2 layout-wide:gap-2">
+      <ul className="mt-1.5 flex flex-wrap gap-1 sm:mt-2 layout-wide:hidden">
+        {UNLOCK_FEATURES.map(({ icon: Icon, short }) => (
+          <li
+            key={short}
+            className="inline-flex items-center gap-1 rounded-full border border-border/50 bg-background/55 px-1.5 py-0.5 text-[9px] font-medium text-foreground/85 sm:px-2 sm:text-[10px]"
+          >
+            <Icon
+              size={9}
+              strokeWidth={2.3}
+              aria-hidden
+              className="text-sky-600 dark:text-sky-300"
+            />
+            {short}
+          </li>
+        ))}
+      </ul>
+
+      <ul className="mt-3 hidden flex-1 content-start gap-2 layout-wide:grid layout-wide:grid-cols-2">
         {UNLOCK_FEATURES.map(({ icon: Icon, title, hint }) => (
           <li key={title} className="flex items-center gap-2">
             <span
@@ -185,7 +209,7 @@ export function JoinReadquestFeedCard() {
               <span className="block truncate text-[12px] font-semibold leading-tight text-foreground/90">
                 {title}
               </span>
-              <span className="hidden truncate text-[10.5px] leading-tight text-muted layout-wide:block">
+              <span className="block truncate text-[10.5px] leading-tight text-muted">
                 {hint}
               </span>
             </span>
@@ -193,15 +217,15 @@ export function JoinReadquestFeedCard() {
         ))}
       </ul>
 
-      <div className="mt-3">
+      <div className="mt-auto pt-2 layout-wide:pt-3">
         <Link
           href="/register"
-          className="block w-full rounded-full px-3 py-2 text-center text-[12px] font-bold text-white shadow-[var(--shadow-pop)]"
+          className="block w-full rounded-full px-3 py-1.5 text-center text-[11px] font-bold text-white shadow-[var(--shadow-pop)] sm:py-2 sm:text-[12px]"
           style={{ background: "var(--gradient-brand)" }}
         >
           Create free account
         </Link>
-        <p className="mt-1.5 text-center text-[10.5px] text-muted">
+        <p className="mt-1 text-center text-[10px] text-muted sm:mt-1.5 sm:text-[10.5px]">
           Have an account?{" "}
           <Link href="/login" className="font-semibold text-foreground hover:underline">
             Sign in

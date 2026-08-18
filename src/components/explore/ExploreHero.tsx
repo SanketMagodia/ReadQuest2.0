@@ -163,30 +163,32 @@ export function ExploreSearchDock({
     const el = dockRef.current;
     if (!el) return;
 
-    // Matches `@custom-variant layout-wide` in globals.css (aspect-ratio).
-    const mq = window.matchMedia("(min-aspect-ratio: 10001/10000)");
-
     const check = () => {
-      const dockTop = mq.matches ? 0 : 48; // top-12 on compact
+      // Read the resolved sticky offset off the element itself. It's
+      // `--topbar-h` on compact and 0 on wide, and hard-coding either here is
+      // how the dock ended up sliding under the top bar.
+      const dockTop = Number.parseFloat(getComputedStyle(el).top) || 0;
       setStuck(el.getBoundingClientRect().top <= dockTop + 0.5);
     };
 
     check();
     window.addEventListener("scroll", check, { passive: true });
     window.addEventListener("resize", check);
-    mq.addEventListener?.("change", check);
     return () => {
       window.removeEventListener("scroll", check);
       window.removeEventListener("resize", check);
-      mq.removeEventListener?.("change", check);
     };
   }, []);
 
   return (
     <div
       ref={dockRef}
-      className={`rq-search-dock rq-enter sticky top-12 z-20 -mx-2 -mt-2 px-4 sm:-mx-4 sm:-mt-3 sm:px-6 layout-wide:top-0 layout-wide:px-4 ${
-        stuck ? "rq-search-dock--stuck" : ""
+      // On phones the negative margin cancels both the page section's padding
+      // and the shell's, so the docked strip bleeds to the screen edges like
+      // the top bar above it — inset by even a few pixels and you see content
+      // scrolling past in the gap.
+      className={`rq-search-dock rq-enter sticky top-[var(--topbar-h)] z-20 -mx-5 -mt-2 px-5 sm:-mx-4 sm:-mt-3 sm:px-6 layout-wide:top-0 layout-wide:px-4 ${
+        stuck ? "rq-search-dock--stuck rq-frost" : ""
       }`}
       style={{ animationDelay: "400ms" }}
     >

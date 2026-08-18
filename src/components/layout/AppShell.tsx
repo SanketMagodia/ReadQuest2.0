@@ -9,9 +9,7 @@ import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./theme-toggle";
 import { StreakBadge } from "@/components/streak/StreakBadge";
 import { TheGistClubLogo } from "@/components/brand/TheGistClubLogo";
-import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import { RightRail } from "./RightRail";
-import { MobileAccountMenu } from "./MobileAccountMenu";
 import { NotificationsBell } from "./NotificationsBell";
 import { MessagesBubble } from "@/components/dm/MessagesBubble";
 import { JoinReadquestSidebarCard } from "@/components/auth/UnlockFeatures";
@@ -117,14 +115,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           string (URLs, code) in children would force this flex item wider
           than its share and overflow the whole shell on narrow phones. */}
       <main className="min-h-[100dvh] min-w-0 flex-1 pb-28 layout-wide:pb-8 layout-wide:px-1">
-        {/* Compact layout top bar (phones + portrait tablets) */}
-        <div className="sticky top-0 z-30 -mx-3 flex items-center justify-between gap-2 border-b border-border/70 bg-background/85 px-3 py-2.5 backdrop-blur layout-wide:hidden">
-          <TheGistClubLogo height={30} />
+        {/* Compact layout top bar (phones + portrait tablets).
+            Pared back to a wordmark + streak on the left and the bell on the
+            right edge; account actions moved to the profile cover's menu. Its
+            height is pinned to `--topbar-h` because the Explore search dock
+            sticks directly beneath it. */}
+        <div className="rq-frost sticky top-0 z-30 -mx-3 flex h-[var(--topbar-h)] items-center justify-between gap-2 border-b border-border/70 px-3 layout-wide:hidden">
+          <div className="flex min-w-0 items-center gap-2">
+            <TheGistClubLogo height={30} />
+            {loggedIn ? <StreakBadge size="sm" /> : null}
+          </div>
           <div className="flex items-center gap-1.5">
-            <InstallPrompt />
+            {loggedIn ? null : <ThemeToggle />}
             <NotificationsBell variant="topbar" />
-            {loggedIn ? <StreakBadge /> : <ThemeToggle />}
-            <MobileAccountMenu />
           </div>
         </div>
         {children}

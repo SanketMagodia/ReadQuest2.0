@@ -17,7 +17,11 @@ import { MOOD_MAP, MOOD_VAR_KEYS, isMoodId, type MoodId } from "@/lib/moods";
 type MoodValue = "" | MoodId;
 
 type MoodContextValue = {
-  /** The logged-in user's own saved mood (themes the whole app for them). */
+  /**
+   * The reader's own mood, which themes the whole app for them: their saved
+   * mood when signed in, the light/dark-matched default when browsing as a
+   * guest.
+   */
   ownMood: MoodValue;
   /** The mood currently painted on screen (preview overrides own). */
   activeMood: MoodValue;
@@ -61,30 +65,58 @@ const GUEST_LIGHT_MOOD: MoodId = "beach-drift";
 export function MoodProvider({ children }: { children: ReactNode }) {
   const { theme, resolvedTheme, setTheme } = useTheme();
   const { status } = useSession();
-  const [ownMood, setOwnMood] = useState<MoodValue>("");
+  const [savedMood, setSavedMood] = useState<MoodValue>("");
   const [preview, setPreview] = useState<MoodValue | null>(null);
+  const [hydrated, setHydrated] = useState(false);
+  const isGuest = status !== "authenticated";
 
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
+
+  /**
+   * Guests have no saved mood, so they get a palette that mirrors their
+   * light/dark choice.
+   *
+   * Derived during render rather than stored: writing it to state from an
+   * effect keyed on `resolvedTheme` closed a loop, because the mood then drove
+   * `setTheme`, which drove `resolvedTheme`, which re-ran the effect. Toggling
+   * the theme while logged out blew the update-depth limit. The theme has to
+   * stay the single source of truth here.
+   *
+   * Empty until after hydration: next-themes reads localStorage on the client
+   * and is empty on the server, so using `resolvedTheme` on the first paint
+   * would mount MoodAtmosphere on one side only.
+   */
+  const guestMood: MoodValue =
+    !hydrated || !resolvedTheme
+      ? ""
+      : resolvedTheme === "dark"
+        ? GUEST_DARK_MOOD
+        : GUEST_LIGHT_MOOD;
+
+  const ownMood: MoodValue = isGuest ? guestMood : savedMood;
   const activeMood: MoodValue = preview ?? ownMood;
 
-  // Remember the user's *own* theme choice (only tracked while no mood is
-  // forcing one) so we can restore it when the last mood clears — e.g. a
-  // logged-out visitor leaving a moody profile returns to their toggle setting.
+  /**
+   * The mood someone actually picked, as opposed to the guest default. Only
+   * this one is allowed to force a light/dark mode — the guest default is
+   * derived *from* the theme, so pushing it back would be circular.
+   */
+  const chosenMood: MoodValue = preview ?? (isGuest ? "" : savedMood);
+
+  // Remember the reader's own theme choice while no chosen mood is overriding
+  // it, so we can restore it when the last one clears — e.g. a logged-out
+  // visitor leaving a moody profile returns to their toggle setting.
   const restoreThemeRef = useRef<string | undefined>(theme);
   useEffect(() => {
-    if (!activeMood) restoreThemeRef.current = theme;
-  }, [theme, activeMood]);
+    if (!chosenMood) restoreThemeRef.current = theme;
+  }, [theme, chosenMood]);
 
   // Load the signed-in reader's saved mood so the whole app reflects it.
-  // Guests get a default palette (Midnight Lamp for dark, Beach Drift for light)
-  // that updates whenever they flip the theme toggle.
   useEffect(() => {
     if (status !== "authenticated") {
-      // Wait until next-themes has resolved the actual light/dark preference
-      // before choosing a palette — avoids a flash on initial render.
-      if (!resolvedTheme) return;
-      const guestMood: MoodValue =
-        resolvedTheme === "dark" ? GUEST_DARK_MOOD : GUEST_LIGHT_MOOD;
-      setOwnMood(guestMood);
+      setSavedMood("");
       return;
     }
     let alive = true;
@@ -93,31 +125,34 @@ export function MoodProvider({ children }: { children: ReactNode }) {
       .then((data: { user?: { mood?: string } } | null) => {
         if (!alive) return;
         const m = data?.user?.mood;
-        setOwnMood(isMoodId(m) ? m : "");
+        setSavedMood(isMoodId(m) ? m : "");
       })
       .catch(() => {});
     return () => {
       alive = false;
     };
-  }, [status, resolvedTheme]);
+  }, [status]);
 
-  // Paint the active mood's palette + force its light/dark mode. When no mood
-  // is active, drop the palette and restore the user's own theme choice.
   useEffect(() => {
     paintMood(activeMood);
-    if (activeMood) {
-      setTheme(MOOD_MAP[activeMood as MoodId].theme);
+  }, [activeMood]);
+
+  // Kept separate from painting: a chosen mood also dictates light/dark, and
+  // when it clears we hand the reader their own setting back.
+  useEffect(() => {
+    if (chosenMood) {
+      setTheme(MOOD_MAP[chosenMood as MoodId].theme);
     } else if (restoreThemeRef.current) {
       setTheme(restoreThemeRef.current);
     }
-  }, [activeMood, setTheme]);
+  }, [chosenMood, setTheme]);
 
   const previewMood = useCallback((mood: MoodValue | null) => {
     setPreview(mood);
   }, []);
 
   const value = useMemo<MoodContextValue>(
-    () => ({ ownMood, activeMood, setOwnMood, previewMood }),
+    () => ({ ownMood, activeMood, setOwnMood: setSavedMood, previewMood }),
     [ownMood, activeMood, previewMood]
   );
 

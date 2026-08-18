@@ -287,7 +287,7 @@ export function NotificationsBell({
                 // `right-0` pushed the popup off the left of the viewport.
                 // Pin to the viewport with fixed positioning + symmetric
                 // gutters instead.
-                : "fixed left-3 right-3 top-[3.25rem]"
+                : "fixed left-3 right-3 top-[var(--topbar-h)]"
             )}
             style={
               variant === "sidebar" && pos

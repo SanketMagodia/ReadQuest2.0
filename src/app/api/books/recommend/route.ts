@@ -138,7 +138,7 @@ export async function POST(req: Request) {
           content: `The reader says:\n"${vibe}"\n\nRecommend their ${PICK_COUNT} books now.`,
         },
       ],
-      { temperature: 0.9, maxTokens: 1400, json: true }
+      { temperature: 0.8, maxTokens: 2400, json: true }
     );
   } catch (err) {
     const message =

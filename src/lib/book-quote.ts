@@ -101,7 +101,7 @@ export async function getOrCreateBookQuote(book: {
         { role: "system", content: SYSTEM },
         { role: "user", content: context },
       ],
-      { temperature: 0.7, maxTokens: 200, json: true }
+      { temperature: 0.7, maxTokens: 500, json: true }
     );
 
     const data = parseJsonObject(completion) as {

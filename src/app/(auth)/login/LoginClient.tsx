@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { signIn } from "next-auth/react";
-import { AtSign, KeyRound, Eye, EyeOff } from "lucide-react";
+import { ArrowRight, AtSign, KeyRound, Eye, EyeOff } from "lucide-react";
 import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
 import { AuthFormShell } from "@/components/auth/AuthFormShell";
 import { BRAND_NAME } from "@/lib/brand";
@@ -48,13 +48,14 @@ export default function LoginClient() {
         <h1 className="mt-1.5 text-[26px] font-black leading-tight tracking-tight max-sm:text-center sm:text-[30px]">
           Sign in to {BRAND_NAME}
         </h1>
-        <p className="mt-2 text-sm text-muted max-sm:text-center">
-          New here?{" "}
+        <p className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-sm text-muted max-sm:justify-center">
+          New here?
           <Link
-            className="font-semibold text-foreground underline-offset-4 hover:underline"
+            className="inline-flex items-center gap-1.5 rounded-full border border-brand-1/45 bg-brand-1/10 px-3 py-1.5 text-[13px] font-bold text-foreground transition hover:border-brand-1/70 hover:bg-brand-1/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/70"
             href="/register"
           >
             Create an account
+            <ArrowRight size={13} aria-hidden />
           </Link>
         </p>
 

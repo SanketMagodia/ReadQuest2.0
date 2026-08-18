@@ -4,19 +4,29 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useSession, signOut } from "next-auth/react";
-import { LogIn, LogOut, Shield, UserRound, X } from "lucide-react";
+import { LogIn, LogOut, Menu, Shield, UserRound, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { MobileSiteLinks } from "@/components/layout/SidebarFooter";
 
 /**
- * Compact account menu shown in the mobile top bar.
+ * Compact account menu for mobile.
  *
- * Anchors a tap-to-open avatar button. When opened, it pops a small card with
+ * Anchors a tap-to-open button. When opened, it pops a small card with
  * profile / admin / sign-out actions. Closes on outside click, route change,
  * or escape press.
  *
+ * Two triggers: the original `avatar`, and a `hamburger` that lives on the
+ * profile cover. The top bar dropped its avatar so the notification bell could
+ * own the right edge, which makes the profile page the way into account
+ * actions on a phone.
+ *
  * Visible only on mobile (the desktop sidebar already exposes these).
  */
-export function MobileAccountMenu() {
+export function MobileAccountMenu({
+  trigger = "avatar",
+}: {
+  trigger?: "avatar" | "hamburger";
+}) {
   const { data: session, status } = useSession();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -49,6 +59,8 @@ export function MobileAccountMenu() {
   const role = session?.user?.role;
   const isAuth = status === "authenticated";
 
+  const isHamburger = trigger === "hamburger";
+
   return (
     <div ref={rootRef} className="relative">
       <button
@@ -57,9 +69,18 @@ export function MobileAccountMenu() {
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="Account menu"
-        className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-border bg-card text-foreground/85 transition hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70"
+        className={cn(
+          "flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70",
+          isHamburger
+            ? // Sits on the profile's gradient cover, so it carries its own
+              // contrast instead of borrowing the page background.
+              "border-white/35 bg-black/25 text-white backdrop-blur-md hover:bg-black/35"
+            : "border-border bg-card text-foreground/85 hover:bg-hover"
+        )}
       >
-        {isAuth && image ? (
+        {isHamburger ? (
+          <Menu size={17} aria-hidden />
+        ) : isAuth && image ? (
           <Image
             src={image}
             alt=""
@@ -76,7 +97,12 @@ export function MobileAccountMenu() {
         <div
           role="menu"
           aria-label="Account"
-          className="absolute right-0 top-[calc(100%+8px)] z-50 w-60 origin-top-right animate-fade overflow-hidden rounded-2xl border border-border bg-card shadow-[var(--shadow-soft)]"
+          className={cn(
+            "absolute top-[calc(100%+8px)] z-50 w-60 animate-fade overflow-hidden rounded-2xl border border-border bg-card shadow-[var(--shadow-soft)]",
+            isHamburger
+              ? "left-0 origin-top-left"
+              : "right-0 origin-top-right"
+          )}
         >
           {isAuth ? (
             <>
