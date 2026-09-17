@@ -1,7 +1,7 @@
 import { Types } from "mongoose";
 import connectDB from "@/lib/db";
 import BookQuote from "@/models/BookQuote";
-import { groqChat, isGroqConfigured } from "@/lib/groq";
+import { llmChat, isLlmConfigured } from "@/lib/llm";
 
 export type BookQuoteResult = {
   text: string;
@@ -82,7 +82,7 @@ export async function getOrCreateBookQuote(book: {
       return { text: cached.text, verbatim: !!cached.verbatim };
     }
 
-    if (!isGroqConfigured()) return null;
+    if (!isLlmConfigured()) return null;
 
     const context = [
       `Book: ${book.title}`,
@@ -96,7 +96,7 @@ export async function getOrCreateBookQuote(book: {
       .filter(Boolean)
       .join("\n");
 
-    const completion = await groqChat(
+    const completion = await llmChat(
       [
         { role: "system", content: SYSTEM },
         { role: "user", content: context },

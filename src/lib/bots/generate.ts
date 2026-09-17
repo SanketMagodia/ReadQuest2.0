@@ -8,10 +8,10 @@ import PostReaction from "@/models/PostReaction";
 import CommentReaction from "@/models/CommentReaction";
 import BotTickLock from "@/models/BotTickLock";
 import "@/models/User";
-import { groqChat } from "@/lib/groq";
+import { llmChat } from "@/lib/llm";
 
 const MIN_GAP_MS = 60 * 1000;
-// Pause between consecutive LLM calls to keep Groq TPM usage well under the limit.
+// Pause between consecutive LLM calls to stay well under the provider's rate limit.
 // Override with BOT_LLM_SLEEP_MS env var (0 = no sleep).
 const SLEEP_BETWEEN_LLM_MS = parseInt(
   process.env.BOT_LLM_SLEEP_MS ?? "30000",
@@ -280,7 +280,7 @@ export async function generatePostForBot(
   }
 
   const { system, user } = buildPrompt(bot as unknown as BotDoc, book);
-  const raw = await groqChat(
+  const raw = await llmChat(
     [
       { role: "system", content: system },
       { role: "user", content: user },
@@ -442,7 +442,7 @@ export async function generateReplyForBot(
     book,
     post
   );
-  const raw = await groqChat(
+  const raw = await llmChat(
     [
       { role: "system", content: system },
       { role: "user", content: user },
@@ -715,7 +715,7 @@ export async function generateAutoResponse(
     target
   );
 
-  const raw = await groqChat(
+  const raw = await llmChat(
     [
       { role: "system", content: system },
       { role: "user", content: user },

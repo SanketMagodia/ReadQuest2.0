@@ -1,4 +1,4 @@
-import { groqChat, isGroqConfigured } from "@/lib/groq";
+import { llmChat, isLlmConfigured } from "@/lib/llm";
 
 /**
  * Heuristic: does the string look like it's already (mostly) English?
@@ -29,10 +29,10 @@ export function looksEnglish(input: string): boolean {
 }
 
 /**
- * Translate arbitrary text to natural, fluent English using Groq.
+ * Translate arbitrary text to natural, fluent English using the LLM provider.
  *
  *  - Returns the original string unchanged if it's empty, already English,
- *    or if Groq isn't configured.
+ *    or if no LLM provider is configured.
  *  - On any LLM failure we also fall through to the original — translation
  *    is a nice-to-have, never a hard requirement for a book to be saved.
  *  - Preserves paragraph structure and tone.
@@ -41,10 +41,10 @@ export async function translateToEnglish(input: string): Promise<string> {
   const text = input?.trim?.() ?? "";
   if (!text) return text;
   if (looksEnglish(text)) return text;
-  if (!isGroqConfigured()) return text;
+  if (!isLlmConfigured()) return text;
 
   try {
-    const result = await groqChat(
+    const result = await llmChat(
       [
         {
           role: "system",
@@ -88,11 +88,11 @@ export async function translateTermsToEnglish(
   const needsTranslating = terms.filter((t) => !looksEnglish(t));
   if (!needsTranslating.length) return text;
 
-  if (!isGroqConfigured()) return text;
+  if (!isLlmConfigured()) return text;
 
   try {
     const list = needsTranslating.map((t, i) => `${i + 1}. ${t}`).join("\n");
-    const result = await groqChat(
+    const result = await llmChat(
       [
         {
           role: "system",

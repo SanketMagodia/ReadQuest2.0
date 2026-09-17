@@ -6,7 +6,7 @@ import Book from "@/models/Book";
 import BookSummary from "@/models/BookSummary";
 import UserBookSummary from "@/models/UserBookSummary";
 import { getAppSession } from "@/lib/session";
-import { groqChat, isGroqConfigured, GroqError } from "@/lib/groq";
+import { llmChat, isLlmConfigured, llmModel, LlmError } from "@/lib/llm";
 import { looksLikeObjectId } from "@/lib/slug";
 
 type BookLean = {
@@ -204,7 +204,7 @@ export async function POST(
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (!isGroqConfigured()) {
+  if (!isLlmConfigured()) {
     return NextResponse.json(
       { error: "AI is not configured on the server." },
       { status: 503 }
@@ -253,7 +253,7 @@ export async function POST(
   const { system, user } = buildSummaryPrompts(book, scope, prompt);
 
   try {
-    const completion = await groqChat(
+    const completion = await llmChat(
       [
         { role: "system", content: system },
         { role: "user", content: user },
@@ -277,7 +277,7 @@ export async function POST(
           $set: {
             content,
             prompt: prompt || DEFAULT_SHARED_BRIEF,
-            model: process.env.GROQ_MODEL || "",
+            model: llmModel(),
             generatedBy: new Types.ObjectId(session.user.id),
             wordCount: wc,
           },
@@ -306,7 +306,7 @@ export async function POST(
         $set: {
           content,
           prompt,
-          model: process.env.GROQ_MODEL || "",
+          model: llmModel(),
           wordCount: wc,
         },
       },
@@ -326,7 +326,7 @@ export async function POST(
     });
   } catch (err) {
     const message =
-      err instanceof GroqError
+      err instanceof LlmError
         ? err.message
         : err instanceof Error
           ? err.message

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getAppSession } from "@/lib/session";
 import connectDB from "@/lib/db";
 import Book from "@/models/Book";
-import { groqChat, isGroqConfigured, GroqError } from "@/lib/groq";
+import { llmChat, isLlmConfigured, LlmError } from "@/lib/llm";
 
 const schema = z.object({
   bookId: z.string().regex(/^[a-f0-9]{24}$/i),
@@ -27,13 +27,13 @@ type BookLean = {
 };
 
 /** Compose helper: generate a short, in-voice post about the selected book.
- *  Auth required so we don't burn Groq quota for anonymous traffic. */
+ *  Auth required so we don't burn LLM quota for anonymous traffic. */
 export async function POST(req: Request) {
   const session = await getAppSession();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (!isGroqConfigured()) {
+  if (!isLlmConfigured()) {
     return NextResponse.json(
       { error: "AI is not configured on the server." },
       { status: 503 }
@@ -83,7 +83,7 @@ export async function POST(req: Request) {
     .join("\n");
 
   try {
-    const completion = await groqChat(
+    const completion = await llmChat(
       [
         { role: "system", content: system },
         { role: "user", content: user },
@@ -100,7 +100,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ content });
   } catch (err) {
     const message =
-      err instanceof GroqError
+      err instanceof LlmError
         ? err.message
         : err instanceof Error
           ? err.message

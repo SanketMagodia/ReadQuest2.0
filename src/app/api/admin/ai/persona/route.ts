@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/admin-guard";
-import { groqChat, isGroqConfigured, GroqError } from "@/lib/groq";
+import { llmChat, isLlmConfigured, LlmError } from "@/lib/llm";
 
 const schema = z.object({
   brief: z.string().trim().max(500).optional().default(""),
@@ -25,7 +25,7 @@ function clean(raw: string, max = 900) {
 export async function POST(req: Request) {
   const guard = await requireAdmin();
   if (guard.response) return guard.response;
-  if (!isGroqConfigured()) {
+  if (!isLlmConfigured()) {
     return NextResponse.json(
       { error: "AI is not configured on the server." },
       { status: 503 }
@@ -67,7 +67,7 @@ export async function POST(req: Request) {
     .join("\n");
 
   try {
-    const completion = await groqChat(
+    const completion = await llmChat(
       [
         { role: "system", content: system },
         { role: "user", content: user },
@@ -84,7 +84,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ persona });
   } catch (err) {
     const message =
-      err instanceof GroqError
+      err instanceof LlmError
         ? err.message
         : err instanceof Error
           ? err.message

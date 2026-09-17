@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAppSession } from "@/lib/session";
-import { groqChat, isGroqConfigured, GroqError } from "@/lib/groq";
+import { llmChat, isLlmConfigured, LlmError } from "@/lib/llm";
 import { resolveBooks, type BookCandidate } from "@/lib/book-match";
 
 export const maxDuration = 60;
@@ -99,7 +99,7 @@ function parseJsonObject(raw: string): unknown {
 
 /** AI book recommendations from a free-text description of a vibe. */
 export async function POST(req: Request) {
-  if (!isGroqConfigured()) {
+  if (!isLlmConfigured()) {
     return NextResponse.json(
       { error: "Recommendations are not available right now." },
       { status: 503 }
@@ -130,7 +130,7 @@ export async function POST(req: Request) {
 
   let completion: string;
   try {
-    completion = await groqChat(
+    completion = await llmChat(
       [
         { role: "system", content: SYSTEM },
         {
@@ -142,10 +142,10 @@ export async function POST(req: Request) {
     );
   } catch (err) {
     const message =
-      err instanceof GroqError || err instanceof Error
+      err instanceof LlmError || err instanceof Error
         ? err.message
         : "AI request failed";
-    console.error("[recommend] groq failed:", message);
+    console.error("[recommend] llm failed:", message);
     return NextResponse.json(
       { error: "Our librarian is thinking too hard. Try again in a moment." },
       { status: 502 }

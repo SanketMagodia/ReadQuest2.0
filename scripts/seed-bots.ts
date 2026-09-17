@@ -1,7 +1,7 @@
 /**
  * Seed 5 starter AI bots with diverse personas.
  * Usage from `web/`: `npm run seed-bots`
- * Requires MONGODB_URI in env. GROQ_API_KEY only needed when bots run.
+ * Requires MONGODB_URI in env. OPENROUTER_API_KEY only needed when bots run.
  */
 import path from "path";
 import dotenv from "dotenv";

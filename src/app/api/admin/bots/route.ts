@@ -4,7 +4,7 @@ import Bot from "@/models/Bot";
 import User from "@/models/User";
 import { requireAdmin } from "@/lib/admin-guard";
 import { botCreateSchema } from "@/lib/validators";
-import { isGroqConfigured } from "@/lib/groq";
+import { isLlmConfigured } from "@/lib/llm";
 import { rollNextPostAt } from "@/lib/bots/generate";
 import { ensureBotScheduler } from "@/lib/bots/scheduler";
 import { serializeBot } from "@/lib/bots/serialize";
@@ -21,7 +21,7 @@ export async function GET() {
     .lean();
 
   return NextResponse.json({
-    groqConfigured: isGroqConfigured(),
+    llmConfigured: isLlmConfigured(),
     bots: rows.map((r) =>
       serializeBot({
         ...r,

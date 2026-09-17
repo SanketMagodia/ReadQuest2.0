@@ -39,7 +39,7 @@ type BotDTO = {
   };
 };
 
-type BotsResponse = { bots: BotDTO[]; groqConfigured: boolean };
+type BotsResponse = { bots: BotDTO[]; llmConfigured: boolean };
 
 type FormState = {
   username: string;
@@ -182,7 +182,7 @@ export function BotManager() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  const groqOk = data?.groqConfigured ?? false;
+  const llmOk = data?.llmConfigured ?? false;
 
   const submitCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -353,11 +353,13 @@ export function BotManager() {
         <div>
           <h2 className="text-xl font-bold">AI Bots</h2>
           <p className="text-sm text-muted">
-            Schedule personas to post about books and reply to other readers. Powered by Groq.
+            Schedule personas to post about books and reply to other readers.
+            Powered by Nemotron via OpenRouter.
           </p>
-          {!groqOk ? (
+          {!llmOk ? (
             <p className="mt-2 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-700 dark:text-amber-300">
-              GROQ_API_KEY is not set. Bots will fail until you add it to <code>.env.local</code>.
+              OPENROUTER_API_KEY is not set. Bots will fail until you add it to{" "}
+              <code>.env.local</code>.
             </p>
           ) : null}
         </div>
@@ -538,7 +540,7 @@ export function BotManager() {
               <input
                 value={form.model}
                 onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))}
-                placeholder="llama-3.3-70b-versatile"
+                placeholder="nvidia/nemotron-3-super-120b-a12b:free"
                 className={inputCls}
               />
             </Field>
@@ -1165,7 +1167,7 @@ function BotRow({
               <input
                 value={draft.model}
                 onChange={(e) => setDraft({ ...draft, model: e.target.value })}
-                placeholder="llama-3.3-70b-versatile"
+                placeholder="nvidia/nemotron-3-super-120b-a12b:free"
                 className={inputCls}
               />
             </Field>
