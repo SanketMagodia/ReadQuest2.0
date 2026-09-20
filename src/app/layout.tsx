@@ -3,6 +3,7 @@ import { Plus_Jakarta_Sans, Fraunces, Geist_Mono } from "next/font/google";
 import type { ReactNode } from "react";
 import "./globals.css";
 import { Providers } from "@/components/providers";
+import { MoodPrePaint } from "@/components/mood/MoodPrePaint";
 import { ServiceWorkerRegister } from "@/components/pwa/ServiceWorkerRegister";
 import { GoogleAnalyticsScripts } from "@/components/analytics/GoogleAnalyticsScripts";
 import { PageViewTracker } from "@/components/analytics/PageViewTracker";
@@ -126,6 +127,7 @@ export default function RootLayout({
       className={`${sans.variable} ${display.variable} ${geistMono.variable}`}
     >
       <head>
+        <MoodPrePaint />
         <GoogleAnalyticsScripts />
         <script
           type="application/ld+json"

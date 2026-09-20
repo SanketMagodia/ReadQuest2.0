@@ -77,15 +77,26 @@ export const authOptions: NextAuthOptions = {
           await hydrateUserFromId(token as JWT, token.uid);
         }
       }
+      // Avatars are data-URLs. NextAuth copies `picture` onto the JWT cookie;
+      // a 512px JPEG there is tens of KB and Node answers 431.
+      delete token.picture;
+      delete token.bio;
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        session.user.id =
+        const id =
           (typeof token.uid === "string" && token.uid) || (token.sub as string) || "";
+        session.user.id = id;
         session.user.username = typeof token.username === "string" ? token.username : "";
         session.user.role = token.role === "admin" ? "admin" : "user";
-        session.user.bio = typeof token.bio === "string" ? token.bio : "";
+        if (id) {
+          await connectDB();
+          const u = await User.findById(id).select("image").lean();
+          if (u && typeof (u as { image?: string }).image === "string") {
+            session.user.image = (u as { image: string }).image;
+          }
+        }
       }
       return session;
     },
@@ -100,7 +111,6 @@ async function hydrateUserFromId(token: JWT, id: string) {
   token.sub = token.uid;
   token.username = u.username;
   token.role = u.role as "user" | "admin";
-  token.bio = u.bio;
 }
 
 async function hydrateGoogleUser(
@@ -145,7 +155,6 @@ async function hydrateGoogleUser(
   token.sub = token.uid;
   token.username = u.username;
   token.role = u.role as "user" | "admin";
-  token.bio = u.bio;
 }
 
 function sanitizeUsername(raw: string) {

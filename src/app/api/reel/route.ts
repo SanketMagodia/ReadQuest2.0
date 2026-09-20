@@ -4,18 +4,22 @@ import { z } from "zod";
 import { getAppSession } from "@/lib/session";
 import connectDB from "@/lib/db";
 import ReelImpression from "@/models/ReelImpression";
-import { buildReel } from "@/lib/reel";
+import { buildReel, buildStarterReel } from "@/lib/reel";
 
 // Ranking a batch is one LLM call, which can outrun the default budget on a
 // cold provider.
 export const maxDuration = 60;
 
 /**
- * GET /api/reel?exclude=id,id,…
+ * GET /api/reel?exclude=id,id,…&starter=1
  *
  * The next run of personalized cards. `exclude` carries ids the client is
  * still holding but hasn't reported an action on yet, so prefetching the next
  * batch mid-scroll can't hand back a book already on screen.
+ *
+ * `starter=1` skips the ranker and answers from the shared hourly rotation,
+ * which is what the client opens with while the personalized run is still in
+ * flight.
  */
 export async function GET(req: Request) {
   const session = await getAppSession();
@@ -23,13 +27,17 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const exclude = (new URL(req.url).searchParams.get("exclude") ?? "")
+  const url = new URL(req.url);
+  const exclude = (url.searchParams.get("exclude") ?? "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean)
     .slice(0, 100);
 
-  const cards = await buildReel(session.user.id, exclude);
+  const cards =
+    url.searchParams.get("starter") === "1"
+      ? await buildStarterReel(session.user.id, exclude)
+      : await buildReel(session.user.id, exclude);
   return NextResponse.json({ cards });
 }
 

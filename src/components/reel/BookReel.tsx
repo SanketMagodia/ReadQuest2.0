@@ -61,37 +61,53 @@ export function BookReel() {
   }, []);
 
   const loadBatch = useCallback(
-    async (mode: "initial" | "more") => {
+    async (mode: "initial" | "more" | "starter" | "background") => {
       if (mode === "more") {
         if (loadingMoreRef.current || exhausted) return;
         loadingMoreRef.current = true;
         setLoadingMore(true);
       }
       try {
+        const params = new URLSearchParams();
         const exclude = cardsRef.current.map((c) => c.id).slice(-60).join(",");
-        const res = await fetch(
-          `/api/reel${exclude ? `?exclude=${encodeURIComponent(exclude)}` : ""}`,
-          { cache: "no-store" }
-        );
+        if (exclude) params.set("exclude", exclude);
+        if (mode === "starter") params.set("starter", "1");
+        const qs = params.toString();
+
+        const res = await fetch(`/api/reel${qs ? `?${qs}` : ""}`, {
+          cache: "no-store",
+        });
         if (!res.ok) {
-          if (mode === "initial") setError("Couldn't load your gists.");
+          if (mode === "initial" || mode === "starter") {
+            setError("Couldn't load your gists.");
+          }
           return;
         }
         const j = (await res.json()) as { cards: ReelCardData[] };
         const fresh = j.cards ?? [];
         if (!fresh.length) {
-          setExhausted(true);
+          // The starter rotation running dry just means this reader has been
+          // through it; the ranked run behind it still has books to give.
+          if (mode !== "starter") setExhausted(true);
           return;
         }
         setCards((prev) => {
           const seen = new Set(prev.map((c) => c.id));
           return [...prev, ...fresh.filter((c) => !seen.has(c.id))];
         });
+        // A later run succeeding clears an earlier one's failure — there are
+        // books on screen, so the error screen would be a lie.
+        setError(null);
+        if (mode === "starter") setLoading(false);
       } catch {
-        if (mode === "initial") setError("Couldn't load your gists.");
+        if (mode === "initial" || mode === "starter") {
+          setError("Couldn't load your gists.");
+        }
       } finally {
-        if (mode === "initial") setLoading(false);
-        else {
+        // A starter run that came back empty keeps the spinner up: the ranked
+        // run behind it is the one that decides whether there's anything left.
+        if (mode === "initial" || mode === "background") setLoading(false);
+        else if (mode === "more") {
           loadingMoreRef.current = false;
           setLoadingMore(false);
         }
@@ -100,9 +116,17 @@ export function BookReel() {
     [exhausted]
   );
 
+  /**
+   * Open on the shared hourly rotation, which needs no ranker, then queue the
+   * personalized run behind it. Reading starts immediately and the LLM
+   * round-trip happens while the reader is on the first gist.
+   */
   useEffect(() => {
     if (status !== "authenticated") return;
-    void loadBatch("initial");
+    void (async () => {
+      await loadBatch("starter");
+      await loadBatch("background");
+    })();
     // Only ever run the first fetch once per session resolution.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);

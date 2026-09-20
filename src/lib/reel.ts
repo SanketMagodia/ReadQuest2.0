@@ -13,6 +13,12 @@ export const REEL_BATCH = 6;
 /** How many books the ranker gets to choose from. */
 const CANDIDATE_POOL = 36;
 
+/** Cards in the instant opening run, before the ranker has answered. */
+export const STARTER_BATCH = 3;
+
+/** Books the hourly starter rotation draws from. */
+const STARTER_POOL = 48;
+
 export type ReelCard = {
   id: string;
   slug: string;
@@ -360,6 +366,115 @@ async function rankWithLlm(
   return picks.length ? picks : null;
 }
 
+function toCard(
+  book: BookDoc,
+  hook: string,
+  tag: string,
+  summary: string
+): ReelCard {
+  return {
+    id: book._id.toString(),
+    slug: book.slug ?? book._id.toString(),
+    title: book.title,
+    authors: book.authors ?? "",
+    thumbnail: book.thumbnail ?? "",
+    description: book.description ?? "",
+    categories: book.categories ?? "",
+    publishedYear: book.publishedYear ?? null,
+    averageRating: book.averageRating ?? null,
+    numPages: book.numPages ?? null,
+    hook,
+    tag,
+    summary,
+  };
+}
+
+async function summaryByBook(books: BookDoc[]): Promise<Map<string, string>> {
+  const rows = await BookSummary.find({ book: { $in: books.map((b) => b._id) } })
+    .select("book content")
+    .lean();
+  return new Map(rows.map((s) => [s.book.toString(), s.content as string]));
+}
+
+/**
+ * The starter rotation: the same well-reviewed, already-summarized books for
+ * everyone, reshuffled each hour. Held in module memory because it's identical
+ * across readers, so the opening cards cost one query per hour per instance
+ * rather than one per visit.
+ */
+let starterCache: { hour: number; books: BookDoc[] } | null = null;
+
+function currentHour(): number {
+  return Math.floor(Date.now() / 3_600_000);
+}
+
+async function starterPool(): Promise<BookDoc[]> {
+  const hour = currentHour();
+  if (starterCache?.hour === hour) return starterCache.books;
+
+  const rows = (await BookSummary.aggregate([
+    {
+      $lookup: {
+        from: Book.collection.name,
+        localField: "book",
+        foreignField: "_id",
+        as: "book",
+      },
+    },
+    { $unwind: "$book" },
+    { $replaceRoot: { newRoot: "$book" } },
+    { $match: { description: { $exists: true, $ne: "" } } },
+    { $sort: { ratingsCount: -1, averageRating: -1 } },
+    { $limit: STARTER_POOL },
+  ])) as BookDoc[];
+
+  starterCache = { hour, books: rows };
+  return rows;
+}
+
+/**
+ * The opening cards, served without waiting on the ranker.
+ *
+ * The personalized run takes an LLM round-trip, which is the whole of the
+ * wait a reader used to sit through before the first gist appeared. These
+ * come straight from the hourly rotation instead, and the client swaps in
+ * ranked cards behind them once `buildReel` answers.
+ */
+export async function buildStarterReel(
+  userId: string,
+  exclude: string[] = []
+): Promise<ReelCard[]> {
+  await connectDB();
+
+  const pool = await starterPool();
+  if (!pool.length) return [];
+
+  // Everyone gets the same three per hour, so the rotation stays shared, but
+  // anything this reader already judged is stepped over rather than replayed.
+  const seen = new Set<string>([
+    ...(
+      await ReelImpression.find({ user: new Types.ObjectId(userId) })
+        .select("book")
+        .lean()
+    ).map((i) => i.book.toString()),
+    ...exclude,
+  ]);
+
+  const offset = currentHour() % pool.length;
+  const picked: BookDoc[] = [];
+  for (let n = 0; n < pool.length && picked.length < STARTER_BATCH; n++) {
+    const book = pool[(offset + n) % pool.length];
+    if (seen.has(book._id.toString())) continue;
+    picked.push(book);
+  }
+  if (!picked.length) return [];
+
+  const contentByBook = await summaryByBook(picked);
+  return picked.map((book) =>
+    toCard(book, "", "", contentByBook.get(book._id.toString()) ?? "")
+  );
+}
+
 /**
  * The next run of cards for a reader.
  *
@@ -380,28 +495,9 @@ export async function buildReel(
     (await rankWithLlm(pool, profile)) ??
     fallbackRank(pool, profile).map((book) => ({ book, hook: "", tag: "" }));
 
-  const summaries = await BookSummary.find({
-    book: { $in: ranked.map((r) => r.book._id) },
-  })
-    .select("book content")
-    .lean();
-  const contentByBook = new Map(
-    summaries.map((s) => [s.book.toString(), s.content as string])
-  );
+  const contentByBook = await summaryByBook(ranked.map((r) => r.book));
 
-  return ranked.map(({ book, hook, tag }) => ({
-    id: book._id.toString(),
-    slug: book.slug ?? book._id.toString(),
-    title: book.title,
-    authors: book.authors ?? "",
-    thumbnail: book.thumbnail ?? "",
-    description: book.description ?? "",
-    categories: book.categories ?? "",
-    publishedYear: book.publishedYear ?? null,
-    averageRating: book.averageRating ?? null,
-    numPages: book.numPages ?? null,
-    hook,
-    tag,
-    summary: contentByBook.get(book._id.toString()) ?? "",
-  }));
+  return ranked.map(({ book, hook, tag }) =>
+    toCard(book, hook, tag, contentByBook.get(book._id.toString()) ?? "")
+  );
 }

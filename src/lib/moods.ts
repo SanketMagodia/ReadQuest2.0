@@ -37,6 +37,13 @@ export type Mood = {
   dark: MoodVars;
 };
 
+/**
+ * Where the last painted mood is parked so it can be restored before React
+ * boots — otherwise every hard refresh flashes the default palette first.
+ */
+export const MOOD_CACHE_KEY = "tgc-mood";
+export const MOOD_VARS_CACHE_KEY = "tgc-mood-vars";
+
 /** The CSS custom properties a mood is allowed to override, app-wide. */
 export const MOOD_VAR_KEYS = [
   "--brand-1",

@@ -12,7 +12,14 @@ import {
 } from "react";
 import { useTheme } from "next-themes";
 import { useSession } from "next-auth/react";
-import { MOOD_MAP, MOOD_VAR_KEYS, isMoodId, type MoodId } from "@/lib/moods";
+import {
+  MOOD_CACHE_KEY,
+  MOOD_MAP,
+  MOOD_VAR_KEYS,
+  MOOD_VARS_CACHE_KEY,
+  isMoodId,
+  type MoodId,
+} from "@/lib/moods";
 
 type MoodValue = "" | MoodId;
 
@@ -42,12 +49,36 @@ export function useMood(): MoodContextValue {
   return ctx;
 }
 
+function cacheMood(mood: MoodValue, vars: Record<string, string> | null) {
+  try {
+    if (!mood || !vars) {
+      localStorage.removeItem(MOOD_CACHE_KEY);
+      localStorage.removeItem(MOOD_VARS_CACHE_KEY);
+      return;
+    }
+    localStorage.setItem(MOOD_CACHE_KEY, mood);
+    localStorage.setItem(MOOD_VARS_CACHE_KEY, JSON.stringify(vars));
+  } catch {
+    // Private mode / storage disabled — the mood just repaints on load.
+  }
+}
+
+function readCachedMood(): MoodValue {
+  try {
+    const m = localStorage.getItem(MOOD_CACHE_KEY);
+    return isMoodId(m) ? m : "";
+  } catch {
+    return "";
+  }
+}
+
 function paintMood(mood: MoodValue) {
   const el = document.documentElement;
   const def = mood ? MOOD_MAP[mood as MoodId] : null;
   if (!def) {
     for (const key of MOOD_VAR_KEYS) el.style.removeProperty(key);
     el.removeAttribute("data-mood");
+    cacheMood("", null);
     return;
   }
   // A mood forces its own light/dark mode, so use that variant's palette.
@@ -56,6 +87,7 @@ function paintMood(mood: MoodValue) {
     el.style.setProperty(key, value);
   }
   el.setAttribute("data-mood", mood);
+  cacheMood(mood, vars);
 }
 
 // Default moods for unauthenticated visitors — matched to their light/dark pref.
@@ -68,10 +100,20 @@ export function MoodProvider({ children }: { children: ReactNode }) {
   const [savedMood, setSavedMood] = useState<MoodValue>("");
   const [preview, setPreview] = useState<MoodValue | null>(null);
   const [hydrated, setHydrated] = useState(false);
-  const isGuest = status !== "authenticated";
+  /**
+   * False until the mood is actually known. `status` sits on "loading" on
+   * every hard refresh and again whenever NextAuth revalidates the session,
+   * and treating that as "signed out" is what made the app flash the guest
+   * palette and flip light/dark mid-navigation.
+   */
+  const [resolved, setResolved] = useState(false);
+  const isGuest = status === "unauthenticated";
 
   useEffect(() => {
     setHydrated(true);
+    // Whatever MoodPrePaint already put on screen, so React agrees with it.
+    const cached = readCachedMood();
+    if (cached) setSavedMood(cached);
   }, []);
 
   /**
@@ -110,13 +152,15 @@ export function MoodProvider({ children }: { children: ReactNode }) {
   // visitor leaving a moody profile returns to their toggle setting.
   const restoreThemeRef = useRef<string | undefined>(theme);
   useEffect(() => {
-    if (!chosenMood) restoreThemeRef.current = theme;
-  }, [theme, chosenMood]);
+    if (resolved && !chosenMood) restoreThemeRef.current = theme;
+  }, [theme, chosenMood, resolved]);
 
   // Load the signed-in reader's saved mood so the whole app reflects it.
   useEffect(() => {
+    if (status === "loading") return;
     if (status !== "authenticated") {
       setSavedMood("");
+      setResolved(true);
       return;
     }
     let alive = true;
@@ -126,26 +170,34 @@ export function MoodProvider({ children }: { children: ReactNode }) {
         if (!alive) return;
         const m = data?.user?.mood;
         setSavedMood(isMoodId(m) ? m : "");
+        setResolved(true);
       })
-      .catch(() => {});
+      .catch(() => {
+        // Keep whatever is already painted rather than snapping to default.
+        if (alive) setResolved(true);
+      });
     return () => {
       alive = false;
     };
   }, [status]);
 
+  // Nothing repaints until the mood is known: the pre-paint script has the
+  // right palette up already, so an early repaint would only cause a flash.
   useEffect(() => {
+    if (!resolved) return;
     paintMood(activeMood);
-  }, [activeMood]);
+  }, [activeMood, resolved]);
 
   // Kept separate from painting: a chosen mood also dictates light/dark, and
   // when it clears we hand the reader their own setting back.
   useEffect(() => {
+    if (!resolved) return;
     if (chosenMood) {
       setTheme(MOOD_MAP[chosenMood as MoodId].theme);
     } else if (restoreThemeRef.current) {
       setTheme(restoreThemeRef.current);
     }
-  }, [chosenMood, setTheme]);
+  }, [chosenMood, setTheme, resolved]);
 
   const previewMood = useCallback((mood: MoodValue | null) => {
     setPreview(mood);
