@@ -19,7 +19,7 @@ export const SEO_KEYWORDS = [
   "book threads",
   "reader social network",
   "book discovery",
-  "daily reading quest",
+  "book gists",
   "book summaries",
 ] as const;
 

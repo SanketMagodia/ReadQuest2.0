@@ -81,8 +81,8 @@ export async function createNotification(opts: CreateOpts): Promise<void> {
 }
 
 /**
- * Fan out a single event to many recipients in one insertMany. Used when a
- * new post lands in a book room — every follower of that book gets one row.
+ * Fan out a single event to many recipients in one insertMany. Kept for
+ * broadcast-shaped events where one action notifies a whole audience.
  */
 export async function fanOutNotification(opts: {
   recipients: ID[];
@@ -149,84 +149,6 @@ export async function fanOutNotification(opts: {
 
 // ─── high-level helpers used by the trigger sites ──────────────────────────
 
-export async function notifyPostReaction(args: {
-  postId: ID;
-  postAuthorId: ID;
-  actorId: ID;
-  actorName: string;
-  reaction: "like" | "dislike";
-  postPreview: string;
-}) {
-  return createNotification({
-    recipient: args.postAuthorId,
-    actor: args.actorId,
-    type: args.reaction === "like" ? "post_like" : "post_dislike",
-    link: `/post/${toId(args.postId).toString()}`,
-    message:
-      args.reaction === "like"
-        ? `${args.actorName} liked your post`
-        : `${args.actorName} disliked your post`,
-    preview: trim(args.postPreview),
-  });
-}
-
-export async function notifyCommentReaction(args: {
-  commentId: ID;
-  commentAuthorId: ID;
-  actorId: ID;
-  actorName: string;
-  reaction: "like" | "dislike";
-  parentPostId: ID;
-  commentPreview: string;
-}) {
-  return createNotification({
-    recipient: args.commentAuthorId,
-    actor: args.actorId,
-    type: args.reaction === "like" ? "comment_like" : "comment_dislike",
-    link: `/post/${toId(args.parentPostId).toString()}#comment-${toId(args.commentId).toString()}`,
-    message:
-      args.reaction === "like"
-        ? `${args.actorName} liked your comment`
-        : `${args.actorName} disliked your comment`,
-    preview: trim(args.commentPreview),
-  });
-}
-
-export async function notifyPostComment(args: {
-  postId: ID;
-  postAuthorId: ID;
-  actorId: ID;
-  actorName: string;
-  commentPreview: string;
-}) {
-  return createNotification({
-    recipient: args.postAuthorId,
-    actor: args.actorId,
-    type: "post_comment",
-    link: `/post/${toId(args.postId).toString()}`,
-    message: `${args.actorName} commented on your post`,
-    preview: trim(args.commentPreview),
-  });
-}
-
-export async function notifyCommentReply(args: {
-  parentCommentId: ID;
-  parentAuthorId: ID;
-  actorId: ID;
-  actorName: string;
-  parentPostId: ID;
-  replyPreview: string;
-}) {
-  return createNotification({
-    recipient: args.parentAuthorId,
-    actor: args.actorId,
-    type: "comment_reply",
-    link: `/post/${toId(args.parentPostId).toString()}#comment-${toId(args.parentCommentId).toString()}`,
-    message: `${args.actorName} replied to your comment`,
-    preview: trim(args.replyPreview),
-  });
-}
-
 export async function notifyFriendRequest(args: {
   recipientId: ID;
   actorId: ID;
@@ -256,26 +178,6 @@ export async function notifyFriendAccepted(args: {
     link: `/profile/${args.actorUsername}`,
     message: `${args.actorName} accepted your friend request`,
     preview: `@${args.actorUsername}`,
-  });
-}
-
-export async function notifyFollowedBookPost(args: {
-  postId: ID;
-  bookId: ID;
-  bookTitle: string;
-  actorId: ID;
-  actorName: string;
-  followerIds: ID[];
-  postPreview: string;
-}) {
-  return fanOutNotification({
-    recipients: args.followerIds,
-    actor: args.actorId,
-    type: "followed_book_post",
-    link: `/post/${toId(args.postId).toString()}`,
-    message: `${args.actorName} posted in ${args.bookTitle}`,
-    preview: trim(args.postPreview),
-    book: args.bookId,
   });
 }
 

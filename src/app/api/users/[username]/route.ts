@@ -2,7 +2,6 @@ import { Types } from "mongoose";
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/db";
 import User from "@/models/User";
-import { peekStreak } from "@/lib/daily";
 import { getFollowCounts } from "@/lib/follows";
 import { getClubForUser } from "@/lib/clubs";
 
@@ -19,10 +18,7 @@ export async function GET(
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const userId = (user._id as Types.ObjectId).toString();
-  const [streak, follows] = await Promise.all([
-    peekStreak(userId),
-    getFollowCounts(userId),
-  ]);
+  const follows = await getFollowCounts(userId);
 
   // Whichever club they're in — running it or just reading along — so visitors
   // can see where this reader hangs out.
@@ -38,7 +34,6 @@ export async function GET(
       image: user.image,
       bio: user.bio,
       mood: (user as { mood?: string }).mood ?? "",
-      streak,
       followerCount: follows.followers,
       followingCount: follows.following,
       createdAt: (user as { createdAt?: Date }).createdAt,

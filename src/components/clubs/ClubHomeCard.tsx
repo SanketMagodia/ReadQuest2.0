@@ -43,8 +43,7 @@ function useCompactLayout() {
 }
 
 /**
- * The club's room, condensed for the Home grid. When a reader belongs to a
- * club this takes the slot the daily quest normally occupies.
+ * The club's room, condensed for the Explore grid beside NYT top picks.
  *
  * On a phone the chat would eat the whole fold, so the card shrinks to a
  * cover-sized tile that opens the room in a sheet — which lets Top 5 Today

@@ -4,7 +4,6 @@ import connectDB from "@/lib/db";
 import User from "@/models/User";
 import ReadList from "@/models/ReadList";
 import BookFollow from "@/models/BookFollow";
-import Post from "@/models/Post";
 import UserRecommendation from "@/models/UserRecommendation";
 import "@/models/Book";
 
@@ -50,7 +49,7 @@ export async function GET(
 
   const userId = user._id as Types.ObjectId;
 
-  const [wantRows, readRows, followRows, recRows, postCount] = await Promise.all([
+  const [wantRows, readRows, followRows, recRows] = await Promise.all([
     ReadList.find({ user: userId, $or: [{ status: "want" }, { status: { $exists: false } }] })
       .sort({ createdAt: -1 })
       .populate("book", "title authors thumbnail slug")
@@ -71,7 +70,6 @@ export async function GET(
       .populate("book", "title authors thumbnail slug")
       .limit(12)
       .lean(),
-    Post.countDocuments({ author: userId }),
   ]);
 
   const wantToRead = serializeBooks(
@@ -87,7 +85,6 @@ export async function GET(
 
   return NextResponse.json({
     counts: {
-      posts: postCount,
       wantToRead: wantToRead.length,
       read: read.length,
       following: following.length,

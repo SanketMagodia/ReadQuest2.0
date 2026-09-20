@@ -1,0 +1,89 @@
+import { Types } from "mongoose";
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { getAppSession } from "@/lib/session";
+import connectDB from "@/lib/db";
+import ReelImpression from "@/models/ReelImpression";
+import { buildReel } from "@/lib/reel";
+
+// Ranking a batch is one LLM call, which can outrun the default budget on a
+// cold provider.
+export const maxDuration = 60;
+
+/**
+ * GET /api/reel?exclude=id,id,…
+ *
+ * The next run of personalized cards. `exclude` carries ids the client is
+ * still holding but hasn't reported an action on yet, so prefetching the next
+ * batch mid-scroll can't hand back a book already on screen.
+ */
+export async function GET(req: Request) {
+  const session = await getAppSession();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const exclude = (new URL(req.url).searchParams.get("exclude") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 100);
+
+  const cards = await buildReel(session.user.id, exclude);
+  return NextResponse.json({ cards });
+}
+
+const impressionSchema = z.object({
+  bookId: z.string().regex(/^[a-f0-9]{24}$/i),
+  action: z.enum(["served", "skipped", "read", "saved"]),
+  dwellSeconds: z.coerce.number().min(0).max(36_000).optional().default(0),
+});
+
+/** Rank of an action, so a weaker signal never overwrites a stronger one. */
+const WEIGHT: Record<string, number> = {
+  served: 0,
+  skipped: 1,
+  read: 2,
+  saved: 3,
+};
+
+/**
+ * POST /api/reel — record what the reader did with a card.
+ *
+ * This is the only feedback the ranker gets, so it runs on `sendBeacon` from
+ * the client and always answers 200-ish quickly.
+ */
+export async function POST(req: Request) {
+  const session = await getAppSession();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const parsed = impressionSchema.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid impression" }, { status: 400 });
+  }
+  const { bookId, action, dwellSeconds } = parsed.data;
+
+  await connectDB();
+  const filter = {
+    user: new Types.ObjectId(session.user.id),
+    book: new Types.ObjectId(bookId),
+  };
+
+  const existing = await ReelImpression.findOne(filter).select("action").lean();
+  const keepExisting =
+    existing && (WEIGHT[existing.action] ?? 0) > (WEIGHT[action] ?? 0);
+
+  await ReelImpression.updateOne(
+    filter,
+    {
+      $set: keepExisting ? {} : { action },
+      $max: { dwellSeconds },
+      $setOnInsert: filter,
+    },
+    { upsert: true }
+  );
+
+  return NextResponse.json({ ok: true });
+}

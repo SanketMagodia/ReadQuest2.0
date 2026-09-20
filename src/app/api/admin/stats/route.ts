@@ -2,15 +2,17 @@ import { Types } from "mongoose";
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-guard";
 import connectDB from "@/lib/db";
-import Post from "@/models/Post";
 import Book from "@/models/Book";
 import User from "@/models/User";
-import Comment from "@/models/Comment";
 import BookFollow from "@/models/BookFollow";
+import BookSummary from "@/models/BookSummary";
+import DailyBookPick from "@/models/DailyBookPick";
+import Memory from "@/models/Memory";
 import ReadList from "@/models/ReadList";
+import ReelImpression from "@/models/ReelImpression";
 import Friendship from "@/models/Friendship";
 import Notification from "@/models/Notification";
-import { getBotUserIds, humanUserFilter } from "@/lib/human-users";
+import { humanUserFilter } from "@/lib/human-users";
 
 function startOfDay(d = new Date()) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -24,57 +26,69 @@ export async function GET() {
 
   const today = startOfDay();
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-  const botUserIds = await getBotUserIds();
-  const humans = humanUserFilter(botUserIds);
+  const humans = humanUserFilter();
 
   const [
-    posts,
     books,
     users,
-    comments,
-    bots,
-    postsToday,
-    commentsToday,
+    eligibleBooks,
+    remainingSummaries,
+    memories,
+    quests,
     usersToday,
-    postsWeek,
+    questsToday,
+    gistsReadToday,
     usersWeek,
+    gistsReadWeek,
     friendships,
     readlists,
     bookFollows,
     notifications,
-    activePostersWeek,
+    activeReadersWeek,
   ] = await Promise.all([
-    Post.countDocuments(),
     Book.countDocuments(),
     User.countDocuments(humans),
-    Comment.countDocuments(),
-    User.countDocuments({ _id: { $in: botUserIds } }),
-    Post.countDocuments({ createdAt: { $gte: today } }),
-    Comment.countDocuments({ createdAt: { $gte: today } }),
+    Book.countDocuments({ description: { $type: "string", $ne: "" } }),
+    Book.aggregate([
+      { $match: { description: { $type: "string", $ne: "" } } },
+      {
+        $lookup: {
+          from: BookSummary.collection.name,
+          localField: "_id",
+          foreignField: "book",
+          as: "s",
+        },
+      },
+      { $match: { s: { $size: 0 } } },
+      { $count: "n" },
+    ]),
+    Memory.countDocuments(),
+    DailyBookPick.countDocuments({ completed: true }),
     User.countDocuments({ ...humans, createdAt: { $gte: today } }),
-    Post.countDocuments({ createdAt: { $gte: weekAgo } }),
+    DailyBookPick.countDocuments({ completed: true, completedAt: { $gte: today } }),
+    ReelImpression.countDocuments({ action: "read", updatedAt: { $gte: today } }),
     User.countDocuments({ ...humans, createdAt: { $gte: weekAgo } }),
+    ReelImpression.countDocuments({ action: "read", updatedAt: { $gte: weekAgo } }),
     Friendship.countDocuments({ status: "accepted" }),
     ReadList.countDocuments(),
     BookFollow.countDocuments(),
     Notification.countDocuments(),
-    Post.distinct("author", {
-      createdAt: { $gte: weekAgo },
-      author: { $nin: botUserIds },
-    }),
+    ReelImpression.distinct("user", { updatedAt: { $gte: weekAgo } }),
   ]);
 
-  const recent = await Post.find()
-    .sort({ _id: -1 })
+  // The reel is the product's pulse now, so "recent activity" means the books
+  // readers actually got through rather than anything they published.
+  const recentReads = await ReelImpression.find({ action: { $in: ["read", "saved"] } })
+    .sort({ updatedAt: -1 })
     .limit(8)
-    .populate("author", "username name isBot")
+    .populate("user", "username name")
     .populate("book", "title")
     .lean();
 
   const recentUsers = await User.find(humans)
     .sort({ createdAt: -1 })
     .limit(8)
-    .select("username name role createdAt isBot")
+    .select("username name role createdAt")
     .lean<
       {
         _id: Types.ObjectId;
@@ -85,34 +99,45 @@ export async function GET() {
       }[]
     >();
 
+  const remaining = (remainingSummaries[0] as { n?: number } | undefined)?.n ?? 0;
+  const summarized = Math.max(0, eligibleBooks - remaining);
+  const summaryCoverage = books ? Math.round((summarized / books) * 100) : 0;
+  const eligibleCoverage = eligibleBooks
+    ? Math.round((summarized / eligibleBooks) * 100)
+    : 0;
+
   return NextResponse.json({
     counts: {
-      posts,
       books,
       users,
-      comments,
-      bots,
+      summaries: summarized,
+      eligibleBooks,
+      remainingSummaries: remaining,
+      summaryCoverage,
+      eligibleCoverage,
+      memories,
+      quests,
       friendships,
       readlists,
       bookFollows,
       notifications,
     },
     today: {
-      posts: postsToday,
-      comments: commentsToday,
       users: usersToday,
+      quests: questsToday,
+      gistsRead: gistsReadToday,
     },
     week: {
-      posts: postsWeek,
       users: usersWeek,
-      activePosters: activePostersWeek.length,
+      gistsRead: gistsReadWeek,
+      activeReaders: activeReadersWeek.length,
     },
-    recentPosts: recent.map((p) => ({
-      id: (p._id as Types.ObjectId).toString(),
-      content: p.content.slice(0, 160),
-      author: p.author as unknown as { username: string; name: string },
-      book: p.book as unknown as { title: string },
-      createdAt: (p as { createdAt?: Date }).createdAt,
+    recentReads: recentReads.map((r) => ({
+      id: r._id.toString(),
+      action: r.action,
+      user: r.user as unknown as { username: string; name: string },
+      book: r.book as unknown as { title: string },
+      at: r.updatedAt,
     })),
     recentUsers: recentUsers.map((u) => ({
       id: u._id.toString(),

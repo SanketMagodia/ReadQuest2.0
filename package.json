@@ -10,9 +10,9 @@
     "lint": "node --max-old-space-size=6144 ./node_modules/eslint/bin/eslint.js",
     "seed": "tsx scripts/seed-books.ts",
     "seed-books": "tsx scripts/seed-books.ts",
-    "seed-bots": "tsx scripts/seed-bots.ts",
     "backfill-slugs": "tsx scripts/backfill-book-slugs.ts",
-    "backfill-friend-follows": "tsx scripts/backfill-friend-follows.ts"
+    "backfill-friend-follows": "tsx scripts/backfill-friend-follows.ts",
+    "summarize-books": "tsx scripts/generate-book-summaries.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

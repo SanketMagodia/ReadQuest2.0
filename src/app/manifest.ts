@@ -1,10 +1,5 @@
 import type { MetadataRoute } from "next";
-import {
-  BRAND_DESCRIPTION,
-  BRAND_NAME,
-  BRAND_SHORT,
-  BRAND_TITLE,
-} from "@/lib/brand";
+import { BRAND_DESCRIPTION, BRAND_SHORT, BRAND_TITLE } from "@/lib/brand";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
@@ -40,10 +35,10 @@ export default function manifest(): MetadataRoute.Manifest {
     ],
     shortcuts: [
       {
-        name: "Compose a quote",
-        short_name: "Compose",
-        description: "Share a line that moved you",
-        url: "/compose",
+        name: "Gists",
+        short_name: "Gists",
+        description: "Swipe through books picked for you",
+        url: "/",
       },
       {
         name: "Explore books",

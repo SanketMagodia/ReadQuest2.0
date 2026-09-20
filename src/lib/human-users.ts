@@ -1,19 +1,10 @@
-import type { Types } from "mongoose";
-import Bot from "@/models/Bot";
-
-/** User ids that own a row in the Bot collection (source of truth). */
-export async function getBotUserIds(): Promise<Types.ObjectId[]> {
-  return Bot.distinct("user");
-}
-
 /**
- * Mongo filter for real human accounts. Excludes both `isBot: true` and any
- * user linked from the Bot collection — some legacy bot rows predate the
- * isBot flag and would otherwise slip into "new readers" counts.
+ * Mongo filter for real human accounts.
+ *
+ * The `isBot` flag is all that's left of the old AI-persona system — the Bot
+ * collection is gone, but existing accounts still carry the flag and must stay
+ * out of reader counts.
  */
-export function humanUserFilter(botUserIds: Types.ObjectId[]) {
-  return {
-    isBot: { $ne: true },
-    _id: { $nin: botUserIds },
-  } as const;
+export function humanUserFilter() {
+  return { isBot: { $ne: true } } as const;
 }

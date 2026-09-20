@@ -2,12 +2,11 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { Compass, Library, BookOpen, UserRound, Users } from "lucide-react";
+import { BookOpen, Compass, Martini, UserRound, Users } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./theme-toggle";
-import { StreakBadge } from "@/components/streak/StreakBadge";
 import { TheGistClubLogo } from "@/components/brand/TheGistClubLogo";
 import { RightRail } from "./RightRail";
 import { NotificationsBell } from "./NotificationsBell";
@@ -15,6 +14,7 @@ import { MessagesBubble } from "@/components/dm/MessagesBubble";
 import { JoinReadquestSidebarCard } from "@/components/auth/UnlockFeatures";
 import { SidebarFooter } from "@/components/layout/SidebarFooter";
 import { SidebarAccount } from "@/components/layout/SidebarAccount";
+import { SidebarMood } from "@/components/mood/SidebarMood";
 
 import type { LucideIcon } from "lucide-react";
 
@@ -25,14 +25,13 @@ type NavItem = {
 };
 
 /**
- * Composing lives in a dialog on the feed now, so it no longer takes a nav
- * slot. Profile and sign-in moved into the account control at the foot of the
- * sidebar.
+ * Home is the personalized gist stream; the searchable library lives at /explore.
+ * Profile and sign-in are in the account control at the foot of the sidebar.
  */
 const navMain: NavItem[] = [
-  { href: "/", label: "Home", icon: Compass },
-  { href: "/feed", label: "Feed", icon: Library },
-  { href: "/clubs", label: "Clubs", icon: BookOpen },
+  { href: "/", label: "Gists", icon: BookOpen },
+  { href: "/explore", label: "Explore", icon: Compass },
+  { href: "/clubs", label: "Clubs", icon: Martini },
   { href: "/friends", label: "Friends", icon: Users },
 ];
 
@@ -46,17 +45,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();
   const username = session?.user?.username;
   const avatar = session?.user?.image ?? "";
-  // Signed-in readers get a streak badge (their theme follows their mood);
-  // only logged-out visitors keep the manual light/dark toggle.
+  // Signed-in readers follow their mood theme; guests keep the light/dark toggle.
   const loggedIn = Boolean(session?.user?.id);
 
   return (
     <div className="mx-auto flex min-h-full w-full max-w-7xl gap-0 px-3 layout-wide:gap-2 layout-wide:px-2 xl:gap-3 xl:px-3">
       {/* Wide layout sidebar (landscape tablets / desktops) */}
-      <aside className="sticky top-0 z-20 hidden h-[100dvh] min-h-0 shrink-0 flex-col overflow-hidden border-r border-border/50 bg-background/75 py-4 backdrop-blur layout-wide:flex lg:w-48 xl:w-52">
+      <aside className="sticky top-0 z-20 hidden h-[100dvh] min-h-0 shrink-0 flex-col overflow-visible border-r border-border/50 bg-background/75 py-4 backdrop-blur layout-wide:flex lg:w-48 xl:w-52">
         <div className="mb-4 shrink-0 flex items-center justify-between gap-2 px-3">
           <TheGistClubLogo height={36} priority />
-          {loggedIn ? <StreakBadge /> : <ThemeToggle />}
+          {loggedIn ? null : <ThemeToggle />}
         </div>
 
         <nav
@@ -107,6 +105,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="mt-auto shrink-0 space-y-2">
           {!username ? <JoinReadquestSidebarCard /> : null}
           <SidebarAccount />
+          {username ? <SidebarMood /> : null}
           <SidebarFooter />
         </div>
       </aside>
@@ -114,16 +113,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Main column. `min-w-0` is critical: without it, any unbreakable long
           string (URLs, code) in children would force this flex item wider
           than its share and overflow the whole shell on narrow phones. */}
-      <main className="min-h-[100dvh] min-w-0 flex-1 pb-28 layout-wide:pb-8 layout-wide:px-1">
+      <main className="min-h-[100dvh] min-w-0 flex-1 pb-[var(--bottomnav-h)] layout-wide:pb-8 layout-wide:px-1">
         {/* Compact layout top bar (phones + portrait tablets).
-            Pared back to a wordmark + streak on the left and the bell on the
-            right edge; account actions moved to the profile cover's menu. Its
+            Pared back to a wordmark on the left and the bell on the right
+            edge; account actions moved to the profile cover's menu. Its
             height is pinned to `--topbar-h` because the Explore search dock
             sticks directly beneath it. */}
         <div className="rq-frost sticky top-0 z-30 -mx-3 flex h-[var(--topbar-h)] items-center justify-between gap-2 border-b border-border/70 px-3 layout-wide:hidden">
           <div className="flex min-w-0 items-center gap-2">
             <TheGistClubLogo height={30} />
-            {loggedIn ? <StreakBadge size="sm" /> : null}
           </div>
           <div className="flex items-center gap-1.5">
             {loggedIn ? null : <ThemeToggle />}

@@ -2,39 +2,45 @@
 
 import { useEffect, useState } from "react";
 import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
-import { BotManager } from "./BotManager";
 import { AdminUsers } from "./AdminUsers";
 import { AdminBroadcasts } from "./AdminBroadcasts";
-import { AdminReports } from "./AdminReports";
 
 type Stats = {
   counts: {
-    posts: number;
     books: number;
     users: number;
-    comments: number;
-    bots: number;
+    summaries: number;
+    /** Books that have a blurb we can summarize. */
+    eligibleBooks: number;
+    /** Eligible books still missing a gist. */
+    remainingSummaries: number;
+    /** Percentage of the whole catalog with a cached AI summary. */
+    summaryCoverage: number;
+    /** Percentage of eligible books with a cached AI summary. */
+    eligibleCoverage: number;
+    memories: number;
+    quests: number;
     friendships: number;
     readlists: number;
     bookFollows: number;
     notifications: number;
   };
   today: {
-    posts: number;
-    comments: number;
     users: number;
+    quests: number;
+    gistsRead: number;
   };
   week: {
-    posts: number;
     users: number;
-    activePosters: number;
+    gistsRead: number;
+    activeReaders: number;
   };
-  recentPosts: {
+  recentReads: {
     id: string;
-    content: string;
-    author: { username: string; name: string };
+    action: string;
+    user: { username: string; name: string };
     book: { title: string };
-    createdAt?: string;
+    at?: string;
   }[];
   recentUsers: {
     id: string;
@@ -45,7 +51,7 @@ type Stats = {
   }[];
 };
 
-type AdminTab = "overview" | "users" | "reports" | "broadcasts" | "bots";
+type AdminTab = "overview" | "users" | "broadcasts";
 
 export function AdminDashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
@@ -62,9 +68,7 @@ export function AdminDashboard() {
   const tabs: { id: AdminTab; label: string }[] = [
     { id: "overview", label: "Overview" },
     { id: "users", label: "Users" },
-    { id: "reports", label: "Reports" },
     { id: "broadcasts", label: "Broadcasts" },
-    { id: "bots", label: "Bots" },
   ];
 
   return (
@@ -73,7 +77,7 @@ export function AdminDashboard() {
         <p className="text-xs uppercase tracking-[0.4em] text-muted">restricted</p>
         <h1 className="mt-4 text-[32px] font-bold">Manager dashboard</h1>
         <p className="text-sm text-muted">
-          Growth metrics, user directory, broadcasts, and bot controls.
+          Growth metrics, user directory, and broadcasts.
         </p>
       </header>
 
@@ -101,9 +105,7 @@ export function AdminDashboard() {
       : null}
 
       {tab === "users" ? <AdminUsers /> : null}
-      {tab === "reports" ? <AdminReports /> : null}
       {tab === "broadcasts" ? <AdminBroadcasts /> : null}
-      {tab === "bots" ? <BotManager /> : null}
     </div>
   );
 }
@@ -113,18 +115,24 @@ function OverviewPanel({ stats }: { stats: Stats }) {
     <div className="space-y-8">
       <section>
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+          Gist coverage
+        </h2>
+        <CoverageCard counts={stats.counts} />
+      </section>
+
+      <section>
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
           Totals
         </h2>
         <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Metric label="Readers" value={stats.counts.users} hint="excl. bots" />
-          <Metric label="Posts" value={stats.counts.posts} />
-          <Metric label="Comments" value={stats.counts.comments} />
           <Metric label="Books" value={stats.counts.books} />
+          <Metric label="Saved memories" value={stats.counts.memories} hint="private" />
+          <Metric label="Quests completed" value={stats.counts.quests} />
           <Metric label="Friendships" value={stats.counts.friendships} />
           <Metric label="Readlist saves" value={stats.counts.readlists} />
           <Metric label="Book follows" value={stats.counts.bookFollows} />
           <Metric label="In-app notifications" value={stats.counts.notifications} />
-          <Metric label="AI bots" value={stats.counts.bots} hint="Bot manager" />
         </div>
       </section>
 
@@ -139,12 +147,12 @@ function OverviewPanel({ stats }: { stats: Stats }) {
               <span className="font-bold tabular-nums">{stats.today.users}</span>
             </li>
             <li className="flex justify-between">
-              <span className="text-muted">Posts</span>
-              <span className="font-bold tabular-nums">{stats.today.posts}</span>
+              <span className="text-muted">Gists read</span>
+              <span className="font-bold tabular-nums">{stats.today.gistsRead}</span>
             </li>
             <li className="flex justify-between">
-              <span className="text-muted">Comments</span>
-              <span className="font-bold tabular-nums">{stats.today.comments}</span>
+              <span className="text-muted">Quests completed</span>
+              <span className="font-bold tabular-nums">{stats.today.quests}</span>
             </li>
           </ul>
         </article>
@@ -158,12 +166,12 @@ function OverviewPanel({ stats }: { stats: Stats }) {
               <span className="font-bold tabular-nums">{stats.week.users}</span>
             </li>
             <li className="flex justify-between">
-              <span className="text-muted">Posts</span>
-              <span className="font-bold tabular-nums">{stats.week.posts}</span>
+              <span className="text-muted">Gists read</span>
+              <span className="font-bold tabular-nums">{stats.week.gistsRead}</span>
             </li>
             <li className="flex justify-between">
-              <span className="text-muted">Active posters</span>
-              <span className="font-bold tabular-nums">{stats.week.activePosters}</span>
+              <span className="text-muted">Active in Gists</span>
+              <span className="font-bold tabular-nums">{stats.week.activeReaders}</span>
             </li>
           </ul>
         </article>
@@ -171,14 +179,16 @@ function OverviewPanel({ stats }: { stats: Stats }) {
 
       <div className="grid gap-8 lg:grid-cols-2">
         <section className="rounded-[28px] border border-border bg-card p-6 shadow-inner sm:p-8">
-          <h2 className="text-xl font-semibold">Latest posts</h2>
-          <ul className="mt-6 space-y-4 text-sm">
-            {stats.recentPosts.map((p) => (
-              <li key={p.id} className="rounded-3xl bg-pill p-5">
+          <h2 className="text-xl font-semibold">Latest gist activity</h2>
+          <ul className="mt-6 space-y-3 text-sm">
+            {stats.recentReads.map((r) => (
+              <li key={r.id} className="rounded-2xl bg-pill px-4 py-3">
                 <p className="text-xs uppercase text-muted">
-                  @{p.author.username} • {p.book.title}
+                  @{r.user?.username ?? "unknown"} • {r.action}
                 </p>
-                <p className="mt-2 text-[15px] leading-relaxed">{p.content}</p>
+                <p className="mt-1 text-[15px] leading-relaxed">
+                  {r.book?.title ?? "—"}
+                </p>
               </li>
             ))}
           </ul>
@@ -186,7 +196,6 @@ function OverviewPanel({ stats }: { stats: Stats }) {
 
         <section className="rounded-[28px] border border-border bg-card p-6 shadow-inner sm:p-8">
           <h2 className="text-xl font-semibold">Newest readers</h2>
-          <p className="mt-1 text-xs text-muted">Human accounts only — bots are listed under Bots.</p>
           <ul className="mt-6 space-y-3 text-sm">
             {stats.recentUsers.map((u) => (
               <li
@@ -204,6 +213,62 @@ function OverviewPanel({ stats }: { stats: Stats }) {
         </section>
       </div>
     </div>
+  );
+}
+
+function CoverageCard({
+  counts,
+}: {
+  counts: Stats["counts"];
+}) {
+  const done = counts.summaries;
+  const total = counts.books;
+  const eligible = counts.eligibleBooks;
+  const remaining = counts.remainingSummaries;
+  const pct = counts.summaryCoverage;
+
+  return (
+    <article className="mt-3 rounded-[26px] border border-border bg-card p-6 shadow-[var(--shadow-soft)]">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-3xl font-black tabular-nums">
+            {done.toLocaleString()}
+            <span className="text-lg font-semibold text-muted">
+              {" "}
+              / {total.toLocaleString()}
+            </span>
+          </p>
+          <p className="mt-1 text-sm text-muted">
+            books have a generated gist · {pct}% of the catalog
+          </p>
+        </div>
+        <p className="text-sm font-semibold tabular-nums text-muted">
+          {remaining.toLocaleString()} remaining
+        </p>
+      </div>
+      <div
+        className="mt-4 h-2 overflow-hidden rounded-full bg-pill"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={pct}
+        aria-label="Share of the catalog with a generated gist"
+      >
+        <div
+          className="h-full rounded-full"
+          style={{
+            width: `${Math.min(100, Math.max(0, pct))}%`,
+            background: "var(--gradient-brand)",
+          }}
+        />
+      </div>
+      <p className="mt-3 text-[12px] text-muted">
+        {eligible.toLocaleString()} books have a blurb we can summarize
+        {eligible ? ` · ${counts.eligibleCoverage}% of those are done` : ""}.
+        Run <code className="font-mono text-[11px]">python scripts/generate_book_summaries.py</code>{" "}
+        for an hour to keep filling the rest.
+      </p>
+    </article>
   );
 }
 

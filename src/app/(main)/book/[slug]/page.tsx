@@ -7,17 +7,18 @@ import {
   ArrowLeft,
   Calendar,
   BookOpenText,
+  Quote,
   Star,
   Newspaper,
   ExternalLink,
 } from "lucide-react";
 import connectDB from "@/lib/db";
 import Book from "@/models/Book";
-import Post from "@/models/Post";
 import BookFollow from "@/models/BookFollow";
+import Memory from "@/models/Memory";
 import ReadList from "@/models/ReadList";
 import "@/models/User";
-import { serializePosts } from "@/lib/serialize";
+import { serializeMemory } from "@/lib/memories";
 import { looksLikeObjectId, makeBookSlug, withUniqueSuffix } from "@/lib/slug";
 import { getAppSession } from "@/lib/session";
 import { getNytReviews } from "@/lib/nyt";
@@ -142,14 +143,17 @@ export default async function BookPage({
   const session = await getAppSession();
   const userId = session?.user?.id;
 
-  const [postCount, postIdsRaw, isFollowing, readListEntry, nytReviews] =
+  const [shelvedCount, myMemoryRows, isFollowing, readListEntry, nytReviews] =
     await Promise.all([
-      Post.countDocuments({ book: bookId }),
-      Post.find({ book: bookId })
-        .sort({ _id: -1 })
-        .limit(30)
-        .select("_id")
-        .lean(),
+      ReadList.countDocuments({ book: bookId }),
+      // Private by construction: scoped to the viewer, and skipped entirely
+      // for signed-out visitors.
+      userId
+        ? Memory.find({ user: userId, book: bookId })
+            .sort({ _id: -1 })
+            .limit(30)
+            .lean()
+        : Promise.resolve([]),
       userId
         ? BookFollow.exists({ user: userId, book: bookId }).then(Boolean)
         : Promise.resolve(false),
@@ -170,8 +174,7 @@ export default async function BookPage({
   const readStatus =
     (readListEntry as { status?: "want" | "read" } | null)?.status ?? null;
 
-  const postIds = postIdsRaw.map((r) => (r._id as Types.ObjectId).toString());
-  const posts = await serializePosts(postIds, { viewerId: userId });
+  const myMemories = myMemoryRows.map((row) => serializeMemory(row));
 
   const cover = book.thumbnail?.replace(/^http:/, "https:");
   const categories =
@@ -201,10 +204,9 @@ export default async function BookPage({
           "@type": "AggregateRating",
           ratingValue: book.averageRating,
           bestRating: 5,
-          reviewCount: postCount || 1,
+          reviewCount: shelvedCount || 1,
         }
       : undefined,
-    discussionUrl: posts.length ? canonicalUrl : undefined,
   };
 
   return (
@@ -292,7 +294,7 @@ export default async function BookPage({
             ) : null}
             <span>·</span>
             <span>
-              {postCount} thread{postCount === 1 ? "" : "s"}
+              on {shelvedCount} shel{shelvedCount === 1 ? "f" : "ves"}
             </span>
           </div>
 
@@ -371,53 +373,51 @@ export default async function BookPage({
         </section>
       ) : null}
 
-      <section className="space-y-5">
-        <div className="flex items-baseline justify-between gap-3">
-          <h2 className="text-lg font-bold">
-            Threads · {postCount}
-          </h2>
-          <Link
-            href={`/compose?bookId=${bookId}`}
-            className="text-xs font-semibold text-sky-600 underline-offset-4 hover:underline dark:text-sky-300"
-          >
-            New quote →
-          </Link>
-        </div>
+      {userId ? (
+        <section className="space-y-5">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="inline-flex items-center gap-2 text-lg font-bold">
+              <Quote size={16} aria-hidden className="text-muted" />
+              Your memories · {myMemories.length}
+            </h2>
+            <span className="text-xs text-muted">Only you can see these</span>
+          </div>
 
-        <div className="flex flex-col gap-3">
-          {posts.map((p) => (
-            <Link
-              key={p.id}
-              href={`/post/${p.id}`}
-              className="rounded-xl border border-border bg-card p-5 transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-soft)]"
-            >
-              <div className="flex items-center justify-between gap-3 text-xs text-muted">
-                <span className="font-semibold text-foreground/85">
-                  @{p.author.username}
-                </span>
-                <time dateTime={p.createdAt}>
-                  {new Date(p.createdAt).toLocaleDateString(undefined, {
+          <div className="flex flex-col gap-3">
+            {myMemories.map((m) => (
+              <div
+                key={m.id}
+                className="rounded-xl border border-border bg-card p-5"
+              >
+                {m.quote ? (
+                  <p className="font-display text-[15px] italic leading-relaxed text-foreground/90">
+                    “{m.quote}”
+                  </p>
+                ) : null}
+                {m.note ? (
+                  <p className="mt-2 whitespace-pre-wrap text-[14px] leading-relaxed text-foreground/80">
+                    {m.note}
+                  </p>
+                ) : null}
+                <p className="mt-3 text-xs text-muted">
+                  {m.page ? `p. ${m.page} · ` : ""}
+                  {new Date(m.createdAt).toLocaleDateString(undefined, {
                     month: "short",
                     day: "numeric",
                     year: "numeric",
                   })}
-                </time>
+                </p>
               </div>
-              <p className="mt-3 whitespace-pre-wrap text-[15px] leading-relaxed">
-                {p.content}
+            ))}
+            {!myMemories.length ? (
+              <p className="rounded-3xl border border-dashed border-border bg-card/60 p-6 text-center text-sm text-muted">
+                Nothing kept from this book yet. Highlight a passage while you
+                read the summary and it lands here.
               </p>
-              <p className="mt-3 text-xs text-muted">
-                {p.commentCount} repl{p.commentCount === 1 ? "y" : "ies"}
-              </p>
-            </Link>
-          ))}
-          {!posts.length ? (
-            <p className="rounded-3xl border border-dashed border-border bg-card/60 p-6 text-center text-sm text-muted">
-              No threads yet — be the first to share a passage from this book.
-            </p>
-          ) : null}
-        </div>
-      </section>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
     </article>
   );
 }

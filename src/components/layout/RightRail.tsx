@@ -9,8 +9,6 @@ import {
   Compass,
   Flame,
   Lightbulb,
-  MessageCircle,
-  PenSquare,
   Quote,
   Shield,
   Sparkles,
@@ -158,14 +156,14 @@ function BrandTile({ authenticated }: { authenticated: boolean }) {
         For readers who live in the margins.
       </p>
       <p className="mt-2 text-[13px] leading-relaxed text-muted">
-        Follow books. Save a readlist. Thread the lines that moved you.
+        Follow books. Save a readlist. Keep the lines that moved you.
       </p>
-      <TileCTA href="/compose">Share a quote</TileCTA>
+      <TileCTA href="/explore">Find your next book</TileCTA>
     </TileShell>
   );
 }
 
-function TodaysPromptTile() {
+function TodaysPromptTile({ username }: { username?: string }) {
   return (
     <TileShell>
       <Eyebrow label="Today's prompt" tone="warm" icon={Coffee} />
@@ -173,11 +171,13 @@ function TodaysPromptTile() {
         {todaysPrompt()}
       </p>
       <p className="mt-1 text-[12px] text-muted">
-        Drop a quick post — even one line counts.
+        Answer it in your memories — nobody else sees them.
       </p>
-      <TileCTA href="/compose" variant="warm">
-        Compose
-      </TileCTA>
+      {username ? (
+        <TileCTA href={`/profile/${username}#memories`} variant="warm">
+          Keep a line
+        </TileCTA>
+      ) : null}
     </TileShell>
   );
 }
@@ -187,8 +187,37 @@ function GeneralTipTile() {
     <TileShell>
       <Eyebrow label="Tip" icon={Lightbulb} tone="warm" />
       <p className="mt-2 text-[13px] leading-relaxed text-foreground/85">
-        Follow books from Explore to personalize your feed. We rank posts by
-        what you read, save, and follow.
+        Follow books and save them to a shelf — Gists reads those signals
+        and gets sharper every day.
+      </p>
+    </TileShell>
+  );
+}
+
+function MemoriesTile({ username }: { username?: string }) {
+  return (
+    <TileShell>
+      <Eyebrow label="Memories" tone="rose" icon={Quote} />
+      <p className="mt-2 text-[13px] leading-relaxed text-foreground/85">
+        Highlight any passage while you read the gist and keep it. Your
+        memories are private — only you ever see them.
+      </p>
+      {username ? (
+        <TileCTA href={`/profile/${username}#memories`} variant="outline">
+          Open your memories
+        </TileCTA>
+      ) : null}
+    </TileShell>
+  );
+}
+
+function ReelHowToTile() {
+  return (
+    <TileShell variant="dashed">
+      <Eyebrow label="Gists" tone="brand" icon={Sprout} />
+      <p className="mt-2 text-[13px] leading-relaxed text-foreground/85">
+        Left or right turns the page. Up skips. Save a line as a memory —
+        only you see it. Follow and shelf books so the next gist is sharper.
       </p>
     </TileShell>
   );
@@ -220,58 +249,11 @@ function ExploreDiscoverTile() {
 function ExploreCommunitiesTile() {
   return (
     <TileShell variant="dashed">
-      <Eyebrow label="Communities" tone="brand" icon={Flame} />
+      <Eyebrow label="Book rooms" tone="brand" icon={Flame} />
       <p className="mt-2 text-[13px] leading-relaxed text-foreground/85">
-        Active book rooms surface on top. Posts, comments, and engaged readers
-        feed the ranking — show up and you&apos;ll climb.
+        The busiest rooms surface on top. Shelving a book, following it, or
+        finishing its gist all count toward the ranking.
       </p>
-    </TileShell>
-  );
-}
-
-function ComposePlaybookTile() {
-  return (
-    <TileShell>
-      <Eyebrow label="Posting playbook" tone="brand" icon={PenSquare} />
-      <ul className="mt-3 space-y-2 text-[13px] leading-relaxed text-foreground/85">
-        <li className="flex gap-2">
-          <span aria-hidden className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500" />
-          Tag a book — your post lands in its room.
-        </li>
-        <li className="flex gap-2">
-          <span aria-hidden className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500" />
-          One sharp thought beats three vague ones.
-        </li>
-        <li className="flex gap-2">
-          <span aria-hidden className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-fuchsia-500" />
-          Mark a spoiler with <code className="rounded bg-pill px-1">[spoiler]</code> in the title.
-        </li>
-      </ul>
-    </TileShell>
-  );
-}
-
-function ComposeQuoteTile() {
-  return (
-    <TileShell variant="gradient-frame">
-      <Eyebrow label="Quote etiquette" tone="brand" icon={Quote} />
-      <p className="mt-2 text-[13px] leading-relaxed text-muted">
-        Format quotes as <em>&ldquo;the line&rdquo; — Author</em>. Brief context
-        below the quote earns the most replies.
-      </p>
-    </TileShell>
-  );
-}
-
-function ThreadEtiquetteTile() {
-  return (
-    <TileShell>
-      <Eyebrow label="Thread kit" tone="rose" icon={MessageCircle} />
-      <ul className="mt-3 space-y-2 text-[13px] leading-relaxed text-foreground/85">
-        <li>Reply to the line, not the reader.</li>
-        <li>If you disagree, quote what you&apos;re responding to.</li>
-        <li>Long take? Make a new post and link this thread.</li>
-      </ul>
     </TileShell>
   );
 }
@@ -281,11 +263,11 @@ function BookRoomTile({ slug }: { slug?: string }) {
     <TileShell variant="gradient-frame">
       <Eyebrow label="Book room" tone="brand" icon={BookOpen} />
       <p className="mt-2 text-base font-semibold leading-snug">
-        Read deeper, together.
+        The whole book, in one sitting.
       </p>
       <p className="mt-2 text-[13px] leading-relaxed text-muted">
-        Open the AI-written summary, then jump back to threads from other
-        readers on this book.
+        An AI-written retelling in the book&apos;s own voice — long enough to
+        matter, short enough to finish.
       </p>
       {slug ? (
         <TileCTA href={`/book/${slug}/summary`}>Read summary</TileCTA>
@@ -300,8 +282,8 @@ function ProfileTipTile({ ownProfile }: { ownProfile: boolean }) {
       <Eyebrow label="Profile" tone="cool" icon={UserRound} />
       <p className="mt-2 text-[13px] leading-relaxed text-foreground/85">
         {ownProfile
-          ? "Add a bio and a photo — followers stick around when a profile has a voice."
-          : "Hit follow to keep an eye on what they post and quote."}
+          ? "Add a bio and a photo — your shelves say more with a voice behind them."
+          : "Hit follow to keep an eye on what they're reading."}
       </p>
     </TileShell>
   );
@@ -314,11 +296,11 @@ function AdminTile() {
       <ul className="mt-3 space-y-2 text-[13px] leading-relaxed text-foreground/85">
         <li>
           <Link href="/admin" className="font-semibold underline-offset-4 hover:underline">
-            Bot manager
+            Dashboard
           </Link>{" "}
-          — schedule personas, replies, auto-responses.
+          — readers, books, and broadcasts at a glance.
         </li>
-        <li>Force a tick if the feed feels sleepy.</li>
+        <li>Broadcasts land on every reader&apos;s home.</li>
       </ul>
     </TileShell>
   );
@@ -330,28 +312,13 @@ function FriendsHowToTile() {
       <Eyebrow label="Friends" tone="brand" icon={Users} />
       <p className="mt-2 text-[13px] leading-relaxed text-foreground/85">
         Search a username, send a request, and see what they&apos;re reading
-        the moment they post.
+        right now.
       </p>
       <ul className="mt-3 space-y-1.5 text-[12px] leading-relaxed text-muted">
         <li>· Requests show up here and in your notifications.</li>
-        <li>· Friends only sees public posts — nothing private.</li>
+        <li>· Shelves are shared; memories never are.</li>
         <li>· Remove anyone from the list anytime.</li>
       </ul>
-    </TileShell>
-  );
-}
-
-function FeedGrowTile() {
-  return (
-    <TileShell variant="dashed">
-      <Eyebrow label="Grow your feed" tone="cool" icon={Sprout} />
-      <p className="mt-2 text-[13px] leading-relaxed text-foreground/85">
-        Follow a few books from{" "}
-        <Link href="/" className="font-semibold underline-offset-4 hover:underline">
-          Explore
-        </Link>{" "}
-        and your top posts will feel made for you within a day.
-      </p>
     </TileShell>
   );
 }
@@ -360,15 +327,22 @@ function FeedGrowTile() {
 // Route → tile composition
 // ──────────────────────────────────────────────────────────────────────────────
 
-function tilesFor(pathname: string, authenticated: boolean): ReactNode[] {
+function tilesFor(
+  pathname: string,
+  authenticated: boolean,
+  username?: string
+): ReactNode[] {
   // 1) Routes that should not render a right rail at all.
   if (/^\/book\/[^/]+\/summary\/?$/.test(pathname)) return [];
   if (pathname.startsWith("/login") || pathname.startsWith("/register"))
     return [];
 
-  // 2) Per-route compositions.
-  // "/" is now the explore/home page; "/feed" is the social timeline.
-  if (pathname === "/" || pathname.startsWith("/?") || pathname.startsWith("/explore")) {
+  // 2) Per-route compositions. Home keeps announcements + one short tip.
+  if (pathname === "/" || pathname.startsWith("/?")) {
+    return [<ReelHowToTile key="gist" />];
+  }
+
+  if (pathname.startsWith("/explore")) {
     return [
       <ExploreDiscoverTile key="discover" />,
       <ExploreCommunitiesTile key="comm" />,
@@ -376,40 +350,18 @@ function tilesFor(pathname: string, authenticated: boolean): ReactNode[] {
     ];
   }
 
-  if (pathname.startsWith("/feed")) {
-    return [
-      <TodaysPromptTile key="prompt" />,
-      <GeneralTipTile key="tip" />,
-      <InstallPrompt key="install" variant="card" />,
-    ];
-  }
-
-  if (pathname.startsWith("/compose")) {
-    return [
-      <ComposePlaybookTile key="playbook" />,
-      <ComposeQuoteTile key="quote" />,
-    ];
-  }
-
-  if (pathname.startsWith("/post/")) {
-    return [
-      <ThreadEtiquetteTile key="thread" />,
-      <FeedGrowTile key="grow" />,
-    ];
-  }
-
   if (/^\/book\/[^/]+\/?$/.test(pathname)) {
     const slug = pathname.split("/")[2];
     return [
       <BookRoomTile key="book" slug={slug} />,
-      <ThreadEtiquetteTile key="thread" />,
+      <MemoriesTile key="memories" username={username} />,
     ];
   }
 
   if (pathname.startsWith("/profile/")) {
     return [
       <ProfileTipTile key="profile" ownProfile />,
-      <GeneralTipTile key="tip" />,
+      <TodaysPromptTile key="prompt" username={username} />,
     ];
   }
 
@@ -421,7 +373,7 @@ function tilesFor(pathname: string, authenticated: boolean): ReactNode[] {
   }
 
   if (pathname.startsWith("/admin")) {
-    return [<AdminTile key="admin" />, <FeedGrowTile key="grow" />];
+    return [<AdminTile key="admin" />, <GeneralTipTile key="tip" />];
   }
 
   // 3) Fallback for everything else (404, settings, etc.).
@@ -437,10 +389,10 @@ function tilesFor(pathname: string, authenticated: boolean): ReactNode[] {
 
 export function RightRail() {
   const pathname = usePathname() ?? "/";
-  const { status } = useSession();
+  const { data: session, status } = useSession();
   const authenticated = status === "authenticated";
 
-  const tiles = tilesFor(pathname, authenticated);
+  const tiles = tilesFor(pathname, authenticated, session?.user?.username);
   if (!tiles.length) return null;
 
   return (

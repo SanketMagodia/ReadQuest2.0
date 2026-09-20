@@ -23,8 +23,6 @@ import {
   Share2,
   Check,
   ChevronRight,
-  ChevronDown,
-  Flame,
   UserPlus,
   UserCheck,
   Clock,
@@ -35,17 +33,21 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
-import type { PostDTO } from "@/lib/serialize";
-import { PostCard } from "@/components/posts/PostCard";
+import type { MemoryDTO } from "@/lib/memories";
+import { MemoryCard } from "@/components/memories/MemoryCard";
+import {
+  MemoryComposeButton,
+  MemoryComposer,
+} from "@/components/memories/MemoryComposer";
 import {
   ProfileBookGrid,
   type ShelfBook,
 } from "@/components/profile/ProfileBookGrid";
 import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
-import { PostSkeletonList } from "@/components/feed/PostSkeleton";
 import { Reveal } from "@/components/ui/Reveal";
 import { resizeAvatar } from "@/lib/image";
 import { useMood } from "@/components/mood/MoodProvider";
+import { MoodSwitcher } from "@/components/mood/MoodSwitcher";
 import { Moon, Sun, VeiledSun } from "@/components/mood/scenery";
 import { useDm } from "@/components/dm/DmProvider";
 import { MobileAccountMenu } from "@/components/layout/MobileAccountMenu";
@@ -60,14 +62,12 @@ type PublicUser = {
   image?: string;
   bio: string;
   mood?: string;
-  streak?: { current: number; longest: number };
   followerCount?: number;
   followingCount?: number;
   createdAt?: string;
 };
 
 type ShelfCounts = {
-  posts: number;
   wantToRead: number;
   read: number;
   following: number;
@@ -522,14 +522,14 @@ export default function ProfilePage() {
 
   const [user, setUser] = useState<PublicUser | null>(null);
   const [loadedOnce, setLoadedOnce] = useState(false);
-  const [posts, setPosts] = useState<PostDTO[]>([]);
-  const [postsLoading, setPostsLoading] = useState(true);
+  const [memories, setMemories] = useState<MemoryDTO[]>([]);
+  const [memoriesLoading, setMemoriesLoading] = useState(true);
+  const [composeOpen, setComposeOpen] = useState(false);
   const [wantToRead, setWantToRead] = useState<ShelfBook[]>([]);
   const [readBooks, setReadBooks] = useState<ShelfBook[]>([]);
   const [recommendations, setRecommendations] = useState<RecommendedBook[]>([]);
   const [following, setFollowing] = useState<ShelfBook[]>([]);
   const [counts, setCounts] = useState<ShelfCounts>({
-    posts: 0,
     wantToRead: 0,
     read: 0,
     following: 0,
@@ -636,22 +636,40 @@ export default function ProfilePage() {
     };
   }, [isVisitor, username]);
 
+  // Memories are private, so they're only ever fetched for your own profile —
+  // the API would refuse anyway, but not asking keeps visitor loads lighter.
+  useEffect(() => {
+    if (!isSelf) {
+      setMemories([]);
+      setMemoriesLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setMemoriesLoading(true);
+    void (async () => {
+      try {
+        const res = await fetch("/api/memories", { cache: "no-store" });
+        if (!res.ok) return;
+        const j = (await res.json()) as { memories?: MemoryDTO[] };
+        if (!cancelled) setMemories(j.memories ?? []);
+      } finally {
+        if (!cancelled) setMemoriesLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isSelf, username]);
+
   useEffect(() => {
     async function load() {
-      setPostsLoading(true);
-      const [ru, rp, rs] = await Promise.all([
+      const [ru, rs] = await Promise.all([
         fetch(`/api/users/${encodeURIComponent(username)}`, { cache: "no-store" }),
-        fetch(`/api/posts?username=${encodeURIComponent(username)}`, {
-          cache: "no-store",
-        }),
         fetch(`/api/users/${encodeURIComponent(username)}/shelf`, {
           cache: "no-store",
         }),
       ]);
       const ujson = ru.ok ? await ru.json() : null;
-      const pjson = rp.ok
-        ? (((await rp.json()) as unknown) as { posts?: PostDTO[] }).posts
-        : [];
       const shelf = rs.ok
         ? ((await rs.json()) as {
             counts?: ShelfCounts;
@@ -678,7 +696,6 @@ export default function ProfilePage() {
       setMood(isMoodId(udoc?.mood) ? udoc.mood : "");
       setFollowerCount(udoc?.followerCount ?? 0);
       setFollowingCount(udoc?.followingCount ?? 0);
-      setPosts(Array.isArray(pjson) ? pjson : []);
       setWantToRead(shelf?.wantToRead ?? []);
       setReadBooks(shelf?.read ?? []);
       setRecommendations(
@@ -687,14 +704,12 @@ export default function ProfilePage() {
       setFollowing(shelf?.following ?? []);
       setCounts(
         shelf?.counts ?? {
-          posts: Array.isArray(pjson) ? pjson.length : 0,
           wantToRead: shelf?.wantToRead?.length ?? 0,
           read: shelf?.read?.length ?? 0,
           following: shelf?.following?.length ?? 0,
           recommendations: shelf?.recommendations?.length ?? 0,
         }
       );
-      setPostsLoading(false);
       setLoadedOnce(true);
     }
     void load();
@@ -1317,7 +1332,7 @@ export default function ProfilePage() {
               {user.bio || (isSelf ? "Add a bio so readers know your vibe." : "Quiet reader vibes.")}
             </p>
 
-            {/* One quiet meta row: mood chip + streak + member-since. The mood
+            {/* One quiet meta row: mood chip + member-since. The mood
                 chip is the switcher for you, read-only for visitors. */}
             <div className="mt-3.5 flex flex-wrap items-center gap-2">
               {isSelf ? (
@@ -1327,15 +1342,6 @@ export default function ProfilePage() {
                   mood={profileMood}
                   name={(user.name || user.username).split(" ")[0]}
                 />
-              ) : null}
-              {user.streak && user.streak.current > 0 ? (
-                <span
-                  className="inline-flex h-7 items-center gap-1.5 rounded-full border border-orange-500/30 bg-orange-500/10 px-3 text-[11px] font-bold uppercase tracking-wide text-orange-600 dark:text-orange-400"
-                  title={`Longest streak: ${user.streak.longest} days`}
-                >
-                  <Flame size={12} aria-hidden />
-                  {user.streak.current}-day streak
-                </span>
               ) : null}
               {joined ? (
                 <span className="inline-flex h-7 items-center gap-1.5 rounded-full bg-pill px-3 text-[11px] font-semibold uppercase tracking-wide text-muted">
@@ -1652,45 +1658,66 @@ export default function ProfilePage() {
         </Reveal>
       </section>
 
-      {/* ── Posts ───────────────────────────────────────────────────────────── */}
-      <section id="posts" className="mt-12 scroll-mt-24">
-        <Reveal>
-          <SectionHeader
-            icon={Grid3X3}
-            title="Posts"
-            count={counts.posts}
-            hint={isSelf ? "Your takes, gists and hot opinions." : "Their takes on what they're reading."}
-          />
-        </Reveal>
-        {postsLoading ? (
+      {/* ── Memories ────────────────────────────────────────────────────────
+          Private to the owner: visitors don't get the section at all, and the
+          API refuses to serve anyone else's rows regardless. */}
+      {isSelf ? (
+        <section id="memories" className="mt-8 scroll-mt-24">
+          <Reveal>
+            <SectionHeader
+              icon={Grid3X3}
+              title="Memories"
+              count={memories.length}
+              hint="Only you can see these."
+              action={
+                composeOpen ? null : (
+                  <MemoryComposeButton onClick={() => setComposeOpen(true)} />
+                )
+              }
+            />
+          </Reveal>
+
           <div className="px-2">
-            <PostSkeletonList count={3} />
+            <MemoryComposer
+              open={composeOpen}
+              onClose={() => setComposeOpen(false)}
+              onSaved={(memory) => setMemories((prev) => [memory, ...prev])}
+            />
           </div>
-        ) : posts.length ? (
-          <div className="flex flex-col gap-4 px-2">
-            {posts.map((p) => (
-              <PostCard
-                key={p.id}
-                post={p}
-                onDeleted={(postId) =>
-                  setPosts((prev) => prev.filter((row) => row.id !== postId))
-                }
+
+          {memoriesLoading ? (
+            <div className="mt-3 flex flex-col gap-2 px-2">
+              {Array.from({ length: 3 }, (_, i) => (
+                <div
+                  key={i}
+                  className="h-16 rounded-2xl border border-border skeleton-shimmer"
+                />
+              ))}
+            </div>
+          ) : memories.length ? (
+            <div className={`flex flex-col gap-2 px-2 ${composeOpen ? "mt-3" : ""}`}>
+              {memories.map((m) => (
+                <MemoryCard
+                  key={m.id}
+                  memory={m}
+                  onDeleted={(id) =>
+                    setMemories((prev) => prev.filter((row) => row.id !== id))
+                  }
+                />
+              ))}
+            </div>
+          ) : composeOpen ? null : (
+            <div className="mt-1">
+              <EmptyShelf
+                icon={<Grid3X3 size={18} aria-hidden />}
+                title="Nothing kept yet"
+                hint="Highlight a passage in a gist, or tap Keep a line."
+                cta={{ href: "/", label: "Open Gists" }}
               />
-            ))}
-          </div>
-        ) : (
-          <EmptyShelf
-            icon={<Grid3X3 size={18} aria-hidden />}
-            title="No posts yet"
-            hint={
-              isSelf
-                ? "Share a line from a book — head to Compose."
-                : "When they post, it'll show up here."
-            }
-            cta={isSelf ? { href: "/compose", label: "Compose a post" } : null}
-          />
-        )}
-      </section>
+            </div>
+          )}
+        </section>
+      ) : null}
 
       <ShelfModal
         openTab={shelfModalTab}
@@ -1735,141 +1762,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-/** Always-visible mood switcher on your own profile (mood is changed often, so
- *  it lives outside the edit form). A compact chip that sits in the header's
- *  meta row; opens a popover of the 8 moods and saving re-themes the app. */
-function MoodSwitcher({
-  value,
-  onChange,
-}: {
-  value: "" | MoodId;
-  onChange: (mood: "" | MoodId) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function onDoc(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
-    }
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
-  const current = value ? MOOD_MAP[value] : null;
-  const swatch = current ? current.swatch : (["#94a3b8", "#475569"] as const);
-
-  return (
-    <div ref={ref} className="relative shrink-0">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        aria-haspopup="menu"
-        title={current ? `${current.label} — ${current.blurb}` : "Set your reading mood"}
-        className="relative inline-flex h-7 items-center gap-1.5 overflow-hidden rounded-full border border-border px-3 text-left transition hover:brightness-105 active:translate-y-px"
-      >
-        <span
-          aria-hidden
-          className="absolute inset-0"
-          style={{
-            background: `linear-gradient(135deg, ${swatch[0]} 0%, ${swatch[1]} 100%)`,
-            opacity: current ? 0.18 : 0.1,
-          }}
-        />
-        <span aria-hidden className="relative text-sm leading-none">
-          {current ? current.emoji : "🎭"}
-        </span>
-        <span className="relative max-w-32 truncate text-[11px] font-bold uppercase tracking-wide">
-          {current ? current.label : "Set a mood"}
-        </span>
-        <ChevronDown
-          size={12}
-          aria-hidden
-          className={`relative text-muted transition ${open ? "rotate-180" : ""}`}
-        />
-      </button>
-
-      {open ? (
-        <div
-          role="menu"
-          className="absolute left-0 z-30 mt-2 w-[min(20rem,calc(100vw-2rem))] rounded-2xl border border-border bg-card p-3 shadow-[var(--shadow-pop)]"
-        >
-          <div className="mb-2 flex items-center justify-between">
-            <p className="text-[11px] font-bold uppercase tracking-wide text-muted">
-              Reading mood
-            </p>
-            {value ? (
-              <button
-                type="button"
-                onClick={() => {
-                  onChange("");
-                  setOpen(false);
-                }}
-                className="text-[11px] font-semibold text-muted underline-offset-2 hover:text-foreground hover:underline"
-              >
-                Clear
-              </button>
-            ) : null}
-          </div>
-          <p className="mb-2 text-[11px] text-muted">
-            Themes your whole space — visitors briefly feel it too.
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            {MOODS.map((m) => {
-              const selected = value === m.id;
-              return (
-                <button
-                  key={m.id}
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={selected}
-                  onClick={() => {
-                    onChange(m.id);
-                    setOpen(false);
-                  }}
-                  title={m.blurb}
-                  className={`group relative overflow-hidden rounded-xl border p-2 text-left transition ${
-                    selected ? "border-transparent ring-2 ring-[var(--ring)]" : "border-border hover:bg-hover"
-                  }`}
-                >
-                  <span
-                    aria-hidden
-                    className="absolute inset-0"
-                    style={{
-                      background: `linear-gradient(135deg, ${m.swatch[0]} 0%, ${m.swatch[1]} 100%)`,
-                      opacity: selected ? 0.22 : 0.1,
-                    }}
-                  />
-                  <span className="relative flex items-center gap-1.5">
-                    <span aria-hidden className="text-sm">
-                      {m.emoji}
-                    </span>
-                    <span className="truncate text-[12px] font-bold">{m.label}</span>
-                  </span>
-                  <span className="relative mt-0.5 block truncate text-[10px] text-muted">
-                    {m.blurb}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-/** Read-only mood chip shown to visitors — matches the owner's switcher chip,
- *  with the blurb available on hover. */
 /**
  * The club this reader belongs to, badged on their profile. Owners get the
  * louder treatment since the club is theirs; members get the same card in a

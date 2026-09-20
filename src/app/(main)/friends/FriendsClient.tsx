@@ -32,10 +32,10 @@ type Friend = {
   friendshipId: string;
   user: UserLite;
   since: string;
+  /** The last book they put on a shelf — our stand-in for "reading now". */
   reading: {
-    postId: string;
-    preview: string;
-    createdAt: string;
+    status: "want" | "read";
+    at: string;
     book: {
       id: string;
       slug: string;
@@ -364,12 +364,12 @@ function FriendsList({
 
               {f.reading ? (
                 <Link
-                  href={`/post/${f.reading.postId}`}
+                  href={`/book/${f.reading.book.slug || f.reading.book.id}`}
                   className="mt-2 block rounded-2xl border border-border/70 bg-pill px-3 py-2.5 transition hover:border-sky-400/50"
                 >
                   <p className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
                     <BookOpen size={11} aria-hidden />
-                    Reading now
+                    {f.reading.status === "read" ? "Just finished" : "Reading now"}
                   </p>
                   <p className="mt-1 truncate text-sm font-semibold text-foreground">
                     {f.reading.book.title}
@@ -379,13 +379,8 @@ function FriendsList({
                       {f.reading.book.authors.split(";")[0]}
                     </p>
                   ) : null}
-                  {f.reading.preview ? (
-                    <p className="mt-1 line-clamp-2 text-[12px] text-muted">
-                      &ldquo;{f.reading.preview}&rdquo;
-                    </p>
-                  ) : null}
                   <p className="mt-1 text-[10px] text-muted">
-                    {timeAgo(f.reading.createdAt)}
+                    {timeAgo(f.reading.at)}
                   </p>
                 </Link>
               ) : (

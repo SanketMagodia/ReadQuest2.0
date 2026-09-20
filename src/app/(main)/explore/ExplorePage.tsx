@@ -15,12 +15,12 @@ import {
 } from "react";
 import {
   ArrowDownUp,
+  Bookmark,
   ChevronDown,
   ExternalLink,
   Flame,
   Globe,
   ListFilter,
-  MessageSquare,
   Plus,
   RefreshCw,
   Sparkles,
@@ -30,12 +30,6 @@ import { useSession } from "next-auth/react";
 import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
 import { Reveal } from "@/components/ui/Reveal";
 import { useInfiniteScroll } from "@/lib/hooks/useInfiniteScroll";
-import {
-  DailyBookCard,
-  DailyQuestMini,
-  DailyQuoteStrip,
-  type DailyQuote,
-} from "@/components/feed/DailyBookCard";
 import { ClubHomeCard } from "@/components/clubs/ClubHomeCard";
 import type { ClubSummary } from "@/lib/clubs";
 import { JoinReadquestFeedCard } from "@/components/auth/UnlockFeatures";
@@ -96,8 +90,9 @@ type Community = {
   authors: string;
   thumbnail: string;
   category: string;
-  postCount: number;
-  commentCount: number;
+  shelved: number;
+  followers: number;
+  readers: number;
   engagedUsers: number;
   lastActivityAt: string;
 };
@@ -146,7 +141,6 @@ export default function ExplorePage() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiResult, setAiResult] = useState<VibeResult | null>(null);
-  const [dailyQuote, setDailyQuote] = useState<DailyQuote | null>(null);
   const [myClub, setMyClub] = useState<ClubSummary | null>(null);
   const showsClub = !isGuest && Boolean(myClub);
   const seqRef = useRef(0);
@@ -154,8 +148,7 @@ export default function ExplorePage() {
   const prevQRef = useRef(q);
   const prevCategoryRef = useRef(category);
 
-  // A club takes over the quest slot on Home, so we need to know early
-  // whether this reader is in one.
+  // A club sits beside the NYT top picks when the reader is in one.
   useEffect(() => {
     if (status !== "authenticated") {
       setMyClub(null);
@@ -568,40 +561,28 @@ export default function ExplorePage() {
         />
       ) : null}
 
-      {/* Daily quest (or a join CTA for guests) leads Home with the NYT top
-          books alongside it ΓÇö side by side, padded on mobile, full-bleed on
-          desktop, and stretched to equal height. Readers in a club get their
-          club room in that slot instead, the quest shrinks to a pill beside
-          today's line, and the pair stacks on phones. */}
+      {/* Club (or a join CTA for guests) sits beside the NYT top picks. */}
       {!isSearching ? (
         <Reveal>
           <div className="flex flex-col gap-3 layout-wide:-mx-4 lg:gap-4">
-            {dailyQuote || myClub ? (
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  {dailyQuote ? <DailyQuoteStrip quote={dailyQuote} /> : null}
-                </div>
-                {myClub ? <DailyQuestMini onQuote={setDailyQuote} /> : null}
-              </div>
-            ) : null}
             <div
               className={`grid items-stretch gap-3 lg:gap-4 ${
-                showsClub
-                  ? // On phones the club shrinks to a cover-sized tile, so it
-                    // only needs a 30% sliver and Top 5 takes the rest.
-                    "grid-cols-[minmax(0,3fr)_minmax(0,7fr)] layout-wide:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]"
-                  : "grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]"
+                isGuest || showsClub
+                  ? showsClub
+                    ? "grid-cols-[minmax(0,3fr)_minmax(0,7fr)] layout-wide:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]"
+                    : "grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]"
+                  : "grid-cols-1"
               }`}
             >
-              <div className="h-full min-w-0">
-                {isGuest ? (
+              {isGuest ? (
+                <div className="h-full min-w-0">
                   <JoinReadquestFeedCard />
-                ) : myClub ? (
+                </div>
+              ) : myClub ? (
+                <div className="h-full min-w-0">
                   <ClubHomeCard club={myClub} />
-                ) : (
-                  <DailyBookCard onQuote={setDailyQuote} />
-                )}
-              </div>
+                </div>
+              ) : null}
               <NytTopPicks />
             </div>
           </div>
@@ -990,9 +971,9 @@ function CommunityCard({
         ) : null}
         <div className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-2 text-[11px] text-muted">
           <span className="inline-flex items-center gap-1 rounded-full bg-pill px-1.5 py-0.5 font-semibold text-foreground/85">
-            <MessageSquare size={11} aria-hidden />
-            <span className="tabular-nums">{community.postCount}</span>
-            <span>posts</span>
+            <Bookmark size={11} aria-hidden />
+            <span className="tabular-nums">{community.shelved}</span>
+            <span>shelved</span>
           </span>
           <span className="inline-flex items-center gap-1 rounded-full bg-pill px-1.5 py-0.5 font-semibold text-foreground/85">
             <Users size={11} aria-hidden />

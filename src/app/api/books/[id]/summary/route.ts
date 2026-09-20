@@ -6,29 +6,22 @@ import Book from "@/models/Book";
 import BookSummary from "@/models/BookSummary";
 import UserBookSummary from "@/models/UserBookSummary";
 import { getAppSession } from "@/lib/session";
-import { llmChat, isLlmConfigured, llmModel, LlmError } from "@/lib/llm";
+import { isLlmConfigured, LlmError } from "@/lib/llm";
 import { looksLikeObjectId } from "@/lib/slug";
+import {
+  DEFAULT_SHARED_BRIEF,
+  generateSummary,
+  upsertSharedSummary,
+  wordCount,
+  type SummaryBook,
+} from "@/lib/book-summary";
 
-type BookLean = {
-  _id: Types.ObjectId;
-  slug?: string;
-  title: string;
-  authors?: string;
-  categories?: string;
-  description?: string;
-  publishedYear?: number;
-};
-
-async function resolveBook(input: string): Promise<BookLean | null> {
+async function resolveBook(input: string): Promise<SummaryBook | null> {
   await connectDB();
   if (looksLikeObjectId(input)) {
-    return (await Book.findById(input).lean()) as BookLean | null;
+    return (await Book.findById(input).lean()) as SummaryBook | null;
   }
-  return (await Book.findOne({ slug: input }).lean()) as BookLean | null;
-}
-
-function wordCount(s: string) {
-  return (s.match(/\S+/g) || []).length;
+  return (await Book.findOne({ slug: input }).lean()) as SummaryBook | null;
 }
 
 type SummaryDTO = {
@@ -113,82 +106,6 @@ const generateSchema = z.object({
   force: z.boolean().optional().default(false),
 });
 
-const DEFAULT_SHARED_BRIEF =
-  "Write a tight, distilled retelling of the book in the book's own voice — like a miniature edition of the book itself.";
-
-function buildSummaryPrompts(book: BookLean, scope: "shared" | "personal", userPrompt: string) {
-  const desc = (book.description || "").slice(0, 1800);
-  const isFiction =
-    /(fiction|novel|stories|fantasy|sci.?fi|mystery|romance|thriller|literature|poetry)/i.test(
-      book.categories || ""
-    );
-
-  const system = [
-    "You are condensing a book into a MINI-BOOK for a reading community called The Gist Club (TGC).",
-    "The output should READ LIKE THE BOOK, not like a summary.",
-    "",
-    "VOICE",
-    "- Mirror the book's prose style, tense, and tone. If the book is lyrical, be lyrical. If it's hard-boiled, be terse. If it's academic, be measured.",
-    "- Use the book's vocabulary and sentence rhythm. Quote it sparingly when a line really matters.",
-    isFiction
-      ? "- Tell the story as a story — characters acting, scenes turning, time moving forward."
-      : "- Carry the argument as the author carries it — ideas unfolding, examples landing, conclusions earned.",
-    "- Spoilers are expected — the reader opted in to the full experience.",
-    "",
-    "FORBIDDEN",
-    "- Do NOT use meta-summary section labels like 'Snapshot', 'Plot', 'Characters', 'Themes', 'Style', 'Setup', 'Overview', 'Conclusion', 'Analysis', 'Takeaways', 'Synopsis'.",
-    "- Do NOT write analytical commentary about the book ('this novel explores…', 'the author argues…').",
-    "- Do NOT write a preamble. Start in-scene or in-idea, like the book itself opens.",
-    "- Do NOT echo the book's title or author as a heading.",
-    "- Do NOT wrap the answer in code fences.",
-    "",
-    "FORMAT",
-    "- Markdown. ~900–1400 words.",
-    "- 4–7 chapter-like sections. Each is given a SHORT, ATMOSPHERIC heading drawn from the book's content (e.g. `## The Island`, `## What She Knew`, `## Free Will Is a Useful Fiction`). Never use generic labels.",
-    "- Inside each section: flowing prose, short paragraphs. The pace should feel like reading the book at 5× speed — beats and turning points kept, connective tissue cut.",
-    "- A `> short line` blockquote is OK once or twice when a single phrase carries the chapter's weight. Skip it if forced.",
-    "- A `---` line on its own creates an ornamental pause. Use at most one between major movements.",
-    "- `**bold**` only for a name first introduced or a single phrase that hits — sparingly.",
-    "",
-    "GOAL",
-    "The reader closes this and feels like they've actually read the book — emotionally, intellectually — only faster.",
-  ].join("\n");
-
-  const customLine =
-    scope === "personal"
-      ? userPrompt ||
-        "Reshape it through a personal angle of your choosing — a character's first-person POV, a thematic lens, a different tone — while keeping it readable as a mini-book."
-      : userPrompt || DEFAULT_SHARED_BRIEF;
-
-  const user = [
-    "Book metadata (your context — never echo as a heading):",
-    `Title: ${book.title}`,
-    book.authors ? `Author: ${book.authors}` : "",
-    book.publishedYear ? `Published: ${book.publishedYear}` : "",
-    book.categories ? `Categories: ${book.categories}` : "",
-    desc ? `Publisher blurb (reference only — expand far beyond this): ${desc}` : "",
-    "",
-    scope === "personal"
-      ? `Reader's request for THIS personal version: ${customLine}`
-      : `Voice direction: ${customLine}`,
-    "",
-    "Write the mini-book now. Open on the first chapter heading.",
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  return { system, user };
-}
-
-function cleanSummary(raw: string) {
-  let s = raw.trim();
-  // Strip accidental code-fence wrappers.
-  s = s.replace(/^```(?:markdown|md)?\s*\n/i, "").replace(/\n```\s*$/i, "");
-  // Strip leading "Summary:" labels.
-  s = s.replace(/^(summary|overview)\s*[:\-—]\s*/i, "");
-  return s.trim();
-}
-
 /**
  * POST: generate (or regenerate) a summary.
  *  - `scope: "shared"` requires auth (any signed-in user kicks off the first
@@ -250,45 +167,26 @@ export async function POST(
     );
   }
 
-  const { system, user } = buildSummaryPrompts(book, scope, prompt);
-
   try {
-    const completion = await llmChat(
-      [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-      { temperature: 0.85, maxTokens: 2400 }
+    const { content, wordCount: wc, model } = await generateSummary(
+      book,
+      scope,
+      prompt
     );
-    const content = cleanSummary(completion);
-    if (!content) {
-      return NextResponse.json(
-        { error: "AI returned an empty summary — try again." },
-        { status: 502 }
-      );
-    }
-
-    const wc = wordCount(content);
 
     if (scope === "shared") {
-      const upserted = await BookSummary.findOneAndUpdate(
-        { book: book._id },
-        {
-          $set: {
-            content,
-            prompt: prompt || DEFAULT_SHARED_BRIEF,
-            model: llmModel(),
-            generatedBy: new Types.ObjectId(session.user.id),
-            wordCount: wc,
-          },
-          $inc: { version: 1 },
-        },
-        { upsert: true, new: true }
-      );
+      const upserted = await upsertSharedSummary({
+        book: book._id,
+        content,
+        prompt,
+        model,
+        wordCount: wc,
+        generatedBy: new Types.ObjectId(session.user.id),
+      });
 
       return NextResponse.json({
         summary: {
-          id: upserted!._id.toString(),
+          id: upserted._id.toString(),
           content,
           prompt: prompt || DEFAULT_SHARED_BRIEF,
           scope: "shared" as const,
@@ -306,7 +204,7 @@ export async function POST(
         $set: {
           content,
           prompt,
-          model: llmModel(),
+          model,
           wordCount: wc,
         },
       },

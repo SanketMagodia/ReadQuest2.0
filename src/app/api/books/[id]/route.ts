@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { Types } from "mongoose";
 import connectDB from "@/lib/db";
 import Book from "@/models/Book";
-import Post from "@/models/Post";
+import ReadList from "@/models/ReadList";
 import { looksLikeObjectId } from "@/lib/slug";
 
 /**
@@ -24,7 +24,7 @@ export async function GET(
     if (!book) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     const _id = (book._id as Types.ObjectId).toString();
-    const postCount = await Post.countDocuments({ book: _id });
+    const shelvedCount = await ReadList.countDocuments({ book: _id });
 
     return NextResponse.json({
       book: {
@@ -42,7 +42,7 @@ export async function GET(
         ratingsCount: book.ratingsCount,
         source: book.source,
       },
-      postCount,
+      shelvedCount,
     });
   } catch {
     return NextResponse.json({ error: "Server error" }, { status: 500 });

@@ -1,7 +1,7 @@
 import mongoose, { Schema, models, model, type InferSchemaType } from "mongoose";
 
 /**
- * One short, inspiring line per book, cached so the daily quest can show it
+ * One short, inspiring line per book, cached so a card can show it
  * without paying for a model call on every page load.
  *
  * `verbatim` records whether the line is an actual sentence from the book or a

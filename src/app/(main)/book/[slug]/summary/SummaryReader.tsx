@@ -14,6 +14,8 @@ import { useSession } from "next-auth/react";
 import {
   ArrowLeft,
   BookOpen,
+  BookmarkPlus,
+  Check,
   RefreshCw,
   User as UserIcon,
   Users,
@@ -22,6 +24,7 @@ import {
 import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
 import {
   trackGenerateSummary,
+  trackMemorySaved,
   trackViewSummary,
 } from "@/lib/analytics-events";
 
@@ -84,6 +87,8 @@ export function SummaryReader({
   const articleRef = useRef<HTMLDivElement | null>(null);
   const scopeCardRef = useRef<HTMLElement | null>(null);
   const [progress, setProgress] = useState(0);
+  const [selection, setSelection] = useState("");
+  const [kept, setKept] = useState(false);
 
   const refresh = useCallback(async () => {
     setError(null);
@@ -186,6 +191,39 @@ export function SummaryReader({
       void refresh();
     }
   };
+
+  const captureSelection = useCallback(() => {
+    const root = articleRef.current;
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed) return;
+    const text = sel.toString().trim();
+    if (text.length <= 3) return;
+    const node = sel.anchorNode;
+    if (!root || !node || !root.contains(node)) return;
+    setSelection(text.slice(0, 2000));
+    setKept(false);
+  }, []);
+
+  const keepSelection = useCallback(async () => {
+    if (!selection || !authenticated) return;
+    const res = await fetch("/api/memories", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bookId, quote: selection }),
+    });
+    if (res.ok) {
+      trackMemorySaved(bookId, "summary");
+      setKept(true);
+      setSelection("");
+      window.getSelection()?.removeAllRanges();
+    }
+  }, [authenticated, bookId, selection]);
+
+  useEffect(() => {
+    if (!kept) return;
+    const t = window.setTimeout(() => setKept(false), 2400);
+    return () => window.clearTimeout(t);
+  }, [kept]);
 
   const renderedBody = useMemo(
     () => (active?.content ? renderMarkdown(active.content) : null),
@@ -393,7 +431,12 @@ export function SummaryReader({
         </section>
 
         {/* Body */}
-        <article ref={articleRef} className="mb-16">
+        <article
+          ref={articleRef}
+          className="mb-16"
+          onMouseUp={captureSelection}
+          onTouchEnd={captureSelection}
+        >
           {data === null ? (
             <LoadingIndicator label="Loading summary…" />
           ) : active ? (
@@ -440,6 +483,33 @@ export function SummaryReader({
           ) : null}
         </article>
       </main>
+
+      {selection || kept ? (
+        <div className="pointer-events-none fixed inset-x-0 bottom-[calc(var(--bottomnav-h)+0.75rem)] z-40 flex justify-center px-3 layout-wide:bottom-6">
+          {kept ? (
+            <p className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-[13px] font-semibold text-emerald-700 shadow-[var(--shadow-soft)] backdrop-blur-sm dark:text-emerald-300">
+              <Check size={15} aria-hidden /> Kept in your memories
+            </p>
+          ) : authenticated ? (
+            <button
+              type="button"
+              onClick={() => void keepSelection()}
+              className="pointer-events-auto inline-flex cursor-pointer items-center gap-2 rounded-full border border-border/70 bg-card/90 px-4 py-2 text-[13px] font-semibold text-foreground shadow-[var(--shadow-soft)] backdrop-blur-sm transition hover:bg-hover"
+            >
+              <BookmarkPlus size={15} aria-hidden />
+              Keep this line
+            </button>
+          ) : (
+            <Link
+              href="/login"
+              className="pointer-events-auto inline-flex cursor-pointer items-center gap-2 rounded-full border border-border/70 bg-card/90 px-4 py-2 text-[13px] font-semibold text-foreground shadow-[var(--shadow-soft)] backdrop-blur-sm transition hover:bg-hover"
+            >
+              <BookmarkPlus size={15} aria-hidden />
+              Sign in to keep this line
+            </Link>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

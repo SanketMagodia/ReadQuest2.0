@@ -1,88 +1,108 @@
-import { Types } from "mongoose";
+import { Types, type PipelineStage } from "mongoose";
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/db";
-import Post from "@/models/Post";
-import Comment from "@/models/Comment";
 import Book from "@/models/Book";
+import BookFollow from "@/models/BookFollow";
+import ReadList from "@/models/ReadList";
+import ReelImpression from "@/models/ReelImpression";
 
-/**
- * Returns the most active book "communities": books with the most threads
- * and engaged people (posters + commenters). Activity is sorted by recency-
- * weighted score so a book that just woke up still surfaces.
- */
-export async function GET(req: Request) {
-  const url = new URL(req.url);
-  const limit = Math.min(Math.max(Number(url.searchParams.get("limit") || 6), 1), 24);
+type Rollup = {
+  _id: Types.ObjectId;
+  count: number;
+  users: Types.ObjectId[];
+  lastAt: Date;
+};
 
-  await connectDB();
-
-  // 1) Roll up posts by book — postCount, distinct authors, last post.
-  //    We pull a wider candidate set than `limit` so we can still rank well
-  //    after combining post + comment signals below.
-  const candidatePoolSize = Math.max(limit * 4, 16);
-  const rollup = (await Post.aggregate([
+/** One `$group` shape reused across the three signal collections. */
+function groupByBook(
+  match: Record<string, unknown>,
+  poolSize: number
+): PipelineStage[] {
+  return [
+    ...(Object.keys(match).length ? [{ $match: match }] : []),
     {
       $group: {
         _id: "$book",
-        postCount: { $sum: 1 },
-        postAuthors: { $addToSet: "$author" },
-        postIds: { $push: "$_id" },
-        lastPostAt: { $max: "$createdAt" },
+        count: { $sum: 1 },
+        users: { $addToSet: "$user" },
+        lastAt: { $max: "$updatedAt" },
       },
     },
-    { $sort: { postCount: -1, lastPostAt: -1 } },
-    { $limit: candidatePoolSize },
-  ])) as Array<{
-    _id: Types.ObjectId;
-    postCount: number;
-    postAuthors: Types.ObjectId[];
-    postIds: Types.ObjectId[];
-    lastPostAt: Date;
-  }>;
+    { $sort: { count: -1, lastAt: -1 } },
+    { $limit: poolSize },
+  ];
+}
 
-  if (!rollup.length) {
+/**
+ * The book rooms readers are actually gathering in.
+ *
+ * With the public timeline gone, "activity" is what people do with a book
+ * rather than what they say about it: shelving it, following it, and getting
+ * through its gist. Ranking is recency-weighted so a book that just woke up
+ * still surfaces above one that was busy last year.
+ */
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const limit = Math.min(
+    Math.max(Number(url.searchParams.get("limit") || 6), 1),
+    24
+  );
+
+  await connectDB();
+
+  // A wider candidate set than `limit` so the merged ranking still has room
+  // to reorder once all three signals are combined.
+  const poolSize = Math.max(limit * 4, 16);
+
+  const [shelves, follows, reads] = (await Promise.all([
+    ReadList.aggregate(groupByBook({}, poolSize)),
+    BookFollow.aggregate(groupByBook({}, poolSize)),
+    ReelImpression.aggregate(
+      groupByBook({ action: { $in: ["read", "saved"] } }, poolSize)
+    ),
+  ])) as [Rollup[], Rollup[], Rollup[]];
+
+  type Merged = {
+    shelved: number;
+    followers: number;
+    readers: number;
+    people: Set<string>;
+    lastAt: Date;
+  };
+  const byBook = new Map<string, Merged>();
+
+  const absorb = (rows: Rollup[], key: "shelved" | "followers" | "readers") => {
+    for (const row of rows) {
+      const id = row._id?.toString();
+      if (!id) continue;
+      const entry =
+        byBook.get(id) ??
+        ({
+          shelved: 0,
+          followers: 0,
+          readers: 0,
+          people: new Set<string>(),
+          lastAt: new Date(0),
+        } satisfies Merged);
+      entry[key] += row.count;
+      for (const u of row.users ?? []) entry.people.add(u.toString());
+      const last = row.lastAt ? new Date(row.lastAt) : new Date(0);
+      if (last > entry.lastAt) entry.lastAt = last;
+      byBook.set(id, entry);
+    }
+  };
+
+  absorb(shelves, "shelved");
+  absorb(follows, "followers");
+  absorb(reads, "readers");
+
+  if (!byBook.size) {
     return NextResponse.json({ communities: [] });
   }
 
-  // 2) Pull every comment in the candidate post universe, group by book.
-  const postToBook = new Map<string, string>();
-  const allPostIds: Types.ObjectId[] = [];
-  for (const row of rollup) {
-    const bookId = row._id.toString();
-    for (const pid of row.postIds) {
-      postToBook.set(pid.toString(), bookId);
-      allPostIds.push(pid);
-    }
-  }
-
-  type CommentLean = { post: Types.ObjectId; author: Types.ObjectId; createdAt: Date };
-  const commentRows = (await Comment.find({ post: { $in: allPostIds } })
-    .select("post author createdAt")
-    .lean()) as CommentLean[];
-
-  type CommentAgg = {
-    commentCount: number;
-    authors: Set<string>;
-    lastCommentAt: Date | null;
-  };
-  const commentByBook = new Map<string, CommentAgg>();
-  for (const c of commentRows) {
-    const bookId = postToBook.get(c.post.toString());
-    if (!bookId) continue;
-    let entry = commentByBook.get(bookId);
-    if (!entry) {
-      entry = { commentCount: 0, authors: new Set(), lastCommentAt: null };
-      commentByBook.set(bookId, entry);
-    }
-    entry.commentCount += 1;
-    entry.authors.add(c.author.toString());
-    if (!entry.lastCommentAt || c.createdAt > entry.lastCommentAt) {
-      entry.lastCommentAt = c.createdAt;
-    }
-  }
-
-  // 3) Resolve book metadata in one query.
-  const books = (await Book.find({ _id: { $in: rollup.map((r) => r._id) } })
+  const books = (await Book.find({
+    _id: { $in: [...byBook.keys()].map((id) => new Types.ObjectId(id)) },
+  })
     .select("_id slug title authors categories thumbnail")
     .lean()) as Array<{
     _id: Types.ObjectId;
@@ -92,35 +112,17 @@ export async function GET(req: Request) {
     categories?: string;
     thumbnail?: string;
   }>;
-  const bookMap = new Map(books.map((b) => [b._id.toString(), b]));
 
-  // 4) Score = post weight + comment weight + distinct people, with mild recency boost.
   const now = Date.now();
-  const merged = rollup
-    .map((r) => {
-      const bookId = r._id.toString();
-      const book = bookMap.get(bookId);
-      if (!book) return null;
+  const merged = books
+    .map((book) => {
+      const id = book._id.toString();
+      const agg = byBook.get(id);
+      if (!agg) return null;
 
-      const commentAgg = commentByBook.get(bookId);
-      const commentCount = commentAgg?.commentCount ?? 0;
-      const allAuthors = new Set<string>(
-        r.postAuthors.map((a) => a.toString())
-      );
-      if (commentAgg) {
-        for (const a of commentAgg.authors) allAuthors.add(a);
-      }
-      const engagedUsers = allAuthors.size;
-
-      const lastActivityAtDate =
-        commentAgg?.lastCommentAt && commentAgg.lastCommentAt > r.lastPostAt
-          ? commentAgg.lastCommentAt
-          : r.lastPostAt;
-      const ageH = (now - new Date(lastActivityAtDate).getTime()) / 3_600_000;
-      const recency = 6 * Math.exp(-ageH / 168); // half-life ~ 1 week
-
-      const score =
-        r.postCount * 2 + commentCount * 1.2 + engagedUsers * 1.5 + recency;
+      const ageH = (now - agg.lastAt.getTime()) / 3_600_000;
+      const recency = 6 * Math.exp(-ageH / 168); // half-life ≈ 1 week
+      const engagedUsers = agg.people.size;
 
       const categories = (book.categories || "")
         .split(",")
@@ -128,26 +130,32 @@ export async function GET(req: Request) {
         .filter(Boolean);
 
       return {
-        id: bookId,
-        slug: book.slug ?? bookId,
+        id,
+        slug: book.slug ?? id,
         title: book.title,
         authors: book.authors ?? "",
         thumbnail: book.thumbnail ?? "",
         category: categories[0] ?? "",
-        postCount: r.postCount,
-        commentCount,
+        shelved: agg.shelved,
+        followers: agg.followers,
+        readers: agg.readers,
         engagedUsers,
-        lastActivityAt: new Date(lastActivityAtDate).toISOString(),
-        score,
+        lastActivityAt: agg.lastAt.toISOString(),
+        score:
+          agg.shelved * 2 +
+          agg.followers * 1.5 +
+          agg.readers * 1.2 +
+          engagedUsers * 1.5 +
+          recency,
       };
     })
     .filter((x): x is NonNullable<typeof x> => x !== null);
 
   merged.sort((a, b) => b.score - a.score);
-  const top = merged.slice(0, limit).map(({ score: _score, ...rest }) => {
+  const communities = merged.slice(0, limit).map(({ score: _score, ...rest }) => {
     void _score;
     return rest;
   });
 
-  return NextResponse.json({ communities: top });
+  return NextResponse.json({ communities });
 }

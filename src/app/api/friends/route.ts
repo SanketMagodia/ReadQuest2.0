@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { getAppSession } from "@/lib/session";
 import connectDB from "@/lib/db";
 import User from "@/models/User";
-import Post from "@/models/Post";
+import ReadList from "@/models/ReadList";
 import "@/models/Book";
 import Friendship from "@/models/Friendship";
 
@@ -15,18 +15,17 @@ type BookLite = {
   thumbnail?: string;
 };
 
-type LatestPost = {
-  _id: Types.ObjectId;
-  author: Types.ObjectId;
-  book: BookLite | null;
-  content: string;
-  createdAt: Date;
+type LatestShelving = {
+  book: BookLite;
+  status: "want" | "read";
+  at: Date;
 };
 
 /**
- * List the viewer's accepted friends, each with their most recent post (so the
- * UI can say "Alice is reading X" without a second round trip). One Friendship
- * scan + one User populate + one Post aggregation (latest-per-author).
+ * List the viewer's accepted friends, each with the last book they shelved (so
+ * the UI can say "Alice is reading X" without a second round trip). One
+ * Friendship scan + one User populate + one ReadList aggregation
+ * (latest-per-user).
  */
 export async function GET() {
   const session = await getAppSession();
@@ -74,20 +73,20 @@ export async function GET() {
     >();
   const userMap = new Map(users.map((u) => [u._id.toString(), u]));
 
-  // Most recent post per friend (used as a lightweight "reading now" hint).
-  const latestRows = (await Post.aggregate([
-    { $match: { author: { $in: friendIds } } },
-    { $sort: { createdAt: -1 } },
+  // Most recently shelved book per friend — the lightweight "reading now" hint.
+  const latestRows = (await ReadList.aggregate([
+    { $match: { user: { $in: friendIds } } },
+    { $sort: { updatedAt: -1 } },
     {
       $group: {
-        _id: "$author",
-        post: { $first: "$$ROOT" },
+        _id: "$user",
+        entry: { $first: "$$ROOT" },
       },
     },
     {
       $lookup: {
         from: "books",
-        localField: "post.book",
+        localField: "entry.book",
         foreignField: "_id",
         as: "book",
       },
@@ -95,18 +94,17 @@ export async function GET() {
     { $unwind: { path: "$book", preserveNullAndEmptyArrays: true } },
   ])) as {
     _id: Types.ObjectId;
-    post: { _id: Types.ObjectId; content: string; createdAt: Date };
+    entry: { status?: "want" | "read"; updatedAt: Date };
     book?: BookLite;
   }[];
 
-  const latestByAuthor = new Map<string, LatestPost>();
+  const latestByUser = new Map<string, LatestShelving>();
   for (const row of latestRows) {
-    latestByAuthor.set(row._id.toString(), {
-      _id: row.post._id,
-      author: row._id,
-      book: row.book ?? null,
-      content: row.post.content,
-      createdAt: row.post.createdAt,
+    if (!row.book) continue;
+    latestByUser.set(row._id.toString(), {
+      book: row.book,
+      status: row.entry.status ?? "want",
+      at: row.entry.updatedAt,
     });
   }
 
@@ -115,7 +113,7 @@ export async function GET() {
       e.requester.equals(me) ? e.recipient : e.requester
     ).toString();
     const u = userMap.get(otherId);
-    const latest = latestByAuthor.get(otherId) ?? null;
+    const latest = latestByUser.get(otherId) ?? null;
     return {
       friendshipId: e._id.toString(),
       user: u
@@ -128,11 +126,10 @@ export async function GET() {
           }
         : { id: otherId, username: "unknown", name: "Unknown", image: null, bio: "" },
       since: (e.acceptedAt ?? e.createdAt).toISOString(),
-      reading: latest && latest.book
+      reading: latest
         ? {
-            postId: latest._id.toString(),
-            preview: latest.content.slice(0, 220),
-            createdAt: latest.createdAt.toISOString(),
+            status: latest.status,
+            at: latest.at.toISOString(),
             book: {
               id: latest.book._id.toString(),
               slug: latest.book.slug ?? "",

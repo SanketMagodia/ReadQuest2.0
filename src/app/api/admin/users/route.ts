@@ -3,8 +3,8 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-guard";
 import connectDB from "@/lib/db";
 import User from "@/models/User";
-import Post from "@/models/Post";
-import { getBotUserIds, humanUserFilter } from "@/lib/human-users";
+import ReadList from "@/models/ReadList";
+import { humanUserFilter } from "@/lib/human-users";
 
 export async function GET(req: Request) {
   const gate = await requireAdmin();
@@ -17,8 +17,7 @@ export async function GET(req: Request) {
 
   await connectDB();
 
-  const botUserIds = await getBotUserIds();
-  const filter: Record<string, unknown> = { ...humanUserFilter(botUserIds) };
+  const filter: Record<string, unknown> = { ...humanUserFilter() };
   if (q) {
     const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const rx = new RegExp(escaped, "i");
@@ -49,14 +48,17 @@ export async function GET(req: Request) {
   const slice = hasMore ? rows.slice(0, limit) : rows;
   const ids = slice.map((u) => u._id);
 
-  const postCounts = ids.length
-    ? await Post.aggregate([
-        { $match: { author: { $in: ids } } },
-        { $group: { _id: "$author", posts: { $sum: 1 } } },
+  const shelfCounts = ids.length
+    ? await ReadList.aggregate([
+        { $match: { user: { $in: ids } } },
+        { $group: { _id: "$user", books: { $sum: 1 } } },
       ])
     : [];
-  const postMap = new Map<string, number>(
-    postCounts.map((r) => [(r._id as Types.ObjectId).toString(), r.posts as number])
+  const shelfMap = new Map<string, number>(
+    shelfCounts.map((r: { _id: Types.ObjectId; books: number }) => [
+      r._id.toString(),
+      r.books,
+    ])
   );
 
   const nextCursor =
@@ -73,7 +75,7 @@ export async function GET(req: Request) {
       role: u.role ?? "user",
       bio: u.bio ?? "",
       image: u.image ?? null,
-      posts: postMap.get(u._id.toString()) ?? 0,
+      shelved: shelfMap.get(u._id.toString()) ?? 0,
       createdAt: u.createdAt.toISOString(),
     })),
     nextCursor,

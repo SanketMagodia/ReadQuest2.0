@@ -2,9 +2,8 @@ import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import {
   BookOpen,
-  Flame,
   Library,
-  MessageCircle,
+  Quote,
   Users,
   UsersRound,
 } from "lucide-react";
@@ -32,21 +31,15 @@ export const UNLOCK_FEATURES = [
   },
   {
     icon: Library,
-    short: "Your feed",
-    title: "Personalised feed",
-    hint: "Tuned to your books and taste",
+    short: "Gists",
+    title: "A stream of gists",
+    hint: "Read the gist, swipe for the next book",
   },
   {
-    icon: MessageCircle,
-    short: "Threads",
-    title: "Post & join threads",
-    hint: "Share lines and reply in book rooms",
-  },
-  {
-    icon: Flame,
-    short: "Daily quest",
-    title: "Daily quest & streak",
-    hint: "One pick a day — keep the flame alive",
+    icon: Quote,
+    short: "Memories",
+    title: "Keep the lines you love",
+    hint: "Private quotes saved as you read",
   },
 ] as const satisfies ReadonlyArray<{
   icon: LucideIcon;
@@ -175,7 +168,7 @@ export function JoinReadquestFeedCard() {
           This is just the lobby
         </h2>
         <p className="mt-0.5 hidden text-[11px] leading-snug text-muted sm:block layout-wide:mt-1 layout-wide:text-[12px]">
-          Clubs, a daily quest, and a feed of people who read like you.
+          Clubs, memories, and an endless stream of gists picked for you.
         </p>
       </div>
 

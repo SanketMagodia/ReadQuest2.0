@@ -13,7 +13,7 @@ export function trackSignUp(method: "credentials" | "google" = "credentials") {
 export function trackSearch(params: {
   searchTerm?: string;
   category?: string;
-  location: "explore" | "friends" | "compose";
+  location: "explore" | "friends" | "memories";
 }) {
   const term = (params.searchTerm ?? params.category ?? "").trim();
   if (!term) return;
@@ -39,18 +39,23 @@ export function trackSelectBook(bookId: string, title: string, source?: string) 
   });
 }
 
-export function trackPostCreated(bookId: string, hasImage: boolean) {
-  gaEvent("create_post", {
-    book_id: bookId,
-    has_image: hasImage ? "yes" : "no",
+/** A private line or note saved to the reader's own memories. */
+export function trackMemorySaved(
+  bookId: string | null,
+  source: "gist" | "profile" | "summary"
+) {
+  gaEvent("memory_saved", {
+    book_id: bookId ?? "none",
+    content_type: source,
   });
 }
 
-export function trackComment(postId: string, isReply: boolean) {
-  gaEvent("comment", {
-    post_id: postId,
-    is_reply: isReply ? "yes" : "no",
-  });
+/** What a reader did with a card in the home reel. */
+export function trackReelAction(
+  bookId: string,
+  action: "skipped" | "read" | "saved"
+) {
+  gaEvent("reel_action", { book_id: bookId, action });
 }
 
 export function trackFollowBook(bookId: string, following: boolean) {
@@ -62,13 +67,6 @@ export function trackReadlistUpdate(
   status: "want" | "read" | "remove"
 ) {
   gaEvent("readlist_update", { book_id: bookId, shelf_status: status });
-}
-
-export function trackReaction(
-  target: "post" | "comment",
-  reaction: "like" | "dislike" | "remove"
-) {
-  gaEvent("reaction", { target_type: target, reaction_type: reaction });
 }
 
 export function trackViewSummary(bookId: string, slug: string) {

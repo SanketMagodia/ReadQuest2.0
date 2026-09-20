@@ -15,6 +15,9 @@
      search dock parks directly beneath it, so the two must agree — when they
      drifted apart the search row slid up underneath the bar. */
   --topbar-h: 3.25rem;
+  /* Compact bottom nav: icon row + label + safe area. The home gist
+     stream and `main`'s padding both use this so Skip sits on the nav. */
+  --bottomnav-h: calc(4.75rem + env(safe-area-inset-bottom, 0px));
 
   --bg: #fafaf9;
   --bg-subtle: #f4f4f5;
@@ -926,6 +929,195 @@ h1,
 }
 .dark .rq-frost {
   background: color-mix(in srgb, var(--bg) 82%, transparent);
+}
+
+/* Home reel — one book per screen, swipe up for the next.
+   The height subtracts the chrome the app shell reserves around `main`: the
+   compact top bar plus `--bottomnav-h`, or just the `pb-8` on wide layouts.
+   Getting this wrong leaves a second scrollbar and the snap points land
+   mid-card. */
+.rq-reel {
+  /* Phone: one title line. Wide: compact header + a single blurred line. */
+  --rq-reel-peek: 2.85rem;
+  height: calc(100dvh - var(--topbar-h) - var(--bottomnav-h));
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.rq-reel::-webkit-scrollbar {
+  display: none;
+}
+@media (min-aspect-ratio: 10001/10000) {
+  .rq-reel {
+    --rq-reel-peek: 5.5rem;
+    height: calc(100dvh - 2rem);
+  }
+}
+
+.rq-reel-slide {
+  height: calc(100% - var(--rq-reel-peek));
+}
+.rq-reel-slide--last {
+  height: 100%;
+}
+.rq-reel-slide + .rq-reel-slide {
+  box-shadow: 0 -1px 0 color-mix(in srgb, var(--fg) 8%, transparent);
+}
+
+.rq-reel-item {
+  height: 100%;
+  scroll-snap-align: start;
+  /* Without `always`, a fast flick can sail past two or three books at once
+     and the reader never sees what they skipped. */
+  scroll-snap-stop: always;
+}
+
+/* The reel has no card chrome on purpose — the text is the interface. This
+   scrim is the only thing between the type and the cover wash, and it carries
+   the whole contrast budget, so don't thin it out. */
+.rq-reel-scrim {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+}
+
+/* Long-form type for the reel. Same reading serif as the daily quest, sized a
+   notch larger because a reel page is read once and swiped past. */
+.rq-reel-prose {
+  font-family:
+    var(--font-reading-serif), "Charter", "Iowan Old Style", Georgia, serif;
+  font-size: 17px;
+  line-height: 1.72;
+  letter-spacing: -0.002em;
+  color: color-mix(in srgb, var(--fg) 93%, transparent);
+}
+@media (min-width: 640px) {
+  .rq-reel-prose {
+    font-size: 18px;
+    line-height: 1.75;
+  }
+}
+.rq-reel-prose p {
+  margin: 0 0 0.95em;
+  text-wrap: wrap;
+  overflow-wrap: break-word;
+}
+.rq-reel-prose p:last-child {
+  margin-bottom: 0;
+}
+.rq-reel-prose h2 {
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.17em;
+  opacity: 0.5;
+  margin: 1.7em 0 0.7em;
+}
+.rq-reel-prose > :first-child {
+  margin-top: 0;
+}
+.rq-reel-prose strong {
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700;
+}
+
+/* Peeking next book: one frosted line on phones; header stays sharp on
+   wide layouts and only the opening line is blurred. */
+.rq-reel-item--peeking header {
+  filter: blur(4px);
+  opacity: 0.75;
+}
+.rq-reel-item--peeking .rq-reel-prose:not([aria-hidden]) {
+  filter: blur(5px);
+  opacity: 0.65;
+}
+@media (min-aspect-ratio: 10001/10000) {
+  .rq-reel-item--peeking header {
+    filter: none;
+    opacity: 1;
+  }
+}
+
+/* Cover art bled behind the card. Blurring a scaled-up copy of the jacket is
+   what gives each card its own palette without shipping a per-book theme. */
+.rq-reel-wash {
+  position: absolute;
+  inset: -20%;
+  filter: blur(64px) saturate(1.5);
+  opacity: 0.5;
+  transform: scale(1.25);
+}
+.dark .rq-reel-wash {
+  opacity: 0.38;
+}
+
+/* Page turns inside a reel card. Short on purpose — this fires on every arrow
+   press, so anything longer reads as lag rather than polish. */
+@keyframes rq-page-turn {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+.rq-page-turn {
+  animation: rq-page-turn 170ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rq-page-turn {
+    animation: none;
+  }
+}
+
+/* One-shot peek after the first cards land: lift the stack just enough
+   to flash the next gist, then settle. Scroll position stays put so snap
+   never jumps the reader to the next book. */
+@keyframes rq-reel-peek {
+  0% {
+    transform: translateY(0);
+  }
+  32% {
+    transform: translateY(-36px);
+  }
+  48% {
+    transform: translateY(-36px);
+  }
+  78% {
+    transform: translateY(6px);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+.rq-reel--peek > .rq-reel-slide {
+  animation: rq-reel-peek 1.15s cubic-bezier(0.22, 1, 0.36, 1) 0.4s 1 both;
+}
+
+@keyframes rq-reel-hint {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.55;
+  }
+  50% {
+    transform: translateY(-5px);
+    opacity: 1;
+  }
+}
+.rq-reel-hint {
+  animation: rq-reel-hint 2.1s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rq-reel-hint,
+  .rq-reel--peek > .rq-reel-slide {
+    animation: none;
+  }
 }
 
 .rq-search-dock {

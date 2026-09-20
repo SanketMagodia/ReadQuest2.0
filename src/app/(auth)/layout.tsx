@@ -74,7 +74,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
               </span>
             </h2>
             <p className="hidden max-w-xl text-[13px] font-medium leading-relaxed text-muted max-sm:block">
-              Quote the good lines. Find your people. Keep the streak alive.
+              Quote the good lines. Find your people. Keep the gists coming.
             </p>
             <p className="max-w-xl text-[13px] leading-relaxed text-muted max-sm:hidden sm:text-[15px]">
               Quote the lines that moved you, build a readlist that reflects
