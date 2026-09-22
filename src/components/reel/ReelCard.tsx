@@ -32,9 +32,11 @@ import {
 import { trackMemorySaved } from "@/lib/analytics-events";
 import type { ReelCard as ReelCardData } from "@/lib/reel";
 import {
+  canOpenShareSheet,
   invokeGistShare,
   littleSynopsis,
   prepareGistShare,
+  type GistShareResult,
   type PreparedGistShare,
 } from "@/lib/share-gist";
 
@@ -88,9 +90,10 @@ export function ReelCard({
   const [columnWidth, setColumnWidth] = useState(0);
   const [selection, setSelection] = useState("");
   const [kept, setKept] = useState(false);
-  const [shareState, setShareState] = useState<"idle" | "busy" | "shared" | "saved" | "failed">(
-    "idle"
-  );
+  const [shareState, setShareState] = useState<
+    "idle" | "busy" | "shared" | "saved" | "unsupported" | "failed"
+  >("idle");
+  const [sheetless, setSheetless] = useState(false);
   const preparedShare = useRef<PreparedGistShare | null>(null);
   const preparingShare = useRef<Promise<PreparedGistShare> | null>(null);
 
@@ -258,6 +261,7 @@ export function ReelCard({
       section,
       firstPageHtml: firstPageRef.current?.innerHTML ?? "",
       title: card.title,
+      author,
       synopsis: littleSynopsis(card.description, card.summary, card.hook),
       bookUrl: `${window.location.origin}/book/${card.slug}`,
       bookId: card.id,
@@ -275,6 +279,7 @@ export function ReelCard({
     preparingShare.current = job;
     return job;
   }, [
+    author,
     card.description,
     card.hook,
     card.id,
@@ -291,14 +296,16 @@ export function ReelCard({
     void buildShare().catch(() => {});
   }, [active, slices, buildShare]);
 
-  function finishShare(result: Promise<"shared" | "saved" | "cancelled">) {
+  useEffect(() => setSheetless(!canOpenShareSheet()), []);
+
+  function finishShare(result: Promise<GistShareResult>) {
     void result.then((outcome) => {
       if (outcome === "cancelled") {
         setShareState("idle");
         return;
       }
-      setShareState(outcome === "saved" ? "saved" : "shared");
-      window.setTimeout(() => setShareState("idle"), 2000);
+      setShareState(outcome);
+      window.setTimeout(() => setShareState("idle"), outcome === "unsupported" ? 4500 : 2000);
     });
   }
 
@@ -331,16 +338,20 @@ export function ReelCard({
     .filter(Boolean)
     .join(" · ");
 
-  const shareLabel =
+  const shareNote =
     shareState === "busy"
-      ? "Preparing snapshot"
+      ? "Preparing…"
       : shareState === "shared"
-        ? "Shared"
+        ? "Shared · caption copied, paste it if the app dropped it"
         : shareState === "saved"
-          ? "Snapshot saved and link copied"
-          : shareState === "failed"
-            ? "Couldn't share this gist"
-            : "Share this gist";
+          ? "Image saved · caption copied"
+          : shareState === "unsupported"
+            ? "This browser has no share sheet (needs HTTPS) — image saved, link copied"
+            : shareState === "failed"
+              ? "Couldn't build that image"
+              : "";
+  const shareLabel =
+    shareNote || (sheetless ? "Save this gist as an image" : "Share this gist");
 
   return (
     <>
@@ -439,6 +450,15 @@ export function ReelCard({
                   <Share2 size={16} aria-hidden />
                 )}
               </button>
+              {shareNote && shareState !== "busy" ? (
+                <p
+                  data-no-shot
+                  role="status"
+                  className="pointer-events-none absolute right-3 top-12 z-30 max-w-[15rem] rounded-lg bg-foreground/90 px-2.5 py-1.5 text-[11px] font-semibold leading-snug text-background shadow-lg"
+                >
+                  {shareNote}
+                </p>
+              ) : null}
               <button
                 type="button"
                 data-no-shot

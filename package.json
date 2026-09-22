@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "node --max-http-header-size=262144 ./node_modules/next/dist/bin/next dev --webpack",
     "dev:turbo": "node --max-http-header-size=262144 ./node_modules/next/dist/bin/next dev",
+    "dev:https": "node --max-http-header-size=262144 ./node_modules/next/dist/bin/next dev --webpack --experimental-https",
     "build": "next build --webpack",
     "start": "node --max-http-header-size=262144 ./node_modules/next/dist/bin/next start",
     "lint": "node --max-old-space-size=6144 ./node_modules/eslint/bin/eslint.js",

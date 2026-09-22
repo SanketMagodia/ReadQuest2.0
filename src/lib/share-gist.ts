@@ -1,7 +1,21 @@
 import { trackShare } from "@/lib/analytics-events";
+import { BRAND_NAME } from "@/lib/brand";
 import { isAllowedCoverUrl } from "@/lib/cover-url";
 
-export type GistShareResult = "shared" | "saved" | "cancelled";
+export type GistShareResult = "shared" | "saved" | "cancelled" | "unsupported";
+
+/** 1×1 transparent PNG, so a cover we can't read never rejects the snapshot. */
+const BLANK_PIXEL =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=";
+
+/**
+ * Whether this browser can open a share sheet. `navigator.share` only exists
+ * in a secure context, so a phone on `http://<lan-ip>` has no sheet at all —
+ * that needs HTTPS (or localhost).
+ */
+export function canOpenShareSheet() {
+  return typeof navigator !== "undefined" && typeof navigator.share === "function";
+}
 
 function fileName(title: string) {
   const base =
@@ -52,92 +66,24 @@ export function littleSynopsis(description: string, summary: string, hook: strin
   return out;
 }
 
-function shareCaption(title: string, synopsis: string, bookUrl: string) {
-  return [title, synopsis, bookUrl].filter(Boolean).join("\n\n");
-}
-
-function wrapLines(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  maxWidth: number
-) {
-  const lines: string[] = [];
-  let line = "";
-  for (const word of text.split(/\s+/)) {
-    const next = line ? `${line} ${word}` : word;
-    if (line && ctx.measureText(next).width > maxWidth) {
-      lines.push(line);
-      line = word;
-    } else {
-      line = next;
-    }
-  }
-  if (line) lines.push(line);
-  return lines;
-}
-
-/** Title and synopsis sit above the gist page so they travel with the picture. */
-async function withTitleAndSynopsis(blob: Blob, title: string, synopsis: string) {
-  const bitmap = await createImageBitmap(blob);
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
-  if (!ctx) {
-    bitmap.close();
-    return blob;
-  }
-
-  const padX = Math.round(bitmap.width * 0.06);
-  const titleSize = Math.max(28, Math.round(bitmap.width * 0.046));
-  const bodySize = Math.max(18, Math.round(bitmap.width * 0.03));
-  const maxText = bitmap.width - padX * 2;
-  const titleFont = `700 ${titleSize}px ui-sans-serif, system-ui, sans-serif`;
-  const bodyFont = `400 ${bodySize}px ui-sans-serif, system-ui, sans-serif`;
-
-  ctx.font = titleFont;
-  const titleLines = wrapLines(ctx, title, maxText).slice(0, 3);
-  ctx.font = bodyFont;
-  const synopsisLines = synopsis ? wrapLines(ctx, synopsis, maxText) : [];
-  const shownSynopsis = synopsisLines.slice(0, 4);
-  if (synopsisLines.length > shownSynopsis.length && shownSynopsis.length) {
-    const last = shownSynopsis.length - 1;
-    shownSynopsis[last] = shownSynopsis[last].replace(/\s+\S*$/, "").trimEnd() + "…";
-  }
-
-  const titleLH = Math.round(titleSize * 1.22);
-  const synLH = Math.round(bodySize * 1.45);
-  const padY = Math.round(bitmap.width * 0.05);
-  const gap = shownSynopsis.length ? Math.round(bodySize * 0.85) : 0;
-  const captionH =
-    padY + titleLines.length * titleLH + gap + shownSynopsis.length * synLH + padY;
-
-  canvas.width = bitmap.width;
-  canvas.height = bitmap.height + captionH;
-
-  const bg = getComputedStyle(document.body).backgroundColor || "#111";
-  const fg = getComputedStyle(document.body).color || "#fff";
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.textBaseline = "top";
-  ctx.fillStyle = fg;
-  ctx.font = titleFont;
-  let y = padY;
-  for (const line of titleLines) {
-    ctx.fillText(line, padX, y);
-    y += titleLH;
-  }
-  y += gap;
-  ctx.globalAlpha = 0.78;
-  ctx.font = bodyFont;
-  for (const line of shownSynopsis) {
-    ctx.fillText(line, padX, y);
-    y += synLH;
-  }
-  ctx.globalAlpha = 1;
-  ctx.drawImage(bitmap, 0, captionH);
-  bitmap.close();
-
-  const out = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
-  return out ?? blob;
+/**
+ * The message that travels next to the picture, the way a WhatsApp caption
+ * does: what the book is, why it's worth a look, and where to read it.
+ */
+function shareCaption(input: {
+  title: string;
+  author: string;
+  synopsis: string;
+  bookUrl: string;
+}) {
+  const heading = input.author ? `${input.title} — ${input.author}` : input.title;
+  return [
+    heading,
+    input.synopsis,
+    `Read the gist on ${BRAND_NAME} → ${input.bookUrl}`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 function downloadBlob(file: File) {
@@ -147,6 +93,42 @@ function downloadBlob(file: File) {
   link.download = file.name;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+async function toDataUrl(src: string) {
+  const res = await fetch(src, { cache: "force-cache" });
+  if (!res.ok) throw new Error(`cover ${res.status}`);
+  const blob = await res.blob();
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("cover unreadable"));
+    reader.onload = () => resolve(String(reader.result));
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
+ * Turn every jacket into a data URL before the canvas step. html-to-image
+ * rejects the whole snapshot when one image fails, and a cover host can always
+ * have a bad minute, so a missing jacket becomes a blank pixel instead.
+ */
+async function inlineImages(clone: HTMLElement) {
+  const images = [...clone.querySelectorAll("img")];
+  await Promise.all(
+    images.map(async (img) => {
+      const src = img.getAttribute("src");
+      if (!src || src.startsWith("data:")) return;
+      try {
+        const absolute = new URL(src, window.location.href).href;
+        const source = isAllowedCoverUrl(absolute) ? coverProxy(src) : absolute;
+        img.src = await toDataUrl(source);
+      } catch {
+        img.src = BLANK_PIXEL;
+      }
+      img.removeAttribute("srcset");
+      img.removeAttribute("loading");
+    })
+  );
 }
 
 let cachedFontCSS: string | null = null;
@@ -199,20 +181,10 @@ async function snapshotFirstPage(
   const bar = clone.querySelector("[data-gist-progress]");
   if (bar instanceof HTMLElement) bar.style.width = `${(1 / pages) * 100}%`;
 
-  clone.querySelectorAll("img").forEach((img) => {
-    const src = img.getAttribute("src");
-    if (!src || src.startsWith("data:") || src.startsWith("/api/cover")) return;
-    try {
-      const absolute = new URL(src, window.location.href).href;
-      if (isAllowedCoverUrl(absolute)) img.src = coverProxy(src);
-    } catch {
-      img.removeAttribute("src");
-    }
-  });
-
   host.appendChild(clone);
   document.body.appendChild(host);
   warmFonts(clone);
+  await inlineImages(clone);
 
   const options = {
     pixelRatio: 2,
@@ -220,6 +192,8 @@ async function snapshotFirstPage(
     includeQueryParams: true,
     backgroundColor: getComputedStyle(document.body).backgroundColor,
     filter: (node: HTMLElement) => !node.hasAttribute?.("data-no-shot"),
+    imagePlaceholder: BLANK_PIXEL,
+    onImageErrorHandler: () => {},
     ...(cachedFontCSS !== null
       ? { fontEmbedCSS: cachedFontCSS }
       : { skipFonts: true }),
@@ -257,6 +231,7 @@ export async function prepareGistShare(input: {
   section: HTMLElement;
   firstPageHtml: string;
   title: string;
+  author: string;
   synopsis: string;
   bookUrl: string;
   bookId: string;
@@ -269,32 +244,31 @@ export async function prepareGistShare(input: {
   );
   if (!shot) throw new Error("empty snapshot");
 
-  const blob = await withTitleAndSynopsis(shot, input.title, input.synopsis);
   return {
-    file: new File([blob], fileName(input.title), { type: "image/png" }),
+    file: new File([shot], fileName(input.title), { type: "image/png" }),
     title: input.title,
     synopsis: input.synopsis,
-    caption: shareCaption(input.title, input.synopsis, input.bookUrl),
+    caption: shareCaption(input),
     bookUrl: input.bookUrl,
     bookId: input.bookId,
   };
 }
 
 function sharePayload(prepared: PreparedGistShare): ShareData | null {
+  // The link lives inside the caption, so chat apps that keep only the text of
+  // an image share still carry it — passing `url` as well would double it up.
   const withFile: ShareData = {
     files: [prepared.file],
     title: prepared.title,
     text: prepared.caption,
   };
-  const withFileAndUrl: ShareData = { ...withFile, url: prepared.bookUrl };
   const textOnly: ShareData = {
     title: prepared.title,
     text: prepared.caption,
     url: prepared.bookUrl,
   };
   if (typeof navigator.share !== "function") return null;
-  if (typeof navigator.canShare !== "function") return withFileAndUrl;
-  if (navigator.canShare(withFileAndUrl)) return withFileAndUrl;
+  if (typeof navigator.canShare !== "function") return withFile;
   if (navigator.canShare(withFile)) return withFile;
   if (navigator.canShare(textOnly)) return textOnly;
   // Some phones report canShare false until share() itself is called.
@@ -315,7 +289,13 @@ export function invokeGistShare(prepared: PreparedGistShare): Promise<GistShareR
   const payload = sharePayload(prepared);
   if (!payload) {
     saveLocally(prepared);
-    return Promise.resolve("saved");
+    return Promise.resolve(canOpenShareSheet() ? "saved" : "unsupported");
+  }
+
+  // WhatsApp and friends sometimes keep the picture and drop the caption, so
+  // leave it on the clipboard to paste. Must happen inside the same tap.
+  if (payload.files) {
+    void navigator.clipboard?.writeText(prepared.caption).catch(() => {});
   }
 
   return navigator.share(payload).then(
@@ -325,6 +305,22 @@ export function invokeGistShare(prepared: PreparedGistShare): Promise<GistShareR
     },
     (err: unknown) => {
       if (isAbort(err)) return "cancelled" as const;
+      // A target that refuses the file still takes the title, synopsis, link.
+      if (payload.files) {
+        return navigator
+          .share({ title: prepared.title, text: prepared.caption, url: prepared.bookUrl })
+          .then(
+            () => {
+              trackShare("gist", prepared.bookId);
+              return "shared" as const;
+            },
+            (second: unknown) => {
+              if (isAbort(second)) return "cancelled" as const;
+              saveLocally(prepared);
+              return "saved" as const;
+            }
+          );
+      }
       saveLocally(prepared);
       return "saved" as const;
     }
