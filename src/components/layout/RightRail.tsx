@@ -223,6 +223,23 @@ function ReelHowToTile() {
   );
 }
 
+function SummaryNextTile() {
+  return (
+    <TileShell>
+      <Eyebrow label="Keep going" tone="warm" icon={BookOpen} />
+      <p className="mt-2 text-[13px] leading-relaxed text-foreground/85">
+        The next gist is a book close to this one. Swipe up and that shelf
+        keeps going.
+      </p>
+      <ul className="mt-3 space-y-1.5 text-[12px] leading-relaxed text-muted">
+        <li>· Share sends the page, the title, and an invite.</li>
+        <li>· Highlight a line to keep it. Only you see it.</li>
+        <li>· The title opens that book&apos;s page.</li>
+      </ul>
+    </TileShell>
+  );
+}
+
 function ExploreDiscoverTile() {
   const chips = ["Fiction", "Memoir", "Sci-fi", "Poetry", "Essays"];
   return (
@@ -258,7 +275,11 @@ function ExploreCommunitiesTile() {
   );
 }
 
-function BookRoomTile({ slug }: { slug?: string }) {
+/**
+ * No CTA here on purpose: only the page itself knows whether this book has a
+ * gist yet, and it puts the button next to the cover when it does.
+ */
+function BookRoomTile() {
   return (
     <TileShell variant="gradient-frame">
       <Eyebrow label="Book room" tone="brand" icon={BookOpen} />
@@ -267,11 +288,9 @@ function BookRoomTile({ slug }: { slug?: string }) {
       </p>
       <p className="mt-2 text-[13px] leading-relaxed text-muted">
         An AI-written retelling in the book&apos;s own voice — long enough to
-        matter, short enough to finish.
+        matter, short enough to finish. Keep scrolling and the books next to it
+        follow.
       </p>
-      {slug ? (
-        <TileCTA href={`/book/${slug}/summary`}>Read summary</TileCTA>
-      ) : null}
     </TileShell>
   );
 }
@@ -333,9 +352,16 @@ function tilesFor(
   username?: string
 ): ReactNode[] {
   // 1) Routes that should not render a right rail at all.
-  if (/^\/book\/[^/]+\/summary\/?$/.test(pathname)) return [];
   if (pathname.startsWith("/login") || pathname.startsWith("/register"))
     return [];
+
+  // A book's gist reel: the same reading tips as home, plus what the scroll does.
+  if (/^\/book\/[^/]+\/summary\/?$/.test(pathname)) {
+    return [
+      <ReelHowToTile key="gist" />,
+      <SummaryNextTile key="next" />,
+    ];
+  }
 
   // 2) Per-route compositions. Home keeps announcements + one short tip.
   if (pathname === "/" || pathname.startsWith("/?")) {
@@ -351,9 +377,8 @@ function tilesFor(
   }
 
   if (/^\/book\/[^/]+\/?$/.test(pathname)) {
-    const slug = pathname.split("/")[2];
     return [
-      <BookRoomTile key="book" slug={slug} />,
+      <BookRoomTile key="book" />,
       <MemoriesTile key="memories" username={username} />,
     ];
   }

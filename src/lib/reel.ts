@@ -123,6 +123,52 @@ async function buildTasteProfile(userId: string): Promise<TasteProfile> {
   };
 }
 
+/** Books worth putting in a reel: a summary exists and there's a blurb to show. */
+const SUMMARIZED = { description: { $exists: true, $ne: "" } };
+
+/**
+ * Already-summarized books matching `bookMatch`, most-read first.
+ *
+ * Driven from the summary collection rather than from books, so the scan is
+ * proportional to how many summaries exist instead of to the whole library.
+ */
+async function summarizedBooks(
+  excludedIds: Types.ObjectId[],
+  bookMatch: PipelineStage.Match["$match"],
+  limit: number
+): Promise<BookDoc[]> {
+  const rows = await BookSummary.aggregate([
+    ...(excludedIds.length ? [{ $match: { book: { $nin: excludedIds } } }] : []),
+    {
+      $lookup: {
+        from: Book.collection.name,
+        localField: "book",
+        foreignField: "_id",
+        as: "book",
+      },
+    },
+    { $unwind: "$book" },
+    { $replaceRoot: { newRoot: "$book" } },
+    { $match: bookMatch },
+    { $sort: { ratingsCount: -1, averageRating: -1 } },
+    { $limit: limit },
+  ]);
+  return rows as BookDoc[];
+}
+
+/** Collect rows into `pool`, skipping any book it already holds. */
+function collector(pool: BookDoc[]) {
+  const taken = new Set(pool.map((b) => b._id.toString()));
+  return (rows: BookDoc[]) => {
+    for (const b of rows) {
+      const id = b._id.toString();
+      if (taken.has(id)) continue;
+      taken.add(id);
+      pool.push(b);
+    }
+  };
+}
+
 /**
  * Books this reader hasn't judged yet, drawn only from the ones that already
  * have a generated summary — a card is only worth putting in the reel if its
@@ -154,45 +200,10 @@ async function buildCandidatePool(
   ]);
   const excludedIds = [...excluded].map((id) => new Types.ObjectId(id));
 
-  /**
-   * Driven from the summary collection rather than from books, so the scan is
-   * proportional to how many summaries exist instead of to the whole library.
-   */
-  const summarizedBooks = async (
-    bookMatch: PipelineStage.Match["$match"],
-    limit: number
-  ): Promise<BookDoc[]> => {
-    const rows = await BookSummary.aggregate([
-      { $match: { book: { $nin: excludedIds } } },
-      {
-        $lookup: {
-          from: Book.collection.name,
-          localField: "book",
-          foreignField: "_id",
-          as: "book",
-        },
-      },
-      { $unwind: "$book" },
-      { $replaceRoot: { newRoot: "$book" } },
-      { $match: bookMatch },
-      { $sort: { ratingsCount: -1, averageRating: -1 } },
-      { $limit: limit },
-    ]);
-    return rows as BookDoc[];
-  };
-
-  const base = { description: { $exists: true, $ne: "" } };
+  const base = SUMMARIZED;
 
   const pool: BookDoc[] = [];
-  const taken = new Set<string>();
-  const absorb = (rows: BookDoc[]) => {
-    for (const b of rows) {
-      const id = b._id.toString();
-      if (taken.has(id)) continue;
-      taken.add(id);
-      pool.push(b);
-    }
-  };
+  const absorb = collector(pool);
 
   if (profile.categories.length) {
     const catRegex = new RegExp(
@@ -201,6 +212,7 @@ async function buildCandidatePool(
     );
     absorb(
       await summarizedBooks(
+        excludedIds,
         { ...base, categories: { $regex: catRegex } },
         CANDIDATE_POOL
       )
@@ -208,7 +220,7 @@ async function buildCandidatePool(
   }
 
   if (pool.length < CANDIDATE_POOL) {
-    absorb(await summarizedBooks(base, CANDIDATE_POOL * 2));
+    absorb(await summarizedBooks(excludedIds, base, CANDIDATE_POOL * 2));
   }
 
   // Shuffle so two visits in the same hour don't replay the same order.
@@ -510,6 +522,94 @@ export async function buildRandomReel(exclude: string[] = []): Promise<ReelCard[
 
   const contentByBook = await summaryByBook(rows);
   return rows.map((book) =>
+    toCard(book, "", "", contentByBook.get(book._id.toString()) ?? "")
+  );
+}
+
+/**
+ * The gist for one specific book, used as the opening card when a reel is
+ * entered from a book page instead of from the feed. Null when that book has
+ * no summary yet — there is nothing to read, so there is no card.
+ */
+export async function buildBookCard(bookId: string): Promise<ReelCard | null> {
+  if (!Types.ObjectId.isValid(bookId)) return null;
+  await connectDB();
+
+  const [book, summary] = await Promise.all([
+    Book.findById(bookId).lean() as Promise<BookDoc | null>,
+    BookSummary.findOne({ book: new Types.ObjectId(bookId) })
+      .select("content")
+      .lean(),
+  ]);
+  const content = (summary as { content?: string } | null)?.content ?? "";
+  if (!book || !content) return null;
+
+  return toCard(book, "", "", content);
+}
+
+/**
+ * Books sitting next to this one — its shelf first, then the rest of its
+ * author, then broadly loved titles — so a reel opened from a book page always
+ * has somewhere left to scroll.
+ *
+ * Deliberately not personalized: this runs for signed-out readers too, and
+ * what belongs under a book is a property of the book, not of the reader.
+ */
+export async function buildRelatedReel(
+  bookId: string,
+  exclude: string[] = []
+): Promise<ReelCard[]> {
+  if (!Types.ObjectId.isValid(bookId)) return [];
+  await connectDB();
+
+  const seed = (await Book.findById(bookId)
+    .select("categories authors")
+    .lean()) as BookDoc | null;
+  if (!seed) return [];
+
+  const excludedIds = [bookId, ...exclude]
+    .filter((id) => Types.ObjectId.isValid(id))
+    .map((id) => new Types.ObjectId(id));
+
+  const pool: BookDoc[] = [];
+  const absorb = collector(pool);
+
+  const categories = splitCategories(seed.categories).slice(0, 4);
+  if (categories.length) {
+    absorb(
+      await summarizedBooks(
+        excludedIds,
+        {
+          ...SUMMARIZED,
+          categories: {
+            $regex: new RegExp(categories.map(escapeRegex).join("|"), "i"),
+          },
+        },
+        REEL_BATCH
+      )
+    );
+  }
+
+  const author = (seed.authors || "").split(/[,;]/)[0]?.trim() ?? "";
+  if (pool.length < REEL_BATCH && author) {
+    absorb(
+      await summarizedBooks(
+        excludedIds,
+        { ...SUMMARIZED, authors: { $regex: escapeRegex(author), $options: "i" } },
+        REEL_BATCH
+      )
+    );
+  }
+
+  if (pool.length < REEL_BATCH) {
+    absorb(await summarizedBooks(excludedIds, SUMMARIZED, REEL_BATCH));
+  }
+
+  const picked = pool.slice(0, REEL_BATCH);
+  if (!picked.length) return [];
+
+  const contentByBook = await summaryByBook(picked);
+  return picked.map((book) =>
     toCard(book, "", "", contentByBook.get(book._id.toString()) ?? "")
   );
 }

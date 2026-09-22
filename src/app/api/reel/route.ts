@@ -4,14 +4,19 @@ import { z } from "zod";
 import { getAppSession } from "@/lib/session";
 import connectDB from "@/lib/db";
 import ReelImpression from "@/models/ReelImpression";
-import { buildRandomReel, buildReel, buildStarterReel } from "@/lib/reel";
+import {
+  buildRandomReel,
+  buildReel,
+  buildRelatedReel,
+  buildStarterReel,
+} from "@/lib/reel";
 
 // Ranking a batch is one LLM call, which can outrun the default budget on a
 // cold provider.
 export const maxDuration = 60;
 
 /**
- * GET /api/reel?exclude=id,id,…&starter=1&random=1
+ * GET /api/reel?exclude=id,id,…&starter=1&random=1&related=<bookId>
  *
  * The next run of personalized cards. `exclude` carries ids the client is
  * still holding but hasn't reported an action on yet, so prefetching the next
@@ -20,14 +25,13 @@ export const maxDuration = 60;
  * `starter=1` skips the ranker and answers from the shared hourly rotation,
  * which is what the client opens with while the personalized run is still in
  * flight. `random=1` samples summarized books the reader may already have
- * seen, for when the ranked pool is empty.
+ * seen, for when the ranked pool is empty. `related=<bookId>` returns the
+ * books that belong under that one, for a reel opened from a book page.
+ *
+ * Related and random runs carry no reader in them, so they answer for
+ * signed-out visitors too — a book page is public and so is the reel it opens.
  */
 export async function GET(req: Request) {
-  const session = await getAppSession();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const url = new URL(req.url);
   const exclude = (url.searchParams.get("exclude") ?? "")
     .split(",")
@@ -35,12 +39,27 @@ export async function GET(req: Request) {
     .filter(Boolean)
     .slice(0, 100);
 
+  const related = url.searchParams.get("related");
+  if (related) {
+    if (!/^[a-f0-9]{24}$/i.test(related)) {
+      return NextResponse.json({ error: "Invalid book" }, { status: 400 });
+    }
+    return NextResponse.json({ cards: await buildRelatedReel(related, exclude) });
+  }
+
+  if (url.searchParams.get("random") === "1") {
+    return NextResponse.json({ cards: await buildRandomReel(exclude) });
+  }
+
+  const session = await getAppSession();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const cards =
     url.searchParams.get("starter") === "1"
       ? await buildStarterReel(session.user.id, exclude)
-      : url.searchParams.get("random") === "1"
-        ? await buildRandomReel(exclude)
-        : await buildReel(session.user.id, exclude);
+      : await buildReel(session.user.id, exclude);
   return NextResponse.json({ cards });
 }
 

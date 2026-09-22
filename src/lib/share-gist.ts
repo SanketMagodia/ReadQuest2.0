@@ -37,53 +37,16 @@ function coverProxy(src: string) {
   return `/api/cover?url=${encodeURIComponent(absolute.href)}`;
 }
 
-/** Two short sentences from the catalog blurb, or the opening of the gist. */
-export function littleSynopsis(description: string, summary: string, hook: string) {
-  const fromSummary = summary
-    .replace(/^>\s?/gm, "")
-    .replace(/[#*_`]/g, "")
-    .split(/\n+/)
-    .map((line) => line.trim())
-    .find(Boolean) ?? "";
-  const raw = (description || fromSummary || hook || "")
-    .replace(/\s+/g, " ")
-    .replace(/^["“]+|["”]+$/g, "")
-    .trim();
-  if (!raw) return "";
-
-  const sentences = raw.split(/(?<=[.!?])\s+/).filter(Boolean);
-  let out = "";
-  for (const sentence of sentences) {
-    const next = out ? `${out} ${sentence}` : sentence;
-    if (next.length > 240 && out) break;
-    out = next;
-    if (out.length >= 160) break;
-  }
-  if (!out) out = raw.slice(0, 220).trim();
-  if (out.length < raw.length && !/[.!?…]$/.test(out)) {
-    out = out.replace(/\s+\S*$/, "").trimEnd() + "…";
-  }
-  return out;
-}
-
 /**
- * The message that travels next to the picture, the way a WhatsApp caption
- * does: what the book is, why it's worth a look, and where to read it.
+ * The whole message, in this order. The link is a line of the text because
+ * phones drop the share sheet's separate `url` field once an image is attached.
  */
-function shareCaption(input: {
-  title: string;
-  author: string;
-  synopsis: string;
-  bookUrl: string;
-}) {
-  const heading = input.author ? `${input.title} — ${input.author}` : input.title;
-  return [
-    heading,
-    input.synopsis,
-    `Read the gist on ${BRAND_NAME} → ${input.bookUrl}`,
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+function shareCaption(title: string, author: string, bookUrl: string) {
+  const who = author.trim();
+  const invite = who
+    ? `Read ${who}'s gist on ${BRAND_NAME}`
+    : `Read the gist on ${BRAND_NAME}`;
+  return [title, invite, bookUrl].filter(Boolean).join("\n");
 }
 
 function downloadBlob(file: File) {
@@ -216,7 +179,6 @@ async function snapshotFirstPage(
 export type PreparedGistShare = {
   file: File;
   title: string;
-  synopsis: string;
   caption: string;
   bookUrl: string;
   bookId: string;
@@ -232,7 +194,6 @@ export async function prepareGistShare(input: {
   firstPageHtml: string;
   title: string;
   author: string;
-  synopsis: string;
   bookUrl: string;
   bookId: string;
   totalPages: number;
@@ -247,16 +208,15 @@ export async function prepareGistShare(input: {
   return {
     file: new File([shot], fileName(input.title), { type: "image/png" }),
     title: input.title,
-    synopsis: input.synopsis,
-    caption: shareCaption(input),
+    caption: shareCaption(input.title, input.author, input.bookUrl),
     bookUrl: input.bookUrl,
     bookId: input.bookId,
   };
 }
 
 function sharePayload(prepared: PreparedGistShare): ShareData | null {
-  // The link lives inside the caption, so chat apps that keep only the text of
-  // an image share still carry it — passing `url` as well would double it up.
+  // The link is already the last line of `text`. A separate `url` is what
+  // phones throw away alongside an image, which is how the link went missing.
   const withFile: ShareData = {
     files: [prepared.file],
     title: prepared.title,
@@ -265,7 +225,6 @@ function sharePayload(prepared: PreparedGistShare): ShareData | null {
   const textOnly: ShareData = {
     title: prepared.title,
     text: prepared.caption,
-    url: prepared.bookUrl,
   };
   if (typeof navigator.share !== "function") return null;
   if (typeof navigator.canShare !== "function") return withFile;
@@ -305,10 +264,10 @@ export function invokeGistShare(prepared: PreparedGistShare): Promise<GistShareR
     },
     (err: unknown) => {
       if (isAbort(err)) return "cancelled" as const;
-      // A target that refuses the file still takes the title, synopsis, link.
+      // A target that refuses the file still takes the caption and the link.
       if (payload.files) {
         return navigator
-          .share({ title: prepared.title, text: prepared.caption, url: prepared.bookUrl })
+          .share({ title: prepared.title, text: prepared.caption })
           .then(
             () => {
               trackShare("gist", prepared.bookId);

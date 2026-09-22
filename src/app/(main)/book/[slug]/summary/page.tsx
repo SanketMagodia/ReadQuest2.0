@@ -1,12 +1,15 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Types } from "mongoose";
 import type { Metadata } from "next";
 import { Source_Serif_4 } from "next/font/google";
+import { ArrowLeft, Clock } from "lucide-react";
 import connectDB from "@/lib/db";
 import Book from "@/models/Book";
 import { looksLikeObjectId } from "@/lib/slug";
 import { BRAND_NAME } from "@/lib/brand";
-import { SummaryReader } from "./SummaryReader";
+import { buildBookCard } from "@/lib/reel";
+import { BookReel } from "@/components/reel/BookReel";
 
 // Medium-style reading serif. Scoped to this route so we don't pay the cost
 // on pages that don't need it.
@@ -51,7 +54,7 @@ export async function generateMetadata({
   const url = `${siteUrl()}/book/${canonicalSlug}/summary`;
   const authors = book.authors || "Unknown author";
   const title = `Summary · ${book.title}`;
-  const description = `A long-form, reader-friendly summary of ${book.title} by ${authors} — plot, themes, characters, and your own personalizable version.`;
+  const description = `A long-form, reader-friendly summary of ${book.title} by ${authors} — read it a page at a time, then keep scrolling into the books next to it.`;
 
   return {
     title,
@@ -82,18 +85,45 @@ export default async function BookSummaryPage({
     redirect(`/book/${canonical}/summary`);
   }
 
+  const bookId = book._id.toString();
+  const seed = await buildBookCard(bookId);
+
+  // No summary means nothing to read. The book page hides the entry point for
+  // these, so this only shows for a link that was already out in the wild.
+  if (!seed) {
+    return (
+      <div className="mx-auto flex w-full max-w-md flex-col items-center gap-4 px-3 py-16 text-center">
+        <span
+          className="flex h-12 w-12 items-center justify-center rounded-full bg-pill text-muted"
+          aria-hidden
+        >
+          <Clock size={20} />
+        </span>
+        <h1 className="text-xl font-bold">Summary coming soon</h1>
+        <p className="text-sm text-muted">
+          {book.title} doesn&apos;t have a gist written yet. It&apos;ll show up
+          here once it does.
+        </p>
+        <Link
+          href={`/book/${canonical}`}
+          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-4 py-2 text-sm font-semibold hover:bg-hover"
+        >
+          <ArrowLeft size={14} aria-hidden /> Back to {book.title.slice(0, 32)}
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className={readingSerif.variable}>
-      <SummaryReader
-        bookId={book._id.toString()}
-        slug={canonical}
-        title={book.title}
-        authors={book.authors ?? ""}
-        thumbnail={book.thumbnail ?? ""}
+      <BookReel
+        seed={seed}
+        relatedTo={bookId}
+        backHref={`/book/${canonical}`}
       />
     </div>
   );
 }
 
-// Reading view depends on per-user state, so don't statically cache.
+// The reel underneath is per-reader, so don't statically cache the shell.
 export const revalidate = 0;

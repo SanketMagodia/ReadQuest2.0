@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   Calendar,
   BookOpenText,
+  Clock,
   Quote,
   Star,
   Newspaper,
@@ -15,6 +16,7 @@ import {
 import connectDB from "@/lib/db";
 import Book from "@/models/Book";
 import BookFollow from "@/models/BookFollow";
+import BookSummary from "@/models/BookSummary";
 import Memory from "@/models/Memory";
 import ReadList from "@/models/ReadList";
 import "@/models/User";
@@ -143,34 +145,39 @@ export default async function BookPage({
   const session = await getAppSession();
   const userId = session?.user?.id;
 
-  const [shelvedCount, myMemoryRows, isFollowing, readListEntry, nytReviews] =
-    await Promise.all([
-      ReadList.countDocuments({ book: bookId }),
-      // Private by construction: scoped to the viewer, and skipped entirely
-      // for signed-out visitors.
-      userId
-        ? Memory.find({ user: userId, book: bookId })
-            .sort({ _id: -1 })
-            .limit(30)
-            .lean()
-        : Promise.resolve([]),
-      userId
-        ? BookFollow.exists({ user: userId, book: bookId }).then(Boolean)
-        : Promise.resolve(false),
-      userId
-        ? ReadList.findOne({ user: userId, book: bookId })
-            .select("status")
-            .lean()
-        : Promise.resolve(null),
-      getNytReviews({
-        isbn: book.isbn13 || book.isbn10 || undefined,
-        title: book.isbn13 || book.isbn10 ? undefined : book.title,
-        author:
-          book.isbn13 || book.isbn10 || book.title
-            ? undefined
-            : book.authors,
-      }),
-    ]);
+  const [
+    shelvedCount,
+    myMemoryRows,
+    isFollowing,
+    readListEntry,
+    nytReviews,
+    hasSummary,
+  ] = await Promise.all([
+    ReadList.countDocuments({ book: bookId }),
+    // Private by construction: scoped to the viewer, and skipped entirely
+    // for signed-out visitors.
+    userId
+      ? Memory.find({ user: userId, book: bookId })
+          .sort({ _id: -1 })
+          .limit(30)
+          .lean()
+      : Promise.resolve([]),
+    userId
+      ? BookFollow.exists({ user: userId, book: bookId }).then(Boolean)
+      : Promise.resolve(false),
+    userId
+      ? ReadList.findOne({ user: userId, book: bookId })
+          .select("status")
+          .lean()
+      : Promise.resolve(null),
+    getNytReviews({
+      isbn: book.isbn13 || book.isbn10 || undefined,
+      title: book.isbn13 || book.isbn10 ? undefined : book.title,
+      author:
+        book.isbn13 || book.isbn10 || book.title ? undefined : book.authors,
+    }),
+    BookSummary.exists({ book: book._id }).then(Boolean),
+  ]);
   const readStatus =
     (readListEntry as { status?: "want" | "read" } | null)?.status ?? null;
 
@@ -305,14 +312,21 @@ export default async function BookPage({
             authenticated={!!userId}
           />
 
-          <Link
-            href={`/book/${canonicalSlug}/summary`}
-            className="group inline-flex w-fit items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white shadow-[var(--shadow-pop)] transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70"
-            style={{ background: "var(--gradient-brand)" }}
-          >
-            Read summary
-            <span aria-hidden className="text-white/80">→</span>
-          </Link>
+          {hasSummary ? (
+            <Link
+              href={`/book/${canonicalSlug}/summary`}
+              className="group inline-flex w-fit items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white shadow-[var(--shadow-pop)] transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70"
+              style={{ background: "var(--gradient-brand)" }}
+            >
+              Read summary
+              <span aria-hidden className="text-white/80">→</span>
+            </Link>
+          ) : (
+            <p className="inline-flex w-fit items-center gap-2 rounded-full bg-pill px-4 py-2 text-sm font-semibold text-muted">
+              <Clock size={14} aria-hidden />
+              Summary coming soon
+            </p>
+          )}
         </div>
       </header>
 

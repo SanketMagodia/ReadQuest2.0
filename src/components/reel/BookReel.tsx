@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { Compass, RefreshCw } from "lucide-react";
+import { ArrowLeft, Compass, RefreshCw } from "lucide-react";
 import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
 import { JoinReadquestFeedCard } from "@/components/auth/UnlockFeatures";
 import { trackReelAction } from "@/lib/analytics-events";
@@ -15,11 +15,23 @@ type ReelAction = "served" | "skipped" | "read" | "saved";
 /** Fetch one more batch when the reader is this close to the end. */
 const PREFETCH_WITHIN = 2;
 
-export function BookReel() {
+type Props = {
+  /**
+   * Open on this gist instead of on the personalized run — the reel a book
+   * page hands over to. Everything below it is that book's neighbourhood.
+   */
+  seed?: ReelCardData;
+  /** Book whose related titles fill the reel under `seed`. */
+  relatedTo?: string;
+  /** Stays put above the reel and returns to the book this gist was opened from. */
+  backHref?: string;
+};
+
+export function BookReel({ seed, relatedTo, backHref }: Props = {}) {
   const { status } = useSession();
-  const [cards, setCards] = useState<ReelCardData[]>([]);
+  const [cards, setCards] = useState<ReelCardData[]>(seed ? [seed] : []);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!seed);
   const [loadingMore, setLoadingMore] = useState(false);
   const [exhausted, setExhausted] = useState(false);
   const [randomMode, setRandomMode] = useState(false);
@@ -69,18 +81,22 @@ export function BookReel() {
     });
   }, []);
 
-  const fetchCards = useCallback(async (kind: "starter" | "ranked" | "random") => {
-    const params = new URLSearchParams();
-    const exclude = cardsRef.current.map((c) => c.id).slice(-60).join(",");
-    if (exclude) params.set("exclude", exclude);
-    if (kind === "starter") params.set("starter", "1");
-    if (kind === "random") params.set("random", "1");
-    const qs = params.toString();
-    const res = await fetch(`/api/reel${qs ? `?${qs}` : ""}`, { cache: "no-store" });
-    if (!res.ok) return null;
-    const j = (await res.json()) as { cards: ReelCardData[] };
-    return j.cards ?? [];
-  }, []);
+  const fetchCards = useCallback(
+    async (kind: "starter" | "ranked" | "random" | "related") => {
+      const params = new URLSearchParams();
+      const exclude = cardsRef.current.map((c) => c.id).slice(-60).join(",");
+      if (exclude) params.set("exclude", exclude);
+      if (kind === "starter") params.set("starter", "1");
+      if (kind === "random") params.set("random", "1");
+      if (kind === "related" && relatedTo) params.set("related", relatedTo);
+      const qs = params.toString();
+      const res = await fetch(`/api/reel${qs ? `?${qs}` : ""}`, { cache: "no-store" });
+      if (!res.ok) return null;
+      const j = (await res.json()) as { cards: ReelCardData[] };
+      return j.cards ?? [];
+    },
+    [relatedTo]
+  );
 
   const loadBatch = useCallback(
     async (mode: "initial" | "more" | "starter" | "background") => {
@@ -91,7 +107,13 @@ export function BookReel() {
       }
       try {
         let fresh = await fetchCards(
-          mode === "starter" ? "starter" : randomModeRef.current ? "random" : "ranked"
+          mode === "starter"
+            ? "starter"
+            : randomModeRef.current
+              ? "random"
+              : relatedTo
+                ? "related"
+                : "ranked"
         );
         if (fresh === null) {
           if (mode === "initial" || mode === "starter") {
@@ -100,7 +122,8 @@ export function BookReel() {
           return;
         }
         if (!fresh.length && mode !== "starter" && !randomModeRef.current) {
-          // Nothing new left to rank. Keep the reel full with a random mix.
+          // Nothing close enough left to serve. Keep the reel full with a
+          // random mix rather than ending the scroll on a dead screen.
           fresh = await fetchCards("random");
           if (fresh === null) {
             if (mode === "initial") setError("Couldn't load your gists.");
@@ -134,7 +157,7 @@ export function BookReel() {
         }
       }
     },
-    [appendCards, exhausted, fetchCards]
+    [appendCards, exhausted, fetchCards, relatedTo]
   );
 
   /**
@@ -143,6 +166,9 @@ export function BookReel() {
    * round-trip happens while the reader is on the first gist.
    */
   useEffect(() => {
+    // A seeded reel already has its first gist on screen; the prefetch below
+    // pulls the related run in behind it.
+    if (seed) return;
     if (status !== "authenticated") return;
     void (async () => {
       await loadBatch("starter");
@@ -150,7 +176,7 @@ export function BookReel() {
     })();
     // Only ever run the first fetch once per session resolution.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
+  }, [status, seed]);
 
   // Track which card is snapped into view. An observer beats a scroll handler
   // here because snap scrolling settles asynchronously.
@@ -233,7 +259,7 @@ export function BookReel() {
     [report]
   );
 
-  if (status === "loading" || (status === "authenticated" && loading)) {
+  if (!seed && (status === "loading" || (status === "authenticated" && loading))) {
     return (
       <div className="rq-reel flex items-center justify-center">
         <LoadingIndicator label="Lining up books for you…" />
@@ -241,7 +267,8 @@ export function BookReel() {
     );
   }
 
-  if (status !== "authenticated") {
+  // A book's own reel is public, like the book page that opens it.
+  if (!seed && status !== "authenticated") {
     return (
       <div className="rq-reel flex items-center justify-center px-3">
         <div className="w-full max-w-md">
@@ -258,7 +285,8 @@ export function BookReel() {
     );
   }
 
-  if (error || (!cards.length && !loading)) {
+  // Never trade gists already on screen for an error screen.
+  if (!cards.length && (error || !loading)) {
     return (
       <div className="rq-reel flex items-center justify-center px-3">
         <div className="max-w-sm rounded-3xl border border-dashed border-border p-8 text-center">
@@ -300,9 +328,24 @@ export function BookReel() {
 
   return (
     <div className="rq-reel-frame">
+      {backHref ? (
+        <div className="shrink-0 border-b border-border/70 px-2 py-1.5">
+          <Link
+            href={backHref}
+            className="inline-flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-semibold text-muted transition hover:bg-hover hover:text-foreground"
+          >
+            <ArrowLeft size={14} aria-hidden />
+            Back to book
+          </Link>
+        </div>
+      ) : null}
       {randomMode ? (
         <div className="shrink-0 border-b border-border/70 px-4 py-2.5 text-center">
-          <p className="text-sm font-semibold">You&apos;ve seen everything we have.</p>
+          <p className="text-sm font-semibold">
+            {relatedTo
+              ? "That's the close matches."
+              : "You've seen everything we have."}
+          </p>
           <p className="mt-0.5 text-xs text-muted">
             A random mix, so there&apos;s always another gist.
           </p>

@@ -34,7 +34,6 @@ import type { ReelCard as ReelCardData } from "@/lib/reel";
 import {
   canOpenShareSheet,
   invokeGistShare,
-  littleSynopsis,
   prepareGistShare,
   type GistShareResult,
   type PreparedGistShare,
@@ -262,7 +261,6 @@ export function ReelCard({
       firstPageHtml: firstPageRef.current?.innerHTML ?? "",
       title: card.title,
       author,
-      synopsis: littleSynopsis(card.description, card.summary, card.hook),
       bookUrl: `${window.location.origin}/book/${card.slug}`,
       bookId: card.id,
       totalPages,
@@ -278,16 +276,7 @@ export function ReelCard({
       });
     preparingShare.current = job;
     return job;
-  }, [
-    author,
-    card.description,
-    card.hook,
-    card.id,
-    card.slug,
-    card.summary,
-    card.title,
-    totalPages,
-  ]);
+  }, [author, card.id, card.slug, card.title, totalPages]);
 
   // Paint the share image while this gist is the one on screen, so the tap
   // can open the phone sheet immediately instead of after a long wait.
@@ -436,6 +425,24 @@ export function ReelCard({
                 data-no-shot
                 onClick={(e) => {
                   e.stopPropagation();
+                  void save();
+                }}
+                aria-label={saved ? "Saved to your shelf" : "Save for later"}
+                aria-pressed={saved}
+                disabled={saving}
+                className={
+                  saved
+                    ? `${GHOST_BUTTON} text-emerald-600 hover:text-emerald-600 dark:text-emerald-300`
+                    : GHOST_BUTTON
+                }
+              >
+                {saved ? <Check size={16} aria-hidden /> : <Bookmark size={16} aria-hidden />}
+              </button>
+              <button
+                type="button"
+                data-no-shot
+                onClick={(e) => {
+                  e.stopPropagation();
                   void share();
                 }}
                 aria-label={shareLabel}
@@ -459,24 +466,6 @@ export function ReelCard({
                   {shareNote}
                 </p>
               ) : null}
-              <button
-                type="button"
-                data-no-shot
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void save();
-                }}
-                aria-label={saved ? "Saved to your shelf" : "Save for later"}
-                aria-pressed={saved}
-                disabled={saving}
-                className={
-                  saved
-                    ? `${GHOST_BUTTON} text-emerald-600 hover:text-emerald-600 dark:text-emerald-300`
-                    : GHOST_BUTTON
-                }
-              >
-                {saved ? <Check size={16} aria-hidden /> : <Bookmark size={16} aria-hidden />}
-              </button>
             </div>
           ) : null}
         </header>
