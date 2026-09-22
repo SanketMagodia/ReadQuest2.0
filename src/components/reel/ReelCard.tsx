@@ -31,7 +31,12 @@ import {
 } from "@/components/reader/markdown";
 import { trackMemorySaved } from "@/lib/analytics-events";
 import type { ReelCard as ReelCardData } from "@/lib/reel";
-import { littleSynopsis, shareGistPage } from "@/lib/share-gist";
+import {
+  invokeGistShare,
+  littleSynopsis,
+  prepareGistShare,
+  type PreparedGistShare,
+} from "@/lib/share-gist";
 
 /** Horizontal swipe past this many pixels turns the page. */
 const PAGE_SWIPE_PX = 48;
@@ -86,6 +91,8 @@ export function ReelCard({
   const [shareState, setShareState] = useState<"idle" | "busy" | "shared" | "saved" | "failed">(
     "idle"
   );
+  const preparedShare = useRef<PreparedGistShare | null>(null);
+  const preparingShare = useRef<Promise<PreparedGistShare> | null>(null);
 
   const sectionRef = useRef<HTMLElement | null>(null);
   const firstPageRef = useRef<HTMLDivElement | null>(null);
@@ -242,30 +249,74 @@ export function ReelCard({
     }
   }, [card.id, selection]);
 
-  async function share() {
+  const buildShare = useCallback(() => {
+    if (preparedShare.current) return Promise.resolve(preparedShare.current);
+    if (preparingShare.current) return preparingShare.current;
     const section = sectionRef.current;
-    if (!section || shareState === "busy") return;
-    setShareState("busy");
-    try {
-      const result = await shareGistPage({
-        section,
-        firstPageHtml: firstPageRef.current?.innerHTML ?? "",
-        title: card.title,
-        synopsis: littleSynopsis(card.description, card.summary, card.hook),
-        bookUrl: `${window.location.origin}/book/${card.slug}`,
-        bookId: card.id,
-        totalPages,
+    if (!section) return Promise.reject(new Error("gist is not on screen"));
+    const job = prepareGistShare({
+      section,
+      firstPageHtml: firstPageRef.current?.innerHTML ?? "",
+      title: card.title,
+      synopsis: littleSynopsis(card.description, card.summary, card.hook),
+      bookUrl: `${window.location.origin}/book/${card.slug}`,
+      bookId: card.id,
+      totalPages,
+    })
+      .then((prepared) => {
+        preparedShare.current = prepared;
+        preparingShare.current = null;
+        return prepared;
+      })
+      .catch((err: unknown) => {
+        preparingShare.current = null;
+        throw err;
       });
-      if (result === "cancelled") {
+    preparingShare.current = job;
+    return job;
+  }, [
+    card.description,
+    card.hook,
+    card.id,
+    card.slug,
+    card.summary,
+    card.title,
+    totalPages,
+  ]);
+
+  // Paint the share image while this gist is the one on screen, so the tap
+  // can open the phone sheet immediately instead of after a long wait.
+  useEffect(() => {
+    if (!active || !slices) return;
+    void buildShare().catch(() => {});
+  }, [active, slices, buildShare]);
+
+  function finishShare(result: Promise<"shared" | "saved" | "cancelled">) {
+    void result.then((outcome) => {
+      if (outcome === "cancelled") {
         setShareState("idle");
         return;
       }
-      setShareState(result === "saved" ? "saved" : "shared");
+      setShareState(outcome === "saved" ? "saved" : "shared");
       window.setTimeout(() => setShareState("idle"), 2000);
-    } catch {
-      setShareState("failed");
-      window.setTimeout(() => setShareState("idle"), 2000);
+    });
+  }
+
+  function share() {
+    if (shareState === "busy") return;
+    const ready = preparedShare.current;
+    if (ready) {
+      finishShare(invokeGistShare(ready));
+      return;
     }
+    setShareState("busy");
+    void buildShare().then(
+      (prepared) => finishShare(invokeGistShare(prepared)),
+      () => {
+        setShareState("failed");
+        window.setTimeout(() => setShareState("idle"), 2000);
+      }
+    );
   }
 
   async function save() {

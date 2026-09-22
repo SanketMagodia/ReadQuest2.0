@@ -149,6 +149,24 @@ function downloadBlob(file: File) {
   URL.revokeObjectURL(url);
 }
 
+let cachedFontCSS: string | null = null;
+let fontEmbedPromise: Promise<string> | null = null;
+
+/** Start the slow font fetch before the tap, so the snapshot itself stays short. */
+function warmFonts(node: HTMLElement) {
+  if (cachedFontCSS !== null || fontEmbedPromise) return;
+  fontEmbedPromise = import("html-to-image")
+    .then(({ getFontEmbedCSS }) => getFontEmbedCSS(node, { cacheBust: false }))
+    .then((css) => {
+      cachedFontCSS = css;
+      return css;
+    })
+    .catch(() => {
+      cachedFontCSS = "";
+      return "";
+    });
+}
+
 /**
  * Paint a copy of the gist card, forced onto page one, and turn it into a PNG.
  * The live card stays where the reader left it.
@@ -194,6 +212,7 @@ async function snapshotFirstPage(
 
   host.appendChild(clone);
   document.body.appendChild(host);
+  warmFonts(clone);
 
   const options = {
     pixelRatio: 2,
@@ -201,6 +220,9 @@ async function snapshotFirstPage(
     includeQueryParams: true,
     backgroundColor: getComputedStyle(document.body).backgroundColor,
     filter: (node: HTMLElement) => !node.hasAttribute?.("data-no-shot"),
+    ...(cachedFontCSS !== null
+      ? { fontEmbedCSS: cachedFontCSS }
+      : { skipFonts: true }),
   };
 
   try {
@@ -210,21 +232,28 @@ async function snapshotFirstPage(
     try {
       return await toBlob(clone, options);
     } catch {
-      return await toBlob(clone, { ...options, skipFonts: true });
+      return await toBlob(clone, { ...options, skipFonts: true, fontEmbedCSS: undefined });
     }
   } finally {
     host.remove();
   }
 }
 
+export type PreparedGistShare = {
+  file: File;
+  title: string;
+  synopsis: string;
+  caption: string;
+  bookUrl: string;
+  bookId: string;
+};
+
 /**
- * Share the gist page with the book title, a short synopsis, and the book URL.
- * The title and synopsis are also drawn above the picture, so they stay with
- * the image when a share target only keeps the file.
- * When the device cannot attach an image, the snapshot is downloaded and the
- * same caption is copied.
+ * Build the picture and caption. This is slow, so it must not be the call
+ * that opens the phone share sheet — that gesture expires while the snapshot
+ * is still painting.
  */
-export async function shareGistPage(input: {
+export async function prepareGistShare(input: {
   section: HTMLElement;
   firstPageHtml: string;
   title: string;
@@ -232,7 +261,7 @@ export async function shareGistPage(input: {
   bookUrl: string;
   bookId: string;
   totalPages: number;
-}): Promise<GistShareResult> {
+}): Promise<PreparedGistShare> {
   const shot = await snapshotFirstPage(
     input.section,
     input.firstPageHtml,
@@ -241,43 +270,63 @@ export async function shareGistPage(input: {
   if (!shot) throw new Error("empty snapshot");
 
   const blob = await withTitleAndSynopsis(shot, input.title, input.synopsis);
-  const file = new File([blob], fileName(input.title), { type: "image/png" });
-  const caption = shareCaption(input.title, input.synopsis, input.bookUrl);
-  const withUrl = {
+  return {
+    file: new File([blob], fileName(input.title), { type: "image/png" }),
     title: input.title,
-    text: caption,
-    url: input.bookUrl,
-    files: [file],
+    synopsis: input.synopsis,
+    caption: shareCaption(input.title, input.synopsis, input.bookUrl),
+    bookUrl: input.bookUrl,
+    bookId: input.bookId,
   };
-  const withText = {
-    title: input.title,
-    text: caption,
-    files: [file],
-  };
+}
 
-  if (typeof navigator.share === "function") {
-    try {
-      if (navigator.canShare?.(withUrl)) {
-        await navigator.share(withUrl);
-        trackShare("gist", input.bookId);
-        return "shared";
-      }
-      if (navigator.canShare?.(withText)) {
-        await navigator.share(withText);
-        trackShare("gist", input.bookId);
-        return "shared";
-      }
-    } catch (err) {
-      if (isAbort(err)) return "cancelled";
+function sharePayload(prepared: PreparedGistShare): ShareData | null {
+  const withFile: ShareData = {
+    files: [prepared.file],
+    title: prepared.title,
+    text: prepared.caption,
+  };
+  const withFileAndUrl: ShareData = { ...withFile, url: prepared.bookUrl };
+  const textOnly: ShareData = {
+    title: prepared.title,
+    text: prepared.caption,
+    url: prepared.bookUrl,
+  };
+  if (typeof navigator.share !== "function") return null;
+  if (typeof navigator.canShare !== "function") return withFileAndUrl;
+  if (navigator.canShare(withFileAndUrl)) return withFileAndUrl;
+  if (navigator.canShare(withFile)) return withFile;
+  if (navigator.canShare(textOnly)) return textOnly;
+  // Some phones report canShare false until share() itself is called.
+  return withFile;
+}
+
+function saveLocally(prepared: PreparedGistShare) {
+  downloadBlob(prepared.file);
+  void navigator.clipboard?.writeText(prepared.caption).catch(() => {});
+  trackShare("gist", prepared.bookId);
+}
+
+/**
+ * Open the system share sheet. Call this directly from a tap — phones ignore
+ * `navigator.share` after the snapshot's awaits have used up the first one.
+ */
+export function invokeGistShare(prepared: PreparedGistShare): Promise<GistShareResult> {
+  const payload = sharePayload(prepared);
+  if (!payload) {
+    saveLocally(prepared);
+    return Promise.resolve("saved");
+  }
+
+  return navigator.share(payload).then(
+    () => {
+      trackShare("gist", prepared.bookId);
+      return "shared" as const;
+    },
+    (err: unknown) => {
+      if (isAbort(err)) return "cancelled" as const;
+      saveLocally(prepared);
+      return "saved" as const;
     }
-  }
-
-  downloadBlob(file);
-  try {
-    await navigator.clipboard.writeText(caption);
-  } catch {
-    // The snapshot still downloaded.
-  }
-  trackShare("gist", input.bookId);
-  return "saved";
+  );
 }
