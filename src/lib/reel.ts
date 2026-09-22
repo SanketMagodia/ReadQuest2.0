@@ -476,6 +476,45 @@ export async function buildStarterReel(
 }
 
 /**
+ * A random run of already-summarized books.
+ *
+ * Used once a reader has judged everything the ranker can still offer, so the
+ * gist reel stays full instead of ending on an empty screen. `exclude` is only
+ * the cards already on screen — earlier impressions are fair game again.
+ */
+export async function buildRandomReel(exclude: string[] = []): Promise<ReelCard[]> {
+  await connectDB();
+
+  const excludedIds = exclude
+    .filter((id) => Types.ObjectId.isValid(id))
+    .map((id) => new Types.ObjectId(id));
+
+  const rows = (await BookSummary.aggregate([
+    ...(excludedIds.length ? [{ $match: { book: { $nin: excludedIds } } }] : []),
+    { $sample: { size: REEL_BATCH * 4 } },
+    {
+      $lookup: {
+        from: Book.collection.name,
+        localField: "book",
+        foreignField: "_id",
+        as: "book",
+      },
+    },
+    { $unwind: "$book" },
+    { $replaceRoot: { newRoot: "$book" } },
+    { $match: { description: { $exists: true, $ne: "" } } },
+    { $limit: REEL_BATCH },
+  ])) as BookDoc[];
+
+  if (!rows.length) return [];
+
+  const contentByBook = await summaryByBook(rows);
+  return rows.map((book) =>
+    toCard(book, "", "", contentByBook.get(book._id.toString()) ?? "")
+  );
+}
+
+/**
  * The next run of cards for a reader.
  *
  * `exclude` carries ids the client already holds but hasn't reported on yet,

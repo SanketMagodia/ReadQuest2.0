@@ -4,14 +4,14 @@ import { z } from "zod";
 import { getAppSession } from "@/lib/session";
 import connectDB from "@/lib/db";
 import ReelImpression from "@/models/ReelImpression";
-import { buildReel, buildStarterReel } from "@/lib/reel";
+import { buildRandomReel, buildReel, buildStarterReel } from "@/lib/reel";
 
 // Ranking a batch is one LLM call, which can outrun the default budget on a
 // cold provider.
 export const maxDuration = 60;
 
 /**
- * GET /api/reel?exclude=id,id,…&starter=1
+ * GET /api/reel?exclude=id,id,…&starter=1&random=1
  *
  * The next run of personalized cards. `exclude` carries ids the client is
  * still holding but hasn't reported an action on yet, so prefetching the next
@@ -19,7 +19,8 @@ export const maxDuration = 60;
  *
  * `starter=1` skips the ranker and answers from the shared hourly rotation,
  * which is what the client opens with while the personalized run is still in
- * flight.
+ * flight. `random=1` samples summarized books the reader may already have
+ * seen, for when the ranked pool is empty.
  */
 export async function GET(req: Request) {
   const session = await getAppSession();
@@ -37,7 +38,9 @@ export async function GET(req: Request) {
   const cards =
     url.searchParams.get("starter") === "1"
       ? await buildStarterReel(session.user.id, exclude)
-      : await buildReel(session.user.id, exclude);
+      : url.searchParams.get("random") === "1"
+        ? await buildRandomReel(exclude)
+        : await buildReel(session.user.id, exclude);
   return NextResponse.json({ cards });
 }
 
@@ -94,4 +97,24 @@ export async function POST(req: Request) {
   );
 
   return NextResponse.json({ ok: true });
+}
+
+/**
+ * DELETE /api/reel — forget which gists this reader has already been shown.
+ *
+ * Shelves, follows, and saved books stay. Only the viewed-history rows go, so
+ * those books can be recommended again.
+ */
+export async function DELETE() {
+  const session = await getAppSession();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  await connectDB();
+  const result = await ReelImpression.deleteMany({
+    user: new Types.ObjectId(session.user.id),
+  });
+
+  return NextResponse.json({ ok: true, cleared: result.deletedCount });
 }

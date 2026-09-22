@@ -28,6 +28,7 @@ import {
   Clock,
   MessageCircle,
   Loader2,
+  RotateCcw,
   Crown,
   BookOpen,
   Users,
@@ -565,6 +566,9 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
   const [imageBusy, setImageBusy] = useState(false);
+  const [gistReset, setGistReset] = useState<"idle" | "confirm" | "busy" | "done">(
+    "idle"
+  );
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const { setOwnMood, previewMood } = useMood();
@@ -780,6 +784,22 @@ export default function ProfilePage() {
 
   function openFilePicker() {
     fileInputRef.current?.click();
+  }
+
+  async function resetGistHistory() {
+    if (gistReset === "busy") return;
+    setGistReset("busy");
+    try {
+      const res = await fetch("/api/reel", { method: "DELETE" });
+      if (!res.ok) {
+        setGistReset("idle");
+        return;
+      }
+      setGistReset("done");
+      window.setTimeout(() => setGistReset("idle"), 2500);
+    } catch {
+      setGistReset("idle");
+    }
   }
 
   // Follow / unfollow this profile (one-directional; no acceptance needed).
@@ -1350,6 +1370,40 @@ export default function ProfilePage() {
                 </span>
               ) : null}
             </div>
+            {isSelf ? (
+              <div className="mt-1.5">
+                {gistReset === "confirm" || gistReset === "busy" ? (
+                  <span className="inline-flex h-7 items-center gap-1.5 text-[11px] font-semibold text-muted">
+                    Clear viewed gists?
+                    <button
+                      type="button"
+                      onClick={() => void resetGistHistory()}
+                      disabled={gistReset === "busy"}
+                      className="text-foreground underline-offset-2 hover:underline disabled:opacity-60"
+                    >
+                      {gistReset === "busy" ? "Clearing…" : "Reset"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setGistReset("idle")}
+                      disabled={gistReset === "busy"}
+                      className="hover:text-foreground disabled:opacity-60"
+                    >
+                      Cancel
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setGistReset("confirm")}
+                    className="inline-flex h-7 items-center gap-1.5 text-[11px] font-semibold text-muted transition hover:text-foreground"
+                  >
+                    <RotateCcw size={12} aria-hidden />
+                    {gistReset === "done" ? "Gists can be recommended again" : "Reset gist history"}
+                  </button>
+                )}
+              </div>
+            ) : null}
           </div>
         </div>
       </header>

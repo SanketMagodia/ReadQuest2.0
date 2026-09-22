@@ -936,6 +936,12 @@ h1,
    compact top bar plus `--bottomnav-h`, or just the `pb-8` on wide layouts.
    Getting this wrong leaves a second scrollbar and the snap points land
    mid-card. */
+.rq-reel-frame {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: calc(100dvh - var(--topbar-h) - var(--bottomnav-h));
+}
 .rq-reel {
   /* Phone: one title line. Wide: compact header + a single blurred line. */
   --rq-reel-peek: 2.85rem;
@@ -946,13 +952,24 @@ h1,
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
+.rq-reel-frame > .rq-reel {
+  height: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+}
 .rq-reel::-webkit-scrollbar {
   display: none;
 }
 @media (min-aspect-ratio: 10001/10000) {
+  .rq-reel-frame,
+  .rq-reel {
+    height: calc(100dvh - 2rem);
+  }
   .rq-reel {
     --rq-reel-peek: 5.5rem;
-    height: calc(100dvh - 2rem);
+  }
+  .rq-reel-frame > .rq-reel {
+    height: auto;
   }
 }
 

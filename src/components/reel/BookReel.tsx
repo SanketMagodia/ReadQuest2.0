@@ -22,6 +22,7 @@ export function BookReel() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [exhausted, setExhausted] = useState(false);
+  const [randomMode, setRandomMode] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -34,6 +35,7 @@ export function BookReel() {
   // downgrade a "read" back to a "skipped".
   const reported = useRef<Map<string, ReelAction>>(new Map());
   const loadingMoreRef = useRef(false);
+  const randomModeRef = useRef(false);
 
   // `loadBatch` needs the current cards to build its exclude list without
   // taking them as a dependency, which would restart in-flight fetches.
@@ -60,6 +62,26 @@ export function BookReel() {
     }).catch(() => {});
   }, []);
 
+  const appendCards = useCallback((fresh: ReelCardData[]) => {
+    setCards((prev) => {
+      const seen = new Set(prev.map((c) => c.id));
+      return [...prev, ...fresh.filter((c) => !seen.has(c.id))];
+    });
+  }, []);
+
+  const fetchCards = useCallback(async (kind: "starter" | "ranked" | "random") => {
+    const params = new URLSearchParams();
+    const exclude = cardsRef.current.map((c) => c.id).slice(-60).join(",");
+    if (exclude) params.set("exclude", exclude);
+    if (kind === "starter") params.set("starter", "1");
+    if (kind === "random") params.set("random", "1");
+    const qs = params.toString();
+    const res = await fetch(`/api/reel${qs ? `?${qs}` : ""}`, { cache: "no-store" });
+    if (!res.ok) return null;
+    const j = (await res.json()) as { cards: ReelCardData[] };
+    return j.cards ?? [];
+  }, []);
+
   const loadBatch = useCallback(
     async (mode: "initial" | "more" | "starter" | "background") => {
       if (mode === "more") {
@@ -68,33 +90,32 @@ export function BookReel() {
         setLoadingMore(true);
       }
       try {
-        const params = new URLSearchParams();
-        const exclude = cardsRef.current.map((c) => c.id).slice(-60).join(",");
-        if (exclude) params.set("exclude", exclude);
-        if (mode === "starter") params.set("starter", "1");
-        const qs = params.toString();
-
-        const res = await fetch(`/api/reel${qs ? `?${qs}` : ""}`, {
-          cache: "no-store",
-        });
-        if (!res.ok) {
+        let fresh = await fetchCards(
+          mode === "starter" ? "starter" : randomModeRef.current ? "random" : "ranked"
+        );
+        if (fresh === null) {
           if (mode === "initial" || mode === "starter") {
             setError("Couldn't load your gists.");
           }
           return;
         }
-        const j = (await res.json()) as { cards: ReelCardData[] };
-        const fresh = j.cards ?? [];
+        if (!fresh.length && mode !== "starter" && !randomModeRef.current) {
+          // Nothing new left to rank. Keep the reel full with a random mix.
+          fresh = await fetchCards("random");
+          if (fresh === null) {
+            if (mode === "initial") setError("Couldn't load your gists.");
+            return;
+          }
+          randomModeRef.current = true;
+          setRandomMode(true);
+        }
         if (!fresh.length) {
           // The starter rotation running dry just means this reader has been
           // through it; the ranked run behind it still has books to give.
           if (mode !== "starter") setExhausted(true);
           return;
         }
-        setCards((prev) => {
-          const seen = new Set(prev.map((c) => c.id));
-          return [...prev, ...fresh.filter((c) => !seen.has(c.id))];
-        });
+        appendCards(fresh);
         // A later run succeeding clears an earlier one's failure — there are
         // books on screen, so the error screen would be a lie.
         setError(null);
@@ -113,7 +134,7 @@ export function BookReel() {
         }
       }
     },
-    [exhausted]
+    [appendCards, exhausted, fetchCards]
   );
 
   /**
@@ -255,6 +276,8 @@ export function BookReel() {
               onClick={() => {
                 setError(null);
                 setExhausted(false);
+                randomModeRef.current = false;
+                setRandomMode(false);
                 setLoading(true);
                 void loadBatch("initial");
               }}
@@ -276,14 +299,22 @@ export function BookReel() {
   }
 
   return (
-    <>
+    <div className="rq-reel-frame">
+      {randomMode ? (
+        <div className="shrink-0 border-b border-border/70 px-4 py-2.5 text-center">
+          <p className="text-sm font-semibold">You&apos;ve seen everything we have.</p>
+          <p className="mt-0.5 text-xs text-muted">
+            A random mix, so there&apos;s always another gist.
+          </p>
+        </div>
+      ) : null}
       <div
         ref={scrollerRef}
         className={peek ? "rq-reel rq-reel--peek" : "rq-reel"}
         aria-label="Gists"
       >
         {cards.map((card, i) => {
-          const hasNext = i < cards.length - 1 || loadingMore || exhausted;
+          const hasNext = i < cards.length - 1 || loadingMore;
           return (
           <div
             key={card.id}
@@ -321,24 +352,8 @@ export function BookReel() {
           <div className="rq-reel-item flex items-center justify-center">
             <LoadingIndicator size="sm" label="Finding your next book…" />
           </div>
-        ) : exhausted ? (
-          <div className="rq-reel-item flex items-center justify-center px-3">
-            <div className="max-w-sm rounded-3xl border border-dashed border-border p-8 text-center">
-              <p className="text-base font-semibold">That&apos;s all the gists</p>
-              <p className="mt-2 text-sm text-muted">
-                You&apos;ve been through everything matching your taste today.
-              </p>
-              <Link
-                href="/explore"
-                className="mt-5 inline-flex rounded-full px-4 py-2 text-xs font-semibold text-white"
-                style={{ background: "var(--gradient-brand)" }}
-              >
-                Go exploring
-              </Link>
-            </div>
-          </div>
         ) : null}
       </div>
-    </>
+    </div>
   );
 }

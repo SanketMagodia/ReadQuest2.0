@@ -17,6 +17,8 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsUp,
+  Loader2,
+  Share2,
   Star,
 } from "lucide-react";
 import {
@@ -29,6 +31,7 @@ import {
 } from "@/components/reader/markdown";
 import { trackMemorySaved } from "@/lib/analytics-events";
 import type { ReelCard as ReelCardData } from "@/lib/reel";
+import { littleSynopsis, shareGistPage } from "@/lib/share-gist";
 
 /** Horizontal swipe past this many pixels turns the page. */
 const PAGE_SWIPE_PX = 48;
@@ -80,7 +83,12 @@ export function ReelCard({
   const [columnWidth, setColumnWidth] = useState(0);
   const [selection, setSelection] = useState("");
   const [kept, setKept] = useState(false);
+  const [shareState, setShareState] = useState<"idle" | "busy" | "shared" | "saved" | "failed">(
+    "idle"
+  );
 
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const firstPageRef = useRef<HTMLDivElement | null>(null);
   const readerRef = useRef<HTMLDivElement | null>(null);
   const columnRef = useRef<HTMLDivElement | null>(null);
   const measureRef = useRef<HTMLDivElement | null>(null);
@@ -234,6 +242,32 @@ export function ReelCard({
     }
   }, [card.id, selection]);
 
+  async function share() {
+    const section = sectionRef.current;
+    if (!section || shareState === "busy") return;
+    setShareState("busy");
+    try {
+      const result = await shareGistPage({
+        section,
+        firstPageHtml: firstPageRef.current?.innerHTML ?? "",
+        title: card.title,
+        synopsis: littleSynopsis(card.description, card.summary, card.hook),
+        bookUrl: `${window.location.origin}/book/${card.slug}`,
+        bookId: card.id,
+        totalPages,
+      });
+      if (result === "cancelled") {
+        setShareState("idle");
+        return;
+      }
+      setShareState(result === "saved" ? "saved" : "shared");
+      window.setTimeout(() => setShareState("idle"), 2000);
+    } catch {
+      setShareState("failed");
+      window.setTimeout(() => setShareState("idle"), 2000);
+    }
+  }
+
   async function save() {
     if (saving || saved) return;
     setSaving(true);
@@ -246,8 +280,21 @@ export function ReelCard({
     .filter(Boolean)
     .join(" · ");
 
+  const shareLabel =
+    shareState === "busy"
+      ? "Preparing snapshot"
+      : shareState === "shared"
+        ? "Shared"
+        : shareState === "saved"
+          ? "Snapshot saved and link copied"
+          : shareState === "failed"
+            ? "Couldn't share this gist"
+            : "Share this gist";
+
   return (
+    <>
     <section
+      ref={sectionRef}
       className={
         peeking
           ? "rq-reel-item rq-reel-item--peeking relative overflow-hidden"
@@ -321,23 +368,45 @@ export function ReelCard({
           </div>
 
           {!peeking ? (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                void save();
-              }}
-              aria-label={saved ? "Saved to your shelf" : "Save for later"}
-              aria-pressed={saved}
-              disabled={saving}
-              className={
-                saved
-                  ? `${GHOST_BUTTON} self-start text-emerald-600 hover:text-emerald-600 dark:text-emerald-300`
-                  : `${GHOST_BUTTON} self-start`
-              }
-            >
-              {saved ? <Check size={16} aria-hidden /> : <Bookmark size={16} aria-hidden />}
-            </button>
+            <div className="flex shrink-0 self-start">
+              <button
+                type="button"
+                data-no-shot
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void share();
+                }}
+                aria-label={shareLabel}
+                disabled={shareState === "busy"}
+                className={GHOST_BUTTON}
+              >
+                {shareState === "busy" ? (
+                  <Loader2 size={16} aria-hidden className="animate-spin" />
+                ) : shareState === "shared" || shareState === "saved" ? (
+                  <Check size={16} aria-hidden className="text-emerald-600 dark:text-emerald-300" />
+                ) : (
+                  <Share2 size={16} aria-hidden />
+                )}
+              </button>
+              <button
+                type="button"
+                data-no-shot
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void save();
+                }}
+                aria-label={saved ? "Saved to your shelf" : "Save for later"}
+                aria-pressed={saved}
+                disabled={saving}
+                className={
+                  saved
+                    ? `${GHOST_BUTTON} text-emerald-600 hover:text-emerald-600 dark:text-emerald-300`
+                    : GHOST_BUTTON
+                }
+              >
+                {saved ? <Check size={16} aria-hidden /> : <Bookmark size={16} aria-hidden />}
+              </button>
+            </div>
           ) : null}
         </header>
 
@@ -372,6 +441,7 @@ export function ReelCard({
         >
           <div
             ref={measureRef}
+            data-no-shot
             aria-hidden
             style={columnWidth > 0 ? { width: columnWidth } : undefined}
             className="rq-reel-prose pointer-events-none invisible absolute inset-y-0 left-0 overflow-hidden"
@@ -390,6 +460,7 @@ export function ReelCard({
               <div
                 key={`${current}-${i}`}
                 ref={i === 0 ? columnRef : undefined}
+                data-gist-body={i === 0 ? "" : undefined}
                 className="rq-reel-prose rq-page-turn overflow-hidden"
               >
                 {slice.map((b, j) => renderBlock(b, `p-${current}-${i}-${j}`))}
@@ -402,6 +473,7 @@ export function ReelCard({
             onClick={() => goToPage(current - 1)}
             onPointerDown={(e) => e.stopPropagation()}
             disabled={current === 0}
+            data-no-shot
             aria-label="Previous page"
             className="absolute left-0 top-1/2 z-10 flex h-24 w-10 -translate-y-1/2 items-center justify-center text-foreground/25 transition hover:text-foreground/55 disabled:pointer-events-none disabled:opacity-0 layout-wide:hidden"
           >
@@ -412,6 +484,7 @@ export function ReelCard({
             onClick={() => goToPage(current + 1)}
             onPointerDown={(e) => e.stopPropagation()}
             disabled={onLastPage}
+            data-no-shot
             aria-label="Next page"
             className="absolute right-0 top-1/2 z-10 flex h-24 w-10 -translate-y-1/2 items-center justify-center text-foreground/25 transition hover:text-foreground/55 disabled:pointer-events-none disabled:opacity-0 layout-wide:hidden"
           >
@@ -424,7 +497,7 @@ export function ReelCard({
           onClick={onNext}
         >
           {selection || kept ? (
-            <div className="mb-2 flex justify-center">
+            <div data-no-shot className="mb-2 flex justify-center">
               {kept ? (
                 <p className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-[13px] font-semibold text-emerald-700 dark:text-emerald-300">
                   <Check size={15} aria-hidden /> Kept in your memories
@@ -446,7 +519,7 @@ export function ReelCard({
           ) : null}
 
           <div className="flex items-center justify-center layout-wide:hidden">
-            <span className="text-[11px] font-semibold tabular-nums text-muted">
+            <span data-page-label="compact" className="text-[11px] font-semibold tabular-nums text-muted">
               {current + 1}/{totalPages}
             </span>
           </div>
@@ -459,12 +532,16 @@ export function ReelCard({
                 goToPage(current - 1);
               }}
               disabled={current === 0}
+              data-no-shot
               aria-label="Previous page"
               className={GHOST_BUTTON}
             >
               <ChevronLeft size={17} aria-hidden />
             </button>
-            <span className="min-w-[3.25rem] text-center text-[11px] font-semibold tabular-nums text-muted">
+            <span
+              data-page-label="wide"
+              className="min-w-[3.25rem] text-center text-[11px] font-semibold tabular-nums text-muted"
+            >
               {current + 1} / {totalPages}
             </span>
             <button
@@ -474,6 +551,7 @@ export function ReelCard({
                 goToPage(current + 1);
               }}
               disabled={onLastPage}
+              data-no-shot
               aria-label="Next page"
               className={GHOST_BUTTON}
             >
@@ -483,6 +561,7 @@ export function ReelCard({
 
           <div className="mt-1.5 h-[2px] w-full overflow-hidden rounded-full bg-border/60 layout-wide:mt-2">
             <div
+              data-gist-progress
               className="h-full rounded-full transition-[width] duration-300"
               style={{
                 width: `${((current + 1) / totalPages) * 100}%`,
@@ -493,5 +572,9 @@ export function ReelCard({
         </footer>
       </div>
     </section>
+    <div ref={firstPageRef} hidden aria-hidden>
+      {(slices?.[0] ?? []).map((b, j) => renderBlock(b, `shot-${j}`))}
+    </div>
+    </>
   );
 }
