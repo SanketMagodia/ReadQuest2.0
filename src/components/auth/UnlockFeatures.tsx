@@ -165,10 +165,10 @@ export function JoinReadquestFeedCard() {
           Free to join
         </p>
         <h2 className="mt-1 text-[14px] font-extrabold leading-[1.15] tracking-tight sm:mt-2 sm:text-[17px] layout-wide:text-[20px]">
-          This is just the lobby
+          The shelf starts when you do
         </h2>
         <p className="mt-0.5 hidden text-[11px] leading-snug text-muted sm:block layout-wide:mt-1 layout-wide:text-[12px]">
-          Clubs, memories, and an endless stream of gists picked for you.
+          Gists, clubs, and the lines you keep — picked once you have a name.
         </p>
       </div>
 

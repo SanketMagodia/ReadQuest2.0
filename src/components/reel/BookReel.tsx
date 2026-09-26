@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { ArrowLeft, Compass, RefreshCw } from "lucide-react";
-import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
-import { JoinReadquestFeedCard } from "@/components/auth/UnlockFeatures";
+import { ArrowLeft, RefreshCw } from "lucide-react";
+import { ShelfLoadingStage } from "@/components/ui/ShelfLoadingStage";
+import { GistLoadingStage, GistLobby } from "./GistGate";
 import { trackReelAction } from "@/lib/analytics-events";
 import type { ReelCard as ReelCardData } from "@/lib/reel";
 import { ReelCard } from "./ReelCard";
@@ -260,29 +260,12 @@ export function BookReel({ seed, relatedTo, backHref }: Props = {}) {
   );
 
   if (!seed && (status === "loading" || (status === "authenticated" && loading))) {
-    return (
-      <div className="rq-reel flex items-center justify-center">
-        <LoadingIndicator label="Lining up books for you…" />
-      </div>
-    );
+    return <GistLoadingStage />;
   }
 
   // A book's own reel is public, like the book page that opens it.
   if (!seed && status !== "authenticated") {
-    return (
-      <div className="rq-reel flex items-center justify-center px-3">
-        <div className="w-full max-w-md">
-          <JoinReadquestFeedCard />
-          <Link
-            href="/explore"
-            className="mt-4 flex items-center justify-center gap-2 rounded-full border border-border bg-card px-4 py-3 text-sm font-semibold hover:bg-hover"
-          >
-            <Compass size={15} aria-hidden />
-            Browse the library instead
-          </Link>
-        </div>
-      </div>
-    );
+    return <GistLobby />;
   }
 
   // Never trade gists already on screen for an error screen.
@@ -392,8 +375,13 @@ export function BookReel({ seed, relatedTo, backHref }: Props = {}) {
         })}
 
         {loadingMore ? (
-          <div className="rq-reel-item flex items-center justify-center">
-            <LoadingIndicator size="sm" label="Finding your next book…" />
+          <div className="rq-reel-item">
+            <ShelfLoadingStage
+              className="h-full"
+              tall
+              lines={["The next book is already leaning in"]}
+              hint="Finding your next book…"
+            />
           </div>
         ) : null}
       </div>

@@ -19,6 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useDm } from "@/components/dm/DmProvider";
 import { trackFriendAction } from "@/lib/analytics-events";
+import { ShelfLoadingStage } from "@/components/ui/ShelfLoadingStage";
 
 type UserLite = {
   id: string;
@@ -316,9 +317,15 @@ function FriendsList({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-16">
-        <Loader2 className="h-6 w-6 animate-spin text-muted" aria-hidden />
-      </div>
+      <ShelfLoadingStage
+        className="min-h-[28rem] rounded-3xl"
+        lines={[
+          "Finding the readers you know",
+          "Seeing what they're in the middle of",
+          "The circle is gathering",
+        ]}
+        hint="Loading friends…"
+      />
     );
   }
   if (error) {
@@ -457,9 +464,14 @@ function RequestsPanel({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-16">
-        <Loader2 className="h-6 w-6 animate-spin text-muted" aria-hidden />
-      </div>
+      <ShelfLoadingStage
+        className="min-h-[28rem] rounded-3xl"
+        lines={[
+          "Checking who's waiting",
+          "Sorting the notes on the door",
+        ]}
+        hint="Loading requests…"
+      />
     );
   }
   if (error) {

@@ -44,7 +44,7 @@ import {
   ProfileBookGrid,
   type ShelfBook,
 } from "@/components/profile/ProfileBookGrid";
-import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
+import { ShelfLoadingStage } from "@/components/ui/ShelfLoadingStage";
 import { Reveal } from "@/components/ui/Reveal";
 import { resizeAvatar } from "@/lib/image";
 import { useMood } from "@/components/mood/MoodProvider";
@@ -571,7 +571,7 @@ export default function ProfilePage() {
   );
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const { setOwnMood, previewMood } = useMood();
+  const { ownMood, setOwnMood, previewMood } = useMood();
 
   const isSelf =
     session?.user?.username?.toLowerCase() === username.toLowerCase();
@@ -580,13 +580,30 @@ export default function ProfilePage() {
   // The mood this profile radiates (falls back to none for unknown values).
   const profileMood: "" | MoodId = isMoodId(user?.mood) ? user.mood : "";
 
-  // Temporarily re-theme the whole app to this reader's mood while their
-  // profile is open; a moodless profile keeps the viewer's own theme. Drop the
-  // preview on the way out.
+  // Someone else's profile borrows their mood for the visit. Your own profile
+  // must not: the sidebar mood picker writes `ownMood`, and a preview of the
+  // saved mood would sit on top of it and ignore the change.
   useEffect(() => {
+    if (isSelf) {
+      previewMood(null);
+      return;
+    }
     previewMood(profileMood || null);
     return () => previewMood(null);
-  }, [profileMood, previewMood]);
+  }, [isSelf, profileMood, previewMood]);
+
+  // The sidebar picker updates ownMood directly. Follow it once a real mood
+  // has arrived, so the empty value during load doesn't wipe the chip or the
+  // Top Shelf scene (both read the profile mood).
+  const moodSeen = useRef(false);
+  useEffect(() => {
+    if (!isSelf) return;
+    if (isMoodId(ownMood)) moodSeen.current = true;
+    else if (!moodSeen.current) return;
+    const next: "" | MoodId = isMoodId(ownMood) ? ownMood : "";
+    setMood(next);
+    setUser((u) => (u && u.mood !== next ? { ...u, mood: next } : u));
+  }, [isSelf, ownMood]);
 
   // Re-show the "why did the theme change" notice each time you open a new
   // reader's profile.
@@ -1131,7 +1148,17 @@ export default function ProfilePage() {
   }, [recommendations, readBooks]);
 
   if (!user && !loadedOnce) {
-    return <LoadingIndicator fullPage label="Loading profile…" />;
+    return (
+      <ShelfLoadingStage
+        className="min-h-[min(70vh,720px)]"
+        lines={[
+          "Opening this shelf",
+          "The books are finding their places",
+          "A reader's room, just a moment",
+        ]}
+        hint="Loading profile…"
+      />
+    );
   }
 
   if (!user) {
@@ -1716,20 +1743,16 @@ export default function ProfilePage() {
           Private to the owner: visitors don't get the section at all, and the
           API refuses to serve anyone else's rows regardless. */}
       {isSelf ? (
-        <section id="memories" className="mt-8 scroll-mt-24">
-          <Reveal>
-            <SectionHeader
-              icon={Grid3X3}
-              title="Memories"
-              count={memories.length}
-              hint="Only you can see these."
-              action={
-                composeOpen ? null : (
-                  <MemoryComposeButton onClick={() => setComposeOpen(true)} />
-                )
-              }
-            />
-          </Reveal>
+        <section id="memories" className="mt-6 scroll-mt-24">
+          <div className="mb-2 flex items-center justify-between gap-3 px-2">
+            <h2 className="text-sm font-semibold tracking-tight">
+              Memories
+              <span className="ml-1.5 font-medium text-muted">{memories.length}</span>
+            </h2>
+            {composeOpen ? null : (
+              <MemoryComposeButton onClick={() => setComposeOpen(true)} />
+            )}
+          </div>
 
           <div className="px-2">
             <MemoryComposer
@@ -1740,22 +1763,27 @@ export default function ProfilePage() {
           </div>
 
           {memoriesLoading ? (
-            <div className="mt-3 flex flex-col gap-2 px-2">
+            <div className="mt-2 flex flex-col gap-1.5 px-2">
               {Array.from({ length: 3 }, (_, i) => (
                 <div
                   key={i}
-                  className="h-16 rounded-2xl border border-border skeleton-shimmer"
+                  className="h-12 rounded-xl border border-border skeleton-shimmer"
                 />
               ))}
             </div>
           ) : memories.length ? (
-            <div className={`flex flex-col gap-2 px-2 ${composeOpen ? "mt-3" : ""}`}>
+            <div className={`flex flex-col gap-4 px-3 py-2 ${composeOpen ? "mt-3" : ""}`}>
               {memories.map((m) => (
                 <MemoryCard
                   key={m.id}
                   memory={m}
                   onDeleted={(id) =>
                     setMemories((prev) => prev.filter((row) => row.id !== id))
+                  }
+                  onUpdated={(memory) =>
+                    setMemories((prev) =>
+                      prev.map((row) => (row.id === memory.id ? memory : row))
+                    )
                   }
                 />
               ))}

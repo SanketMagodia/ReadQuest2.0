@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Plus_Jakarta_Sans, Fraunces, Geist_Mono } from "next/font/google";
+import { Caveat, Plus_Jakarta_Sans, Fraunces, Geist_Mono } from "next/font/google";
 import type { ReactNode } from "react";
 import "./globals.css";
 import { Providers } from "@/components/providers";
@@ -34,6 +34,13 @@ const display = Fraunces({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+});
+
+// Handwritten script for kept lines, so a memory reads as a quote on paper.
+const script = Caveat({
+  variable: "--font-script",
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
 });
 
 const siteUrl =
@@ -124,7 +131,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${sans.variable} ${display.variable} ${geistMono.variable}`}
+      className={`${sans.variable} ${display.variable} ${geistMono.variable} ${script.variable}`}
     >
       <head>
         <MoodPrePaint />
