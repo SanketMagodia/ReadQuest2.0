@@ -9,34 +9,42 @@ export async function GET(
   _: Request,
   ctx: { params: Promise<{ username: string }> }
 ) {
-  const { username } = await ctx.params;
-  await connectDB();
-  const user = await User.findOne({
-    username: username.toLowerCase(),
-  }).lean();
+  try {
+    const { username } = await ctx.params;
+    const handle = username?.trim().toLowerCase();
+    if (!handle) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
 
-  if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    await connectDB();
+    const user = await User.findOne({ username: handle }).lean();
 
-  const userId = (user._id as Types.ObjectId).toString();
-  const follows = await getFollowCounts(userId);
+    if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Whichever club they're in — running it or just reading along — so visitors
-  // can see where this reader hangs out.
-  const membership = await getClubForUser(userId);
+    const userId = (user._id as Types.ObjectId).toString();
+    const follows = await getFollowCounts(userId);
 
-  return NextResponse.json({
-    club: membership?.club ?? null,
-    clubRole: membership?.role ?? null,
-    user: {
-      id: userId,
-      username: user.username,
-      name: user.name,
-      image: user.image,
-      bio: user.bio,
-      mood: (user as { mood?: string }).mood ?? "",
-      followerCount: follows.followers,
-      followingCount: follows.following,
-      createdAt: (user as { createdAt?: Date }).createdAt,
-    },
-  });
+    // Whichever club they're in — running it or just reading along — so visitors
+    // can see where this reader hangs out.
+    const membership = await getClubForUser(userId);
+
+    return NextResponse.json({
+      club: membership?.club ?? null,
+      clubRole: membership?.role ?? null,
+      user: {
+        id: userId,
+        username: user.username,
+        name: user.name,
+        image: user.image,
+        bio: user.bio,
+        mood: (user as { mood?: string }).mood ?? "",
+        followerCount: follows.followers,
+        followingCount: follows.following,
+        createdAt: (user as { createdAt?: Date }).createdAt,
+      },
+    });
+  } catch (err) {
+    console.error("[GET /api/users/[username]]", err);
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
+  }
 }

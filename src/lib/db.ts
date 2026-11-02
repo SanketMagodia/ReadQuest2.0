@@ -10,14 +10,26 @@ export async function connectDB(): Promise<typeof mongoose> {
   if (!MONGODB_URI) {
     throw new Error("Define MONGODB_URI in environment");
   }
-  if (global.mongooseConn) return global.mongooseConn;
+  if (global.mongooseConn) {
+    try {
+      await global.mongooseConn;
+      return mongoose;
+    } catch {
+      global.mongooseConn = undefined;
+    }
+  }
 
   global.mongooseConn = mongoose.connect(MONGODB_URI, {
     bufferCommands: false,
   });
 
-  await global.mongooseConn;
-  return mongoose;
+  try {
+    await global.mongooseConn;
+    return mongoose;
+  } catch (err) {
+    global.mongooseConn = undefined;
+    throw err;
+  }
 }
 
 export default connectDB;

@@ -522,7 +522,10 @@ export default function ProfilePage() {
   const { data: session, status } = useSession();
 
   const [user, setUser] = useState<PublicUser | null>(null);
-  const [loadedOnce, setLoadedOnce] = useState(false);
+  type ProfileLoadStatus = "loading" | "ok" | "not_found" | "error";
+  const [profileLoadStatus, setProfileLoadStatus] =
+    useState<ProfileLoadStatus>("loading");
+  const [profileReloadKey, setProfileReloadKey] = useState(0);
   const [memories, setMemories] = useState<MemoryDTO[]>([]);
   const [memoriesLoading, setMemoriesLoading] = useState(true);
   const [composeOpen, setComposeOpen] = useState(false);
@@ -683,58 +686,110 @@ export default function ProfilePage() {
   }, [isSelf, username]);
 
   useEffect(() => {
-    async function load() {
-      const [ru, rs] = await Promise.all([
-        fetch(`/api/users/${encodeURIComponent(username)}`, { cache: "no-store" }),
-        fetch(`/api/users/${encodeURIComponent(username)}/shelf`, {
-          cache: "no-store",
-        }),
-      ]);
-      const ujson = ru.ok ? await ru.json() : null;
-      const shelf = rs.ok
-        ? ((await rs.json()) as {
-            counts?: ShelfCounts;
-            wantToRead?: ShelfBook[];
-            read?: ShelfBook[];
-            recommendations?: RecommendedBook[];
-            following?: ShelfBook[];
-          })
-        : null;
+    const handle = username.trim();
+    if (!handle) return;
 
-      const udoc =
-        ujson && "user" in ujson ? (ujson as { user: PublicUser }).user : null;
+    let cancelled = false;
+    setProfileLoadStatus("loading");
+    setUser(null);
 
-      const cjson = ujson as {
-        club?: ClubSummary | null;
-        clubRole?: "owner" | "member" | null;
-      } | null;
-      setProfileClub(cjson?.club ?? null);
-      setProfileClubRole(cjson?.clubRole ?? null);
-      setUser(udoc);
-      setBio(udoc?.bio ?? "");
-      setName(udoc?.name ?? "");
-      setImage(udoc?.image ?? "");
-      setMood(isMoodId(udoc?.mood) ? udoc.mood : "");
-      setFollowerCount(udoc?.followerCount ?? 0);
-      setFollowingCount(udoc?.followingCount ?? 0);
-      setWantToRead(shelf?.wantToRead ?? []);
-      setReadBooks(shelf?.read ?? []);
-      setRecommendations(
-        (shelf?.recommendations ?? []).sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99))
-      );
-      setFollowing(shelf?.following ?? []);
-      setCounts(
-        shelf?.counts ?? {
-          wantToRead: shelf?.wantToRead?.length ?? 0,
-          read: shelf?.read?.length ?? 0,
-          following: shelf?.following?.length ?? 0,
-          recommendations: shelf?.recommendations?.length ?? 0,
+    async function fetchUserProfile(attempts = 3): Promise<Response> {
+      let last: Response | null = null;
+      for (let i = 0; i < attempts; i++) {
+        if (cancelled) throw new DOMException("Aborted", "AbortError");
+        const res = await fetch(
+          `/api/users/${encodeURIComponent(handle)}`,
+          { cache: "no-store" }
+        );
+        if (res.status === 404 || res.ok) return res;
+        last = res;
+        if (i < attempts - 1) {
+          await new Promise((r) => setTimeout(r, 350 * (i + 1)));
         }
-      );
-      setLoadedOnce(true);
+      }
+      return last!;
+    }
+
+    async function load() {
+      try {
+        const [ru, rs] = await Promise.all([
+          fetchUserProfile(),
+          fetch(`/api/users/${encodeURIComponent(handle)}/shelf`, {
+            cache: "no-store",
+          }),
+        ]);
+        if (cancelled) return;
+
+        if (ru.status === 404) {
+          setProfileLoadStatus("not_found");
+          return;
+        }
+        if (!ru.ok) {
+          setProfileLoadStatus("error");
+          return;
+        }
+
+        const ujson = (await ru.json()) as {
+          user?: PublicUser;
+          club?: ClubSummary | null;
+          clubRole?: "owner" | "member" | null;
+        };
+        const shelf = rs.ok
+          ? ((await rs.json()) as {
+              counts?: ShelfCounts;
+              wantToRead?: ShelfBook[];
+              read?: ShelfBook[];
+              recommendations?: RecommendedBook[];
+              following?: ShelfBook[];
+            })
+          : null;
+
+        if (cancelled) return;
+
+        const udoc = ujson.user ?? null;
+        if (!udoc) {
+          setProfileLoadStatus("not_found");
+          return;
+        }
+
+        setProfileClub(ujson.club ?? null);
+        setProfileClubRole(ujson.clubRole ?? null);
+        setUser(udoc);
+        setBio(udoc.bio ?? "");
+        setName(udoc.name ?? "");
+        setImage(udoc.image ?? "");
+        setMood(isMoodId(udoc.mood) ? udoc.mood : "");
+        setFollowerCount(udoc.followerCount ?? 0);
+        setFollowingCount(udoc.followingCount ?? 0);
+        setWantToRead(shelf?.wantToRead ?? []);
+        setReadBooks(shelf?.read ?? []);
+        setRecommendations(
+          (shelf?.recommendations ?? []).sort(
+            (a, b) => (a.rank ?? 99) - (b.rank ?? 99)
+          )
+        );
+        setFollowing(shelf?.following ?? []);
+        setCounts(
+          shelf?.counts ?? {
+            wantToRead: shelf?.wantToRead?.length ?? 0,
+            read: shelf?.read?.length ?? 0,
+            following: shelf?.following?.length ?? 0,
+            recommendations: shelf?.recommendations?.length ?? 0,
+          }
+        );
+        setProfileLoadStatus("ok");
+      } catch (err) {
+        if (cancelled || (err instanceof DOMException && err.name === "AbortError")) {
+          return;
+        }
+        setProfileLoadStatus("error");
+      }
     }
     void load();
-  }, [username]);
+    return () => {
+      cancelled = true;
+    };
+  }, [username, profileReloadKey]);
 
   async function saveProfile(e: React.FormEvent) {
     e.preventDefault();
@@ -1147,7 +1202,7 @@ export default function ProfilePage() {
     return source.filter((b) => b.thumbnail).slice(0, 4);
   }, [recommendations, readBooks]);
 
-  if (!user && !loadedOnce) {
+  if (profileLoadStatus === "loading" || (!user && profileLoadStatus === "ok")) {
     return (
       <ShelfLoadingStage
         className="min-h-[min(70vh,720px)]"
@@ -1161,7 +1216,25 @@ export default function ProfilePage() {
     );
   }
 
-  if (!user) {
+  if (profileLoadStatus === "error") {
+    return (
+      <div className="mx-auto max-w-xl px-4 py-20 text-center">
+        <p className="text-lg font-semibold">Couldn&apos;t load this profile</p>
+        <p className="mt-2 text-sm text-muted">
+          Something went wrong on our side. Try again in a moment.
+        </p>
+        <button
+          type="button"
+          onClick={() => setProfileReloadKey((k) => k + 1)}
+          className="mt-4 inline-flex rounded-full border border-border px-4 py-2 text-sm font-semibold hover:bg-hover"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+
+  if (!user || profileLoadStatus === "not_found") {
     return (
       <div className="mx-auto max-w-xl px-4 py-20 text-center">
         <p className="text-lg font-semibold">Profile not found</p>
