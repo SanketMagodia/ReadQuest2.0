@@ -1,3 +1,4 @@
+import { cache } from "react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Types } from "mongoose";
@@ -29,13 +30,18 @@ type BookLean = {
   thumbnail?: string;
 };
 
-async function resolveBook(input: string): Promise<BookLean | null> {
+/** Shared by `generateMetadata` and the page, so a visit looks the book up once. */
+const resolveBook = cache(async (input: string): Promise<BookLean | null> => {
   await connectDB();
   if (looksLikeObjectId(input)) {
     return (await Book.findById(input).lean()) as BookLean | null;
   }
   return (await Book.findOne({ slug: input }).lean()) as BookLean | null;
-}
+});
+
+// Nothing here depends on the reader — the reel resolves its own session on
+// the client — so the shell is built once and served from the CDN.
+export const revalidate = 600;
 
 function siteUrl(): string {
   return process.env.NEXTAUTH_URL ?? "http://localhost:3000";
@@ -124,6 +130,3 @@ export default async function BookSummaryPage({
     </div>
   );
 }
-
-// The reel underneath is per-reader, so don't statically cache the shell.
-export const revalidate = 0;

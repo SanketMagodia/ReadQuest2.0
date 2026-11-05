@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { useSession } from "next-auth/react";
 import {
   BookOpen,
@@ -17,31 +17,49 @@ import { Reveal } from "@/components/ui/Reveal";
 import { BRAND_NAME } from "@/lib/brand";
 import { MOOD_MAP, isMoodId } from "@/lib/moods";
 import type { ClubSummary } from "@/lib/clubs";
+import { readCache, writeCache } from "@/lib/client-cache";
+
+type MyClub = {
+  club: ClubSummary | null;
+  role: "owner" | "member" | null;
+};
+
+function clubsKey(q: string) {
+  return `clubs:list:${q.trim().toLowerCase()}`;
+}
 
 export default function ClubsPage() {
   const router = useRouter();
   const { status } = useSession();
   const signedIn = status === "authenticated";
 
+  // What this visit last saw is on screen at once; the fetches below only
+  // bring it up to date.
   const [q, setQ] = useState("");
-  const [clubs, setClubs] = useState<ClubSummary[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [myClub, setMyClub] = useState<ClubSummary | null>(null);
-  const [myRole, setMyRole] = useState<"owner" | "member" | null>(null);
+  const [clubs, setClubs] = useState<ClubSummary[] | undefined>(() =>
+    readCache<ClubSummary[]>(clubsKey(""))
+  );
+  const [mine] = useState(() => readCache<MyClub>("clubs:mine"));
+  const [myClub, setMyClub] = useState<ClubSummary | null>(mine?.club ?? null);
+  const [myRole, setMyRole] = useState<"owner" | "member" | null>(
+    mine?.role ?? null
+  );
   const [creating, setCreating] = useState(false);
+  const loading = clubs === undefined;
 
   const loadClubs = useCallback(async (query: string) => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (query.trim()) params.set("q", query.trim());
-      const res = await fetch(`/api/clubs?${params}`, { cache: "no-store" });
-      if (!res.ok) return;
-      const data = (await res.json()) as { clubs?: ClubSummary[] };
-      setClubs(data.clubs ?? []);
-    } finally {
-      setLoading(false);
-    }
+    const key = clubsKey(query);
+    setClubs(readCache<ClubSummary[]>(key));
+    const params = new URLSearchParams();
+    if (query.trim()) params.set("q", query.trim());
+    const res = await fetch(`/api/clubs?${params}`, { cache: "no-store" }).catch(
+      () => null
+    );
+    const data = res?.ok
+      ? ((await res.json()) as { clubs?: ClubSummary[] })
+      : null;
+    if (data) writeCache(key, data.clubs ?? []);
+    setClubs((prev) => data?.clubs ?? prev ?? []);
   }, []);
 
   const loadMine = useCallback(async () => {
@@ -52,25 +70,30 @@ export default function ClubsPage() {
     }
     const res = await fetch("/api/clubs/me", { cache: "no-store" });
     if (!res.ok) return;
-    const data = (await res.json()) as {
-      club: ClubSummary | null;
-      role: "owner" | "member" | null;
-    };
+    const data = (await res.json()) as MyClub;
+    writeCache("clubs:mine", data);
     setMyClub(data.club);
     setMyRole(data.role);
   }, [signedIn]);
 
   useEffect(() => {
+    if (status === "loading") return;
     void loadMine();
-  }, [loadMine]);
+  }, [loadMine, status]);
 
-  // Debounced search.
+  // Debounced search; the opening list loads straight away.
+  const firstQuery = useRef(true);
   useEffect(() => {
+    if (firstQuery.current) {
+      firstQuery.current = false;
+      void loadClubs(q);
+      return;
+    }
     const t = setTimeout(() => void loadClubs(q), 260);
     return () => clearTimeout(t);
   }, [q, loadClubs]);
 
-  const others = clubs.filter((c) => c.id !== myClub?.id);
+  const others = (clubs ?? []).filter((c) => c.id !== myClub?.id);
 
   return (
     <section className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-2 pb-12 sm:px-4">

@@ -1073,6 +1073,8 @@ h1,
 
 /* Page turns inside a reel card. Short on purpose — this fires on every arrow
    press, so anything longer reads as lag rather than polish. */
+/* Wide layouts change gist pages with a quick fade; the page curl below is
+   the phone layout's. */
 @keyframes rq-page-turn {
   from {
     opacity: 0;
@@ -1090,6 +1092,145 @@ h1,
   .rq-page-turn {
     animation: none;
   }
+}
+
+/* Gist page tabs pinned to the screen edges on the phone layout. They fill
+   the gutter they sit in (capped on wider gutters) and never grow past it. */
+.rq-edge-tab {
+  display: flex;
+  height: 3.5rem;
+  width: 100%;
+  max-width: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--fg) 12%, transparent);
+  background: color-mix(in srgb, var(--card) 82%, transparent);
+  color: color-mix(in srgb, var(--fg) 72%, transparent);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(6px);
+  transition:
+    color 160ms ease,
+    background-color 160ms ease;
+}
+.rq-edge-tab--left {
+  border-left: 0;
+  border-radius: 0 14px 14px 0;
+}
+.rq-edge-tab--right {
+  border-right: 0;
+  border-radius: 14px 0 0 14px;
+}
+.group:hover .rq-edge-tab,
+.group:active .rq-edge-tab {
+  color: var(--fg);
+  background: var(--card);
+}
+/* On the first page, the next tab's arrow leans in twice to say "there's
+   more" — the arrow moves, not the tab, so it stays out of the text. */
+@keyframes rq-edge-nudge {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(-3px);
+  }
+}
+.rq-edge-tab--nudge svg {
+  animation: rq-edge-nudge 900ms ease-in-out 1.2s 2;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rq-edge-tab--nudge svg {
+    animation: none;
+  }
+}
+
+/* Gist page turn. At rest the text sits straight on the cover wash; only
+   while a page is being turned does it become a sheet of paper, hinged at
+   the left spine. ReelCard drives --leaf-angle (0 → -180deg), --leaf-lift
+   (0 flat … 1 upright) and --leaf-fade per frame. */
+.rq-leaf-turn {
+  --leaf-angle: 0deg;
+  --leaf-lift: 0;
+  --leaf-fade: 1;
+  --leaf-pad-x: 14px;
+  --leaf-pad-y: 10px;
+  --leaf-paper: color-mix(in srgb, var(--card) 93%, var(--brand-amber) 7%);
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  perspective: 2200px;
+}
+.dark .rq-leaf-turn {
+  --leaf-paper: color-mix(in srgb, var(--card) 94%, var(--brand-amber) 6%);
+}
+.rq-leaf-under {
+  position: absolute;
+  inset: 0;
+}
+/* Shadow the lifting leaf throws across the page underneath. */
+.rq-leaf-under::after {
+  content: "";
+  position: absolute;
+  inset: calc(var(--leaf-pad-y) * -1) calc(var(--leaf-pad-x) * -1);
+  background: linear-gradient(
+    to right,
+    rgba(0, 0, 0, 0.28),
+    rgba(0, 0, 0, 0.08) 45%,
+    transparent 80%
+  );
+  opacity: calc(var(--leaf-lift) * 0.55);
+}
+.rq-leaf {
+  position: absolute;
+  inset: calc(var(--leaf-pad-y) * -1) calc(var(--leaf-pad-x) * -1);
+  transform-origin: left center;
+  transform: rotateY(var(--leaf-angle));
+  transform-style: preserve-3d;
+  opacity: var(--leaf-fade);
+  will-change: transform;
+}
+.rq-leaf-face,
+.rq-leaf-back {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  border-radius: 3px 12px 12px 3px;
+  background: var(--leaf-paper);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--fg) 7%, transparent),
+    calc(var(--leaf-lift) * -14px) 6px calc(8px + var(--leaf-lift) * 34px)
+      rgba(0, 0, 0, calc(0.12 + var(--leaf-lift) * 0.28));
+  overflow: hidden;
+}
+.rq-leaf-face {
+  padding: var(--leaf-pad-y) var(--leaf-pad-x);
+}
+/* Spine crease plus the curl catching light near the free edge. */
+.rq-leaf-face::after,
+.rq-leaf-back::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(to right, rgba(0, 0, 0, 0.14), transparent 7%),
+    linear-gradient(
+      to left,
+      rgba(0, 0, 0, 0.22),
+      rgba(255, 255, 255, 0.18) 9%,
+      transparent 34%
+    );
+  opacity: calc(0.35 + var(--leaf-lift) * 0.65);
+}
+.rq-leaf-back {
+  transform: rotateY(180deg);
+  background: color-mix(in srgb, var(--leaf-paper) 92%, var(--fg) 8%);
+}
+.rq-leaf-back::after {
+  transform: scaleX(-1);
 }
 
 /* One-shot peek after the first cards land: lift the stack just enough

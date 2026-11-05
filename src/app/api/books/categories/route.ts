@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/db";
 import Book from "@/models/Book";
+import { sharedCache } from "@/lib/http-cache";
 
 const STOP_WORDS = new Set(["", "general", "n/a", "none"]);
 
@@ -49,5 +50,9 @@ export async function GET() {
       ? cleaned
       : FALLBACK_CATEGORIES.map((c) => ({ label: c, count: 0 }));
 
-  return NextResponse.json({ categories: merged.slice(0, 24) });
+  // A full pass over the library — the shelf labels barely move hour to hour.
+  return NextResponse.json(
+    { categories: merged.slice(0, 24) },
+    { headers: sharedCache(3600) }
+  );
 }

@@ -132,9 +132,12 @@ async function snapshotFirstPage(
   clone.querySelectorAll(".rq-page-turn").forEach((el) => {
     el.classList.remove("rq-page-turn");
   });
-
-  const body = clone.querySelector("[data-gist-body]");
-  if (body && firstPageHtml) body.innerHTML = firstPageHtml;
+  const body = clone.querySelector<HTMLElement>("[data-gist-body]");
+  if (body) {
+    // Hidden while a page is mid-turn; the shot always shows page one.
+    body.style.visibility = "";
+    if (firstPageHtml) body.innerHTML = firstPageHtml;
+  }
 
   const pages = Math.max(totalPages, 1);
   clone.querySelectorAll("[data-page-label]").forEach((el) => {

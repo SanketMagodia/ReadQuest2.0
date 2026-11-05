@@ -5,6 +5,7 @@ import connectDB from "@/lib/db";
 import Club from "@/models/Club";
 import ClubMembership from "@/models/ClubMembership";
 import ClubMessage from "@/models/ClubMessage";
+import User from "@/models/User";
 import { clubMessageSchema } from "@/lib/validators";
 import { trimPreview } from "@/lib/dm";
 
@@ -130,11 +131,14 @@ export async function POST(
     );
   }
 
-  const doc = await ClubMessage.create({
-    club: club._id,
-    sender: me,
-    content: parsed.data.content,
-  });
+  const [doc, sender] = await Promise.all([
+    ClubMessage.create({
+      club: club._id,
+      sender: me,
+      content: parsed.data.content,
+    }),
+    User.findById(me).select("image").lean<{ image?: string } | null>(),
+  ]);
 
   await Club.updateOne(
     { _id: club._id },
@@ -157,7 +161,7 @@ export async function POST(
       author: {
         username: session.user.username ?? "",
         name: session.user.name ?? session.user.username ?? "",
-        image: session.user.image ?? "",
+        image: sender?.image ?? "",
       },
     },
   });

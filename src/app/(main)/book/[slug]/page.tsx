@@ -1,3 +1,4 @@
+import { cache, Suspense } from "react";
 import { notFound, redirect } from "next/navigation";
 import { Types } from "mongoose";
 import Link from "next/link";
@@ -43,13 +44,75 @@ type BookLean = {
   isbn10?: string;
 };
 
-async function resolveBookBySlugOrId(input: string): Promise<BookLean | null> {
+/** Shared by `generateMetadata` and the page, so a visit looks the book up once. */
+const resolveBookBySlugOrId = cache(async (input: string): Promise<BookLean | null> => {
   await connectDB();
   if (looksLikeObjectId(input)) {
     const byId = (await Book.findById(input).lean()) as BookLean | null;
     return byId;
   }
   return (await Book.findOne({ slug: input }).lean()) as BookLean | null;
+});
+
+/**
+ * NYT reviews, streamed in after the rest of the page. The API is slow and
+ * rate-limited (6s timeout), and nothing above it should wait on it.
+ */
+async function NytReviews({ book }: { book: BookLean }) {
+  const nytReviews = await getNytReviews({
+    isbn: book.isbn13 || book.isbn10 || undefined,
+    title: book.isbn13 || book.isbn10 ? undefined : book.title,
+    author: book.isbn13 || book.isbn10 || book.title ? undefined : book.authors,
+  });
+  if (!nytReviews.length) return null;
+
+  return (
+    <section className="space-y-3">
+      <h2 className="inline-flex items-center gap-2 text-lg font-bold">
+        <Newspaper
+          size={18}
+          aria-hidden
+          className="text-rose-500 dark:text-rose-300"
+        />
+        New York Times review
+      </h2>
+      <div className="flex flex-col gap-3">
+        {nytReviews.slice(0, 3).map((r) => (
+          <a
+            key={r.url}
+            href={r.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group rounded-2xl border border-border bg-card p-4 transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-soft)]"
+          >
+            <div className="flex items-center justify-between gap-3 text-xs text-muted">
+              <span className="font-semibold text-foreground/85">
+                {r.byline || "The New York Times"}
+              </span>
+              {r.publicationDate ? (
+                <time dateTime={r.publicationDate}>
+                  {new Date(r.publicationDate).toLocaleDateString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })}
+                </time>
+              ) : null}
+            </div>
+            {r.summary ? (
+              <p className="mt-2 line-clamp-3 text-[14px] leading-relaxed text-foreground/85">
+                {r.summary}
+              </p>
+            ) : null}
+            <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-rose-600 dark:text-rose-300">
+              Read on nytimes.com
+              <ExternalLink size={11} aria-hidden />
+            </span>
+          </a>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function siteUrl(): string {
@@ -145,14 +208,8 @@ export default async function BookPage({
   const session = await getAppSession();
   const userId = session?.user?.id;
 
-  const [
-    shelvedCount,
-    myMemoryRows,
-    isFollowing,
-    readListEntry,
-    nytReviews,
-    hasSummary,
-  ] = await Promise.all([
+  const [shelvedCount, myMemoryRows, isFollowing, readListEntry, hasSummary] =
+    await Promise.all([
     ReadList.countDocuments({ book: bookId }),
     // Private by construction: scoped to the viewer, and skipped entirely
     // for signed-out visitors.
@@ -170,12 +227,6 @@ export default async function BookPage({
           .select("status")
           .lean()
       : Promise.resolve(null),
-    getNytReviews({
-      isbn: book.isbn13 || book.isbn10 || undefined,
-      title: book.isbn13 || book.isbn10 ? undefined : book.title,
-      author:
-        book.isbn13 || book.isbn10 || book.title ? undefined : book.authors,
-    }),
     BookSummary.exists({ book: book._id }).then(Boolean),
   ]);
   const readStatus =
@@ -339,53 +390,9 @@ export default async function BookPage({
         </section>
       ) : null}
 
-      {nytReviews.length ? (
-        <section className="space-y-3">
-          <h2 className="inline-flex items-center gap-2 text-lg font-bold">
-            <Newspaper
-              size={18}
-              aria-hidden
-              className="text-rose-500 dark:text-rose-300"
-            />
-            New York Times review
-          </h2>
-          <div className="flex flex-col gap-3">
-            {nytReviews.slice(0, 3).map((r) => (
-              <a
-                key={r.url}
-                href={r.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="group rounded-2xl border border-border bg-card p-4 transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-soft)]"
-              >
-                <div className="flex items-center justify-between gap-3 text-xs text-muted">
-                  <span className="font-semibold text-foreground/85">
-                    {r.byline || "The New York Times"}
-                  </span>
-                  {r.publicationDate ? (
-                    <time dateTime={r.publicationDate}>
-                      {new Date(r.publicationDate).toLocaleDateString(undefined, {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
-                    </time>
-                  ) : null}
-                </div>
-                {r.summary ? (
-                  <p className="mt-2 line-clamp-3 text-[14px] leading-relaxed text-foreground/85">
-                    {r.summary}
-                  </p>
-                ) : null}
-                <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-rose-600 dark:text-rose-300">
-                  Read on nytimes.com
-                  <ExternalLink size={11} aria-hidden />
-                </span>
-              </a>
-            ))}
-          </div>
-        </section>
-      ) : null}
+      <Suspense fallback={null}>
+        <NytReviews book={book} />
+      </Suspense>
 
       {userId ? (
         <section className="space-y-5">

@@ -100,6 +100,9 @@ function parseJsonObject(raw: string): unknown {
 /** AI book recommendations from a free-text description of a vibe. */
 export async function POST(req: Request) {
   if (!isLlmConfigured()) {
+    console.warn(
+      "[recommend] OPENROUTER_API_KEY is missing — set it in server env (e.g. web/.env.local or Vercel → Environment Variables), then redeploy."
+    );
     return NextResponse.json(
       { error: "Recommendations are not available right now." },
       { status: 503 }

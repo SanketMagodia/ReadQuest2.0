@@ -24,6 +24,12 @@ const nextConfig: NextConfig = {
     root: projectRoot,
   },
   allowedDevOrigins: devOrigins(),
+  experimental: {
+    // Moving between tabs reuses a page the router already has instead of
+    // asking the server again. Writes that change a server-rendered page call
+    // `router.refresh()`, which clears this.
+    staleTimes: { dynamic: 300, static: 1800 },
+  },
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "**" },

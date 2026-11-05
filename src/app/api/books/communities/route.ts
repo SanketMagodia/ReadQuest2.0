@@ -5,6 +5,7 @@ import Book from "@/models/Book";
 import BookFollow from "@/models/BookFollow";
 import ReadList from "@/models/ReadList";
 import ReelImpression from "@/models/ReelImpression";
+import { sharedCache } from "@/lib/http-cache";
 
 type Rollup = {
   _id: Types.ObjectId;
@@ -97,7 +98,7 @@ export async function GET(req: Request) {
   absorb(reads, "readers");
 
   if (!byBook.size) {
-    return NextResponse.json({ communities: [] });
+    return NextResponse.json({ communities: [] }, { headers: sharedCache(300) });
   }
 
   const books = (await Book.find({
@@ -157,5 +158,7 @@ export async function GET(req: Request) {
     return rest;
   });
 
-  return NextResponse.json({ communities });
+  // Three whole-collection rollups; their growth tracks readers, so the edge
+  // absorbs the traffic instead of the database.
+  return NextResponse.json({ communities }, { headers: sharedCache(300) });
 }

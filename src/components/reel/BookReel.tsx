@@ -1,16 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { ArrowLeft, RefreshCw } from "lucide-react";
 import { ShelfLoadingStage } from "@/components/ui/ShelfLoadingStage";
 import { GistLoadingStage, GistLobby } from "./GistGate";
 import { trackReelAction } from "@/lib/analytics-events";
+import { readCache, writeCache } from "@/lib/client-cache";
 import type { ReelCard as ReelCardData } from "@/lib/reel";
 import { ReelCard } from "./ReelCard";
 
 type ReelAction = "served" | "skipped" | "read" | "saved";
+
+type ReelSnapshot = {
+  cards: ReelCardData[];
+  activeIndex: number;
+  randomMode: boolean;
+  exhausted: boolean;
+  reported: Map<string, ReelAction>;
+};
 
 /** Fetch one more batch when the reader is this close to the end. */
 const PREFETCH_WITHIN = 2;
@@ -25,29 +34,77 @@ type Props = {
   relatedTo?: string;
   /** Stays put above the reel and returns to the book this gist was opened from. */
   backHref?: string;
+  /** Opening gists rendered on the server, so the first one needs no fetch. */
+  initialCards?: ReelCardData[];
+  /** Whether the server saw a session — spares waiting on the client's check. */
+  signedIn?: boolean;
 };
 
-export function BookReel({ seed, relatedTo, backHref }: Props = {}) {
+export function BookReel({
+  seed,
+  relatedTo,
+  backHref,
+  initialCards,
+  signedIn,
+}: Props = {}) {
   const { status } = useSession();
-  const [cards, setCards] = useState<ReelCardData[]>(seed ? [seed] : []);
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [loading, setLoading] = useState(!seed);
+  // Only the home reel is worth picking back up; a book's reel is cheap and
+  // starts from that book every time.
+  const snapshotKey = seed || relatedTo ? null : "reel:home";
+  const [restored] = useState(() =>
+    snapshotKey ? readCache<ReelSnapshot>(snapshotKey) : undefined
+  );
+  const [cards, setCards] = useState<ReelCardData[]>(
+    () => restored?.cards ?? (seed ? [seed] : (initialCards ?? []))
+  );
+  const [activeIndex, setActiveIndex] = useState(restored?.activeIndex ?? 0);
+  const prerendered = Boolean(restored || seed || initialCards?.length);
+  const [loading, setLoading] = useState(!prerendered);
+  // `null` while nobody knows yet. The server's answer wins because the
+  // client session takes a round-trip to resolve.
+  const knownSignedIn =
+    signedIn ?? (status === "loading" ? null : status === "authenticated");
   const [loadingMore, setLoadingMore] = useState(false);
-  const [exhausted, setExhausted] = useState(false);
-  const [randomMode, setRandomMode] = useState(false);
+  const [exhausted, setExhausted] = useState(restored?.exhausted ?? false);
+  const [randomMode, setRandomMode] = useState(restored?.randomMode ?? false);
   const [error, setError] = useState<string | null>(null);
 
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const cardsRef = useRef<ReelCardData[]>([]);
-  const peekedRef = useRef(false);
+  // A restored reel has been seen before; it doesn't need the swipe hint.
+  const peekedRef = useRef(Boolean(restored));
   const [peek, setPeek] = useState(false);
 
   // Actions already sent for a book, so a re-render or a scroll wobble can't
   // downgrade a "read" back to a "skipped".
-  const reported = useRef<Map<string, ReelAction>>(new Map());
+  const reported = useRef<Map<string, ReelAction>>(
+    restored?.reported ?? new Map()
+  );
   const loadingMoreRef = useRef(false);
-  const randomModeRef = useRef(false);
+  const randomModeRef = useRef(restored?.randomMode ?? false);
+
+  useEffect(() => {
+    if (!snapshotKey || !cards.length) return;
+    writeCache<ReelSnapshot>(snapshotKey, {
+      cards,
+      activeIndex,
+      randomMode,
+      exhausted,
+      reported: reported.current,
+    });
+  }, [snapshotKey, cards, activeIndex, randomMode, exhausted]);
+
+  // Put the reader back on the gist they left, before the first paint and
+  // before the observer below starts reporting what's in view.
+  useLayoutEffect(() => {
+    if (!restored?.activeIndex) return;
+    const root = scrollerRef.current;
+    const el = itemRefs.current[restored.activeIndex];
+    if (!root || !el) return;
+    root.scrollTop +=
+      el.getBoundingClientRect().top - root.getBoundingClientRect().top;
+  }, [restored]);
 
   // `loadBatch` needs the current cards to build its exclude list without
   // taking them as a dependency, which would restart in-flight fetches.
@@ -168,15 +225,17 @@ export function BookReel({ seed, relatedTo, backHref }: Props = {}) {
   useEffect(() => {
     // A seeded reel already has its first gist on screen; the prefetch below
     // pulls the related run in behind it.
-    if (seed) return;
-    if (status !== "authenticated") return;
+    if (seed || restored) return;
+    if (knownSignedIn !== true) return;
     void (async () => {
-      await loadBatch("starter");
+      // The server already ran the starter (even if it came back empty), so go
+      // straight to the personalized run.
+      if (initialCards === undefined) await loadBatch("starter");
       await loadBatch("background");
     })();
     // Only ever run the first fetch once per session resolution.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, seed]);
+  }, [knownSignedIn, seed]);
 
   // Track which card is snapped into view. An observer beats a scroll handler
   // here because snap scrolling settles asynchronously.
@@ -259,12 +318,12 @@ export function BookReel({ seed, relatedTo, backHref }: Props = {}) {
     [report]
   );
 
-  if (!seed && (status === "loading" || (status === "authenticated" && loading))) {
+  if (!prerendered && (knownSignedIn === null || (knownSignedIn && loading))) {
     return <GistLoadingStage />;
   }
 
   // A book's own reel is public, like the book page that opens it.
-  if (!seed && status !== "authenticated") {
+  if (!seed && knownSignedIn === false) {
     return <GistLobby />;
   }
 

@@ -6,6 +6,7 @@ import Book from "@/models/Book";
 import { bookCreateSchema, bookSearchSchema } from "@/lib/validators";
 import { makeBookSlug, withUniqueSuffix } from "@/lib/slug";
 import { searchOpenLibrary, type OLBookResult } from "@/lib/openlibrary";
+import { sharedCache } from "@/lib/http-cache";
 
 type BookLean = {
   _id: Types.ObjectId;
@@ -142,11 +143,16 @@ export async function GET(req: Request) {
       }
     }
 
-    return NextResponse.json({
-      books: localBooks,
-      openLibrary,
-      nextCursor,
-    });
+    // The same page of books for everyone; searches also skip the Open
+    // Library round-trip when someone else just asked the same thing.
+    return NextResponse.json(
+      {
+        books: localBooks,
+        openLibrary,
+        nextCursor,
+      },
+      { headers: sharedCache(60) }
+    );
   } catch (e) {
     console.error(e);
     return NextResponse.json({ error: "Server error" }, { status: 500 });

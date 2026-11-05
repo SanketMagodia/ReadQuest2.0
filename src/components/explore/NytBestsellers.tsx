@@ -11,6 +11,7 @@ import {
   RefreshCw,
   TrendingUp,
 } from "lucide-react";
+import { readCache, writeCache } from "@/lib/client-cache";
 import type { NytBook, NytList, NytListName } from "@/lib/nyt";
 
 /**
@@ -23,6 +24,11 @@ import type { NytBook, NytList, NytListName } from "@/lib/nyt";
  */
 
 type ListLite = Pick<NytList, "encodedName" | "displayName" | "books">;
+
+type RailSnapshot = { lists: Record<string, ListLite>; order: string[] };
+
+const CACHE_KEY = "nyt:rail";
+const FULL_CACHE_KEY = "nyt:rail-full";
 
 // Surface the lists readers care about most, in a sensible order. Anything not
 // listed here falls in afterwards, alphabetically.
@@ -39,13 +45,21 @@ const PRIORITY: string[] = [
 
 export function NytBestsellers() {
   const router = useRouter();
-  const [lists, setLists] = useState<Record<string, ListLite>>({});
-  const [order, setOrder] = useState<string[]>([]);
-  const [active, setActive] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [restored] = useState(() => readCache<RailSnapshot>(CACHE_KEY));
+  const [lists, setLists] = useState<Record<string, ListLite>>(
+    restored?.lists ?? {}
+  );
+  const [order, setOrder] = useState<string[]>(restored?.order ?? []);
+  const [active, setActive] = useState(restored?.order[0] ?? "");
+  const [loading, setLoading] = useState(!restored);
   const [failed, setFailed] = useState(false);
   const [adoptingIsbn, setAdoptingIsbn] = useState<string | null>(null);
-  const [fullLists, setFullLists] = useState<Record<string, NytBook[]>>({});
+  const [fullLists, setFullLists] = useState<Record<string, NytBook[]>>(
+    () => readCache<Record<string, NytBook[]>>(FULL_CACHE_KEY) ?? {}
+  );
+  useEffect(() => {
+    writeCache(FULL_CACHE_KEY, fullLists);
+  }, [fullLists]);
   const [expanding, setExpanding] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const railRef = useRef<HTMLDivElement>(null);
@@ -71,6 +85,7 @@ export function NytBestsellers() {
   }, []);
 
   useEffect(() => {
+    if (restored) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -120,6 +135,7 @@ export function NytBestsellers() {
           return map[a].displayName.localeCompare(map[b].displayName);
         });
 
+        writeCache<RailSnapshot>(CACHE_KEY, { lists: map, order: ranked });
         setLists(map);
         setOrder(ranked);
         setActive(ranked[0] ?? "");
@@ -134,7 +150,7 @@ export function NytBestsellers() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [restored]);
 
   const activeList = active ? lists[active] : undefined;
 

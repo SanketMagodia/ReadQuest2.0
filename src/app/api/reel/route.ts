@@ -2,6 +2,7 @@ import { Types } from "mongoose";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAppSession } from "@/lib/session";
+import { sharedCache } from "@/lib/http-cache";
 import connectDB from "@/lib/db";
 import ReelImpression from "@/models/ReelImpression";
 import {
@@ -44,7 +45,12 @@ export async function GET(req: Request) {
     if (!/^[a-f0-9]{24}$/i.test(related)) {
       return NextResponse.json({ error: "Invalid book" }, { status: 400 });
     }
-    return NextResponse.json({ cards: await buildRelatedReel(related, exclude) });
+    // What sits under a book is a property of the book, so every reader
+    // opening the same gist shares one answer.
+    return NextResponse.json(
+      { cards: await buildRelatedReel(related, exclude) },
+      { headers: sharedCache(600) }
+    );
   }
 
   if (url.searchParams.get("random") === "1") {

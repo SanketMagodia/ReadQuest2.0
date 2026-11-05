@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import { Bell, CheckCheck, Loader2 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
@@ -89,6 +90,7 @@ export function NotificationsBell({
   variant?: "sidebar" | "topbar";
 }) {
   const { data: session } = useSession();
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<Notification[]>([]);
   const [unread, setUnread] = useState(0);
@@ -132,13 +134,12 @@ export function NotificationsBell({
     }
   }, [session?.user?.id]);
 
-  // Initial count load + 60s polling while signed in.
+  // Refresh the count on load and on every page change — no timer, so a tab
+  // left open costs nothing.
   useEffect(() => {
     if (!session?.user?.id) return;
     void fetchCount();
-    const i = window.setInterval(fetchCount, 60_000);
-    return () => window.clearInterval(i);
-  }, [session?.user?.id, fetchCount]);
+  }, [session?.user?.id, fetchCount, pathname]);
 
   // Reload when opening so the list is always fresh.
   useEffect(() => {

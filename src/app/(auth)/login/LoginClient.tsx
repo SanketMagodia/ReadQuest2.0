@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { ArrowRight, AtSign, KeyRound, Eye, EyeOff } from "lucide-react";
@@ -11,7 +11,6 @@ import { BRAND_NAME } from "@/lib/brand";
 import { trackLogin } from "@/lib/analytics-events";
 
 export default function LoginClient() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const nextUrl = searchParams?.get("next")?.trim() || "/";
   const [username, setUsername] = useState("");
@@ -32,7 +31,9 @@ export default function LoginClient() {
 
     if ((res as unknown as { ok?: boolean })?.ok) {
       trackLogin("credentials");
-      router.push(nextUrl.startsWith("/") ? nextUrl : "/");
+      // A full load, not a client navigation: pages the router and the
+      // client cache kept from the signed-out visit must not be reused.
+      window.location.assign(nextUrl.startsWith("/") ? nextUrl : "/");
       return;
     }
 

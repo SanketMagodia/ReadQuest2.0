@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { useDm } from "@/components/dm/DmProvider";
 import { trackFriendAction } from "@/lib/analytics-events";
 import { ShelfLoadingStage } from "@/components/ui/ShelfLoadingStage";
+import { readCache, writeCache } from "@/lib/client-cache";
 
 type UserLite = {
   id: string;
@@ -51,6 +52,11 @@ type FriendRequest = {
   id: string;
   createdAt: string;
   user: UserLite;
+};
+
+type RequestLists = {
+  incoming: FriendRequest[];
+  outgoing: FriendRequest[];
 };
 
 type RelationshipStatus =
@@ -135,22 +141,32 @@ export function FriendsClient() {
   })();
   const [tab, setTab] = useState<Tab>(initialTab);
 
-  const [friends, setFriends] = useState<Friend[]>([]);
-  const [friendsLoading, setFriendsLoading] = useState(true);
+  // Lists this visit already loaded show at once and are refreshed quietly.
+  const [cachedFriends] = useState(() => readCache<Friend[]>("friends:list"));
+  const [cachedRequests] = useState(() =>
+    readCache<RequestLists>("friends:requests")
+  );
+  const [friends, setFriends] = useState<Friend[]>(cachedFriends ?? []);
+  const [friendsLoading, setFriendsLoading] = useState(!cachedFriends);
   const [friendsError, setFriendsError] = useState<string | null>(null);
 
-  const [incoming, setIncoming] = useState<FriendRequest[]>([]);
-  const [outgoing, setOutgoing] = useState<FriendRequest[]>([]);
-  const [requestsLoading, setRequestsLoading] = useState(true);
+  const [incoming, setIncoming] = useState<FriendRequest[]>(
+    cachedRequests?.incoming ?? []
+  );
+  const [outgoing, setOutgoing] = useState<FriendRequest[]>(
+    cachedRequests?.outgoing ?? []
+  );
+  const [requestsLoading, setRequestsLoading] = useState(!cachedRequests);
   const [requestsError, setRequestsError] = useState<string | null>(null);
 
   const loadFriends = useCallback(async () => {
-    setFriendsLoading(true);
+    if (!readCache("friends:list")) setFriendsLoading(true);
     setFriendsError(null);
     try {
       const res = await fetch("/api/friends", { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = (await res.json()) as { friends: Friend[] };
+      writeCache("friends:list", data.friends);
       setFriends(data.friends);
     } catch (e) {
       setFriendsError(e instanceof Error ? e.message : "Failed to load");
@@ -160,15 +176,13 @@ export function FriendsClient() {
   }, []);
 
   const loadRequests = useCallback(async () => {
-    setRequestsLoading(true);
+    if (!readCache("friends:requests")) setRequestsLoading(true);
     setRequestsError(null);
     try {
       const res = await fetch("/api/friends/requests", { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = (await res.json()) as {
-        incoming: FriendRequest[];
-        outgoing: FriendRequest[];
-      };
+      const data = (await res.json()) as RequestLists;
+      writeCache("friends:requests", data);
       setIncoming(data.incoming);
       setOutgoing(data.outgoing);
     } catch (e) {

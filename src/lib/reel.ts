@@ -463,9 +463,14 @@ export async function buildStarterReel(
 
   // Everyone gets the same three per hour, so the rotation stays shared, but
   // anything this reader already judged is stepped over rather than replayed.
+  // Only the rotation's books matter here, so a long-time reader's history
+  // never turns the opening cards into a full scan of their impressions.
   const seen = new Set<string>([
     ...(
-      await ReelImpression.find({ user: new Types.ObjectId(userId) })
+      await ReelImpression.find({
+        user: new Types.ObjectId(userId),
+        book: { $in: pool.map((b) => b._id) },
+      })
         .select("book")
         .lean()
     ).map((i) => i.book.toString()),

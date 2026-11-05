@@ -7,6 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type PointerEvent,
 } from "react";
 import Link from "next/link";
@@ -30,6 +31,7 @@ import {
   type MdBlock,
 } from "@/components/reader/markdown";
 import { trackMemorySaved } from "@/lib/analytics-events";
+import { readCache, writeCache } from "@/lib/client-cache";
 import type { ReelCard as ReelCardData } from "@/lib/reel";
 import {
   canOpenShareSheet,
@@ -39,8 +41,42 @@ import {
   type PreparedGistShare,
 } from "@/lib/share-gist";
 
-/** Horizontal swipe past this many pixels turns the page. */
+/** Horizontal swipe past this many pixels turns the page (reduced motion). */
 const PAGE_SWIPE_PX = 48;
+/** Let go past this share of the page width and the leaf finishes turning. */
+const TURN_COMMIT = 0.35;
+/** A flick faster than this (px/ms) turns the page however far it got. */
+const TURN_FLICK = 0.45;
+const TURN_MS = 620;
+
+function prefersReducedMotion() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+/** Same query as the `layout-compact` variant — the phone-shaped shell. */
+const COMPACT_QUERY = "(max-aspect-ratio: 1/1)";
+
+function subscribeCompact(onChange: () => void) {
+  const mq = window.matchMedia(COMPACT_QUERY);
+  mq.addEventListener("change", onChange);
+  return () => mq.removeEventListener("change", onChange);
+}
+
+/** Swipe-to-turn and the page curl only exist on the phone layout. */
+function useCompactLayout() {
+  return useSyncExternalStore(
+    subscribeCompact,
+    () => window.matchMedia(COMPACT_QUERY).matches,
+    () => false
+  );
+}
+
+type Turn = { dir: 1 | -1; from: number; to: number };
+
+/** Where the "Keep this line" bubble sits, relative to the reader box. */
+type BubbleAt = { x: number; y: number; below: boolean };
+const BUBBLE_HALF_WIDTH = 80;
+const BUBBLE_ROOM = 52;
 
 const GHOST_BUTTON =
   "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted transition hover:bg-hover hover:text-foreground disabled:pointer-events-none disabled:opacity-25";
@@ -83,12 +119,24 @@ export function ReelCard({
   onPeek?: () => void;
 }) {
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [page, setPage] = useState(0);
+  // Where this gist was left, so coming back to the reel finds it there.
+  const pageKey = `reel-page:${card.id}`;
+  const savedKey = `reel-saved:${card.id}`;
+  const [saved, setSaved] = useState(() => readCache<boolean>(savedKey) ?? false);
+  const [page, setPage] = useState(() => readCache<number>(pageKey) ?? 0);
+  useEffect(() => {
+    writeCache(pageKey, page);
+  }, [pageKey, page]);
+  useEffect(() => {
+    if (saved) writeCache(savedKey, true);
+  }, [savedKey, saved]);
   const [slices, setSlices] = useState<MdBlock[][] | null>(null);
   const [columnWidth, setColumnWidth] = useState(0);
   const [selection, setSelection] = useState("");
-  const [kept, setKept] = useState(false);
+  const [selectionAt, setSelectionAt] = useState<BubbleAt | null>(null);
+  /** Where the "kept" confirmation shows — the spot the line was kept from. */
+  const [kept, setKept] = useState<BubbleAt | null>(null);
+  const compact = useCompactLayout();
   const [shareState, setShareState] = useState<
     "idle" | "busy" | "shared" | "saved" | "unsupported" | "failed"
   >("idle");
@@ -105,8 +153,17 @@ export function ReelCard({
   const swipeRef = useRef<{
     x: number;
     y: number;
-    axis: "h" | "v" | null;
+    lastX: number;
+    lastT: number;
+    vx: number;
+    /** `skip`: the drag is a text highlight or there's no page that way. */
+    axis: "h" | "v" | "skip" | null;
   } | null>(null);
+  // The turning leaf only exists while a page is actually being turned; its
+  // angle is written straight to the DOM so a drag doesn't re-render per frame.
+  const [turn, setTurn] = useState<Turn | null>(null);
+  const turnRef = useRef<(Turn & { progress: number; raf: number }) | null>(null);
+  const turnLayerRef = useRef<HTMLDivElement | null>(null);
 
   const author = primaryAuthor(card.authors);
   const category = firstCategory(card.categories);
@@ -183,6 +240,93 @@ export function ReelCard({
     }
   }, [active, slices, onLastPage, onRead]);
 
+  /** A highlight belongs to the page it was made on. */
+  const clearSelection = useCallback(() => {
+    window.getSelection()?.removeAllRanges();
+    setSelection("");
+    setSelectionAt(null);
+  }, []);
+
+  /**
+   * Turning forward lifts the current page off the spine (0° → -180°);
+   * turning back lays the previous page down again (-180° → 0°).
+   */
+  const applyTurn = useCallback(() => {
+    const t = turnRef.current;
+    const el = turnLayerRef.current;
+    if (!t || !el) return;
+    const angle = (t.dir === 1 ? t.progress : 1 - t.progress) * -180;
+    const tilt = Math.abs(angle);
+    el.style.setProperty("--leaf-angle", `${angle}deg`);
+    el.style.setProperty("--leaf-lift", Math.sin((tilt * Math.PI) / 180).toFixed(3));
+    // Past ~130° the leaf is lying over the far margin; let it go quietly.
+    el.style.setProperty("--leaf-fade", Math.min(1, Math.max(0, (180 - tilt) / 50)).toFixed(3));
+  }, []);
+
+  useLayoutEffect(() => {
+    if (turn) applyTurn();
+  }, [turn, applyTurn]);
+
+  useEffect(() => () => cancelAnimationFrame(turnRef.current?.raf ?? 0), []);
+
+  const beginTurn = useCallback(
+    (dir: 1 | -1) => {
+      if (turnRef.current) return false;
+      const to = current + dir;
+      if (to < 0 || to >= totalPages || !slices) return false;
+      const next: Turn = { dir, from: current, to };
+      turnRef.current = { ...next, progress: 0, raf: 0 };
+      clearSelection();
+      setTurn(next);
+      return true;
+    },
+    [clearSelection, current, totalPages, slices]
+  );
+
+  /** Animate the leaf to flat-down (0) or fully turned (1), then settle. */
+  const settleTurn = useCallback(
+    (target: 0 | 1, ease: (x: number) => number) => {
+      const t = turnRef.current;
+      if (!t) return;
+      cancelAnimationFrame(t.raf);
+      const startP = t.progress;
+      const duration = Math.max(120, TURN_MS * Math.abs(target - startP));
+      const t0 = performance.now();
+      const step = (now: number) => {
+        const live = turnRef.current;
+        if (!live) return;
+        const k = Math.min(1, (now - t0) / duration);
+        live.progress = startP + (target - startP) * ease(k);
+        applyTurn();
+        if (k < 1) {
+          live.raf = requestAnimationFrame(step);
+          return;
+        }
+        if (target === 1) setPage(live.to);
+        turnRef.current = null;
+        setTurn(null);
+      };
+      t.raf = requestAnimationFrame(step);
+    },
+    [applyTurn]
+  );
+
+  const goToPage = useCallback(
+    (next: number) => {
+      const to = Math.max(0, Math.min(next, totalPages - 1));
+      if (to === current || turnRef.current) return;
+      if (!compact || prefersReducedMotion() || Math.abs(to - current) > 1) {
+        clearSelection();
+        setPage(to);
+        return;
+      }
+      if (beginTurn(to > current ? 1 : -1)) {
+        settleTurn(1, (x) => (x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2));
+      }
+    },
+    [beginTurn, clearSelection, compact, current, settleTurn, totalPages]
+  );
+
   useEffect(() => {
     if (!active) return;
     const onKey = (e: KeyboardEvent) => {
@@ -190,54 +334,158 @@ export function ReelCard({
       if (target && /^(INPUT|TEXTAREA)$/.test(target.tagName)) return;
       if (e.key === "ArrowRight") {
         e.preventDefault();
-        setPage((p) => Math.min(p + 1, totalPages - 1));
+        goToPage(current + 1);
       } else if (e.key === "ArrowLeft") {
         e.preventDefault();
-        setPage((p) => Math.max(p - 1, 0));
+        goToPage(current - 1);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [active, totalPages]);
-
-  const goToPage = useCallback((next: number) => {
-    setPage((p) => Math.max(0, Math.min(next, totalPages - 1)));
-  }, [totalPages]);
+  }, [active, current, goToPage]);
 
   const onSwipePointerDown = useCallback((e: PointerEvent<HTMLDivElement>) => {
+    if (!compact) return;
     if (e.pointerType === "mouse" && e.button !== 0) return;
-    swipeRef.current = { x: e.clientX, y: e.clientY, axis: null };
+    if (turnRef.current) return;
+    const now = performance.now();
+    swipeRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      lastX: e.clientX,
+      lastT: now,
+      vx: 0,
+      axis: null,
+    };
     e.currentTarget.setPointerCapture(e.pointerId);
-  }, []);
+  }, [compact]);
 
-  const onSwipePointerMove = useCallback((e: PointerEvent<HTMLDivElement>) => {
-    const start = swipeRef.current;
-    if (!start || start.axis) return;
-    const dx = e.clientX - start.x;
-    const dy = e.clientY - start.y;
-    if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
-    start.axis = Math.abs(dx) > Math.abs(dy) * 1.15 ? "h" : "v";
-  }, []);
+  const onSwipePointerMove = useCallback(
+    (e: PointerEvent<HTMLDivElement>) => {
+      const start = swipeRef.current;
+      if (!start || start.axis === "v" || start.axis === "skip") return;
+      const dx = e.clientX - start.x;
+      const dy = e.clientY - start.y;
+      const now = performance.now();
+      const dt = now - start.lastT;
+      if (dt > 0) start.vx = (e.clientX - start.lastX) / dt;
+      start.lastX = e.clientX;
+      start.lastT = now;
 
-  const onSwipePointerEnd = useCallback((e: PointerEvent<HTMLDivElement>) => {
+      if (!start.axis) {
+        if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+        if (Math.abs(dx) <= Math.abs(dy) * 1.15) {
+          start.axis = "v";
+          return;
+        }
+        // A mouse drag across words is a highlight, not a page turn.
+        const selecting =
+          e.pointerType === "mouse" &&
+          (window.getSelection()?.toString().trim().length ?? 0) > 0;
+        if (selecting || prefersReducedMotion()) {
+          start.axis = selecting ? "skip" : "h";
+          return;
+        }
+        start.axis = beginTurn(dx < 0 ? 1 : -1) ? "h" : "skip";
+        if (start.axis !== "h") return;
+      }
+
+      const t = turnRef.current;
+      const width = readerRef.current?.clientWidth ?? 0;
+      if (!t || width <= 0) return;
+      t.progress = Math.min(1, Math.max(0, (-t.dir * dx) / width));
+      applyTurn();
+    },
+    [applyTurn, beginTurn]
+  );
+
+  const onSwipePointerEnd = useCallback(
+    (e: PointerEvent<HTMLDivElement>) => {
+      const start = swipeRef.current;
+      swipeRef.current = null;
+      if (!start || start.axis !== "h") return;
+      const t = turnRef.current;
+      if (!t) {
+        // Reduced motion: no leaf, just a swipe.
+        if ((window.getSelection()?.toString().trim().length ?? 0) > 3) return;
+        const dx = e.clientX - start.x;
+        if (Math.abs(dx) < PAGE_SWIPE_PX) return;
+        goToPage(dx < 0 ? current + 1 : current - 1);
+        return;
+      }
+      const flick = -t.dir * start.vx;
+      const commit =
+        t.progress > TURN_COMMIT || (flick > TURN_FLICK && t.progress > 0.04);
+      settleTurn(commit ? 1 : 0, (x) => 1 - (1 - x) ** 3);
+    },
+    [current, goToPage, settleTurn]
+  );
+
+  const onSwipePointerCancel = useCallback(() => {
     const start = swipeRef.current;
     swipeRef.current = null;
-    if (!start || start.axis !== "h") return;
-    // A highlight is a drag, not a page turn.
-    if ((window.getSelection()?.toString().trim().length ?? 0) > 3) return;
-    const dx = e.clientX - start.x;
-    if (Math.abs(dx) < PAGE_SWIPE_PX) return;
-    goToPage(dx < 0 ? current + 1 : current - 1);
-  }, [current, goToPage]);
+    if (start?.axis === "h" && turnRef.current) {
+      settleTurn(0, (x) => 1 - (1 - x) ** 3);
+    }
+  }, [settleTurn]);
 
-  const captureSelection = useCallback(() => {
-    const text = window.getSelection()?.toString().trim() ?? "";
-    setSelection(text.length > 3 ? text.slice(0, 2000) : "");
-    setKept(false);
-  }, []);
+  /**
+   * Follow the selection wherever it's made — mouse drag, long-press, or the
+   * phone's selection handles, which never fire a touchend on the reader.
+   * Phones open their own copy/share menu above a selection, so the bubble
+   * goes below there and above with a mouse, flipping when there's no room.
+   */
+  useEffect(() => {
+    if (!active) return;
+    let timer = 0;
+    const read = () => {
+      const host = readerRef.current;
+      const sel = window.getSelection();
+      const text = sel?.toString().trim() ?? "";
+      if (!host || !sel || !sel.rangeCount || text.length <= 3 || !host.contains(sel.anchorNode)) {
+        setSelection("");
+        setSelectionAt(null);
+        return;
+      }
+      const rect = sel.getRangeAt(0).getBoundingClientRect();
+      const box = host.getBoundingClientRect();
+      const roomAbove = rect.top - box.top > BUBBLE_ROOM;
+      const roomBelow = box.bottom - rect.bottom > BUBBLE_ROOM;
+      const touch = window.matchMedia("(pointer: coarse)").matches;
+      const below = touch ? roomBelow || !roomAbove : !roomAbove && roomBelow;
+      const center = rect.left + rect.width / 2 - box.left;
+      setSelection(text.slice(0, 2000));
+      setSelectionAt({
+        x: Math.min(box.width - BUBBLE_HALF_WIDTH, Math.max(BUBBLE_HALF_WIDTH, center)),
+        y: below ? rect.bottom - box.top + 10 : rect.top - box.top - 10,
+        below,
+      });
+      setKept(null);
+    };
+    // Settle first: a drag fires this on every character, and a tap on the
+    // bubble can briefly clear the selection before its click lands.
+    const onChange = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(read, 200);
+    };
+    document.addEventListener("selectionchange", onChange);
+    window.addEventListener("resize", onChange);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("selectionchange", onChange);
+      window.removeEventListener("resize", onChange);
+    };
+  }, [active]);
+
+  useEffect(() => {
+    if (!kept) return;
+    const t = window.setTimeout(() => setKept(null), 2200);
+    return () => window.clearTimeout(t);
+  }, [kept]);
 
   const keepSelection = useCallback(async () => {
     if (!selection) return;
+    const at = selectionAt;
     const res = await fetch("/api/memories", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -245,11 +493,14 @@ export function ReelCard({
     });
     if (res.ok) {
       trackMemorySaved(card.id, "gist");
-      setKept(true);
       setSelection("");
+      setSelectionAt(null);
       window.getSelection()?.removeAllRanges();
+      setKept(at);
     }
-  }, [card.id, selection]);
+  }, [card.id, selection, selectionAt]);
+
+  const bubble = kept ?? (selection ? selectionAt : null);
 
   const buildShare = useCallback(() => {
     if (preparedShare.current) return Promise.resolve(preparedShare.current);
@@ -489,15 +740,15 @@ export function ReelCard({
             always measures against the exact height a real column gets. */}
         <div
           ref={readerRef}
-          className="relative min-h-0 flex-1 touch-pan-y"
+          className={
+            turn
+              ? "relative min-h-0 flex-1 touch-pan-y select-none"
+              : "relative min-h-0 flex-1 touch-pan-y"
+          }
           onPointerDown={onSwipePointerDown}
           onPointerMove={onSwipePointerMove}
           onPointerUp={onSwipePointerEnd}
-          onPointerCancel={() => {
-            swipeRef.current = null;
-          }}
-          onMouseUp={captureSelection}
-          onTouchEnd={captureSelection}
+          onPointerCancel={onSwipePointerCancel}
         >
           <div
             ref={measureRef}
@@ -521,13 +772,40 @@ export function ReelCard({
                 key={`${current}-${i}`}
                 ref={i === 0 ? columnRef : undefined}
                 data-gist-body={i === 0 ? "" : undefined}
-                className="rq-reel-prose rq-page-turn overflow-hidden"
+                className={
+                  compact
+                    ? "rq-reel-prose overflow-hidden"
+                    : "rq-reel-prose rq-page-turn overflow-hidden"
+                }
+                style={turn ? { visibility: "hidden" } : undefined}
               >
                 {slice.map((b, j) => renderBlock(b, `p-${current}-${i}-${j}`))}
               </div>
             ))}
+
+            {turn && slices ? (
+              <div ref={turnLayerRef} data-no-shot aria-hidden className="rq-leaf-turn">
+                <div className="rq-leaf-under rq-reel-prose overflow-hidden">
+                  {(slices[turn.dir === 1 ? turn.to : turn.from] ?? []).map((b, j) =>
+                    renderBlock(b, `u-${j}`)
+                  )}
+                </div>
+                <div className="rq-leaf">
+                  <div className="rq-leaf-face">
+                    <div className="rq-reel-prose h-full overflow-hidden">
+                      {(slices[turn.dir === 1 ? turn.from : turn.to] ?? []).map((b, j) =>
+                        renderBlock(b, `l-${j}`)
+                      )}
+                    </div>
+                  </div>
+                  <div className="rq-leaf-back" />
+                </div>
+              </div>
+            ) : null}
           </div>
 
+          {/* Edge tabs live entirely in the side gutters (the card's px-*),
+              so neither the tab nor its tap target ever covers the text. */}
           <button
             type="button"
             onClick={() => goToPage(current - 1)}
@@ -535,9 +813,11 @@ export function ReelCard({
             disabled={current === 0}
             data-no-shot
             aria-label="Previous page"
-            className="absolute left-0 top-1/2 z-10 flex h-24 w-10 -translate-y-1/2 items-center justify-center text-foreground/25 transition hover:text-foreground/55 disabled:pointer-events-none disabled:opacity-0 layout-wide:hidden"
+            className="group absolute -left-4 top-1/2 z-10 flex h-28 w-4 -translate-y-1/2 items-center justify-start transition disabled:pointer-events-none disabled:opacity-0 sm:-left-8 sm:w-8 lg:-left-12 lg:w-12 layout-wide:hidden"
           >
-            <ChevronLeft size={28} strokeWidth={1.5} aria-hidden />
+            <span className="rq-edge-tab rq-edge-tab--left">
+              <ChevronLeft size={14} strokeWidth={2.5} aria-hidden />
+            </span>
           </button>
           <button
             type="button"
@@ -546,30 +826,44 @@ export function ReelCard({
             disabled={onLastPage}
             data-no-shot
             aria-label="Next page"
-            className="absolute right-0 top-1/2 z-10 flex h-24 w-10 -translate-y-1/2 items-center justify-center text-foreground/25 transition hover:text-foreground/55 disabled:pointer-events-none disabled:opacity-0 layout-wide:hidden"
+            className="group absolute -right-4 top-1/2 z-10 flex h-28 w-4 -translate-y-1/2 items-center justify-end transition disabled:pointer-events-none disabled:opacity-0 sm:-right-8 sm:w-8 lg:-right-12 lg:w-12 layout-wide:hidden"
           >
-            <ChevronRight size={28} strokeWidth={1.5} aria-hidden />
+            <span
+              className={
+                current === 0
+                  ? "rq-edge-tab rq-edge-tab--right rq-edge-tab--nudge"
+                  : "rq-edge-tab rq-edge-tab--right"
+              }
+            >
+              <ChevronRight size={14} strokeWidth={2.5} aria-hidden />
+            </span>
           </button>
-        </div>
 
-        <footer
-          className="shrink-0 cursor-pointer pt-2"
-          onClick={onNext}
-        >
-          {selection || kept ? (
-            <div data-no-shot className="mb-2 flex justify-center">
+          {bubble ? (
+            <div
+              data-no-shot
+              className="pointer-events-none absolute z-30"
+              style={{
+                left: bubble.x,
+                top: bubble.y,
+                transform: `translate(-50%, ${bubble.below ? "0" : "-100%"})`,
+              }}
+            >
               {kept ? (
-                <p className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-[13px] font-semibold text-emerald-700 dark:text-emerald-300">
+                <p className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-emerald-500/20 bg-card/95 px-4 py-2 text-[13px] font-semibold text-emerald-700 shadow-[var(--shadow-soft)] backdrop-blur-sm dark:text-emerald-300">
                   <Check size={15} aria-hidden /> Kept in your memories
                 </p>
               ) : (
                 <button
                   type="button"
+                  // Keep the highlight alive and the reader's swipe out of it.
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.preventDefault()}
                   onClick={(e) => {
                     e.stopPropagation();
                     void keepSelection();
                   }}
-                  className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border/70 bg-card/80 px-4 py-2 text-[13px] font-semibold text-foreground shadow-[var(--shadow-soft)] backdrop-blur-sm transition hover:bg-hover"
+                  className="pointer-events-auto inline-flex cursor-pointer items-center gap-2 whitespace-nowrap rounded-full border border-border/70 bg-card/95 px-4 py-2 text-[13px] font-semibold text-foreground shadow-[var(--shadow-soft)] backdrop-blur-sm transition hover:bg-hover"
                 >
                   <BookmarkPlus size={15} aria-hidden />
                   Keep this line
@@ -577,7 +871,12 @@ export function ReelCard({
               )}
             </div>
           ) : null}
+        </div>
 
+        <footer
+          className="shrink-0 cursor-pointer pt-2"
+          onClick={onNext}
+        >
           <div className="flex items-center justify-center layout-wide:hidden">
             <span data-page-label="compact" className="text-[11px] font-semibold tabular-nums text-muted">
               {current + 1}/{totalPages}

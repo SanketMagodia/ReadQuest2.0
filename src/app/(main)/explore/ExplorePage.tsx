@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Image from "next/image";
 import Link from "next/link";
@@ -47,6 +47,7 @@ import {
   type VibeResult,
 } from "@/components/explore/VibeRecommender";
 import { trackSearch, trackVibeRecommend } from "@/lib/analytics-events";
+import { readCache, writeCache } from "@/lib/client-cache";
 
 type BookRow = {
   id: string;
@@ -79,7 +80,7 @@ type SortKey = "recent" | "title" | "rating";
 
 const SORT_LABELS: Record<SortKey, string> = {
   recent: "Newest",
-  title: "AΓÇôZ",
+  title: "A-Z",
   rating: "Top rated",
 };
 
@@ -99,11 +100,21 @@ type Community = {
 
 const PAGE_SIZE = 24;
 
+type ResultsSnapshot = {
+  books: BookRow[];
+  olResults: OLResult[];
+  nextCursor: string | null;
+};
+
+function resultsKey(q: string, category: string, sort: SortKey) {
+  return `explore:books:${q.trim().toLowerCase()}|${category.trim()}|${sort}`;
+}
+
 /**
  * Reads `?q=` from the URL and pushes it up to the page. Lives behind a
  * Suspense boundary (Next.js 16 requires `useSearchParams` to be wrapped) so
- * clicking the right-rail Discover chips ΓÇö which link to /explore?q=ΓÇª while
- * the reader is already here ΓÇö actually runs the search.
+ * clicking the right-rail Discover chips - which link to /explore?q=… while
+ * the reader is already here - actually runs the search.
  */
 function QuerySync({ onApply }: { onApply: (q: string) => void }) {
   const searchParams = useSearchParams();
@@ -125,33 +136,62 @@ export default function ExplorePage() {
   const [q, setQ] = useState("");
   const [category, setCategory] = useState("");
   const [sort, setSort] = useState<SortKey>("recent");
-  const [books, setBooks] = useState<BookRow[]>([]);
-  const [olResults, setOlResults] = useState<OLResult[]>([]);
+  // Everything below starts from what this visit already loaded, so coming
+  // back to Explore paints straight away instead of refetching.
+  const [restored] = useState(() =>
+    readCache<ResultsSnapshot>(resultsKey("", "", "recent"))
+  );
+  const [books, setBooks] = useState<BookRow[]>(restored?.books ?? []);
+  const [olResults, setOlResults] = useState<OLResult[]>(restored?.olResults ?? []);
   const [adoptingKey, setAdoptingKey] = useState<string | null>(null);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(
+    restored?.nextCursor ?? null
+  );
   const [openCreate, setOpenCreate] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(!restored);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [communities, setCommunities] = useState<Community[]>([]);
-  const [communitiesLoading, setCommunitiesLoading] = useState(true);
-  // "Recommend me" ΓÇö describe a vibe, get AI picks with a one-line why.
+  const [categories, setCategories] = useState<Category[]>(
+    () => readCache<Category[]>("explore:categories") ?? []
+  );
+  const [communities, setCommunities] = useState<Community[] | undefined>(
+    () => readCache<Community[]>("explore:communities")
+  );
+  // "Recommend me" - describe a vibe, get AI picks with a one-line why.
   const [aiMode, setAiMode] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
-  const [aiResult, setAiResult] = useState<VibeResult | null>(null);
-  const [myClub, setMyClub] = useState<ClubSummary | null>(null);
+  const [aiResult, setAiResult] = useState<VibeResult | null>(
+    () => readCache<VibeResult | null>("explore:vibe") ?? null
+  );
+  const [myClub, setMyClub] = useState<ClubSummary | null>(
+    () => readCache<ClubSummary | null>("explore:my-club") ?? null
+  );
   const showsClub = !isGuest && Boolean(myClub);
   const seqRef = useRef(0);
-  const seenRef = useRef<Set<string>>(new Set());
+  const seenRef = useRef<Set<string>>(
+    new Set(restored?.books.map((b) => b.id) ?? [])
+  );
+  /** The list on screen and the search it answers, for the cache. */
+  const loadedRef = useRef<ResultsSnapshot & { key: string }>({
+    key: resultsKey("", "", "recent"),
+    books: restored?.books ?? [],
+    olResults: restored?.olResults ?? [],
+    nextCursor: restored?.nextCursor ?? null,
+  });
   const prevQRef = useRef(q);
   const prevCategoryRef = useRef(category);
 
-  // A club sits beside the NYT top picks when the reader is in one.
+  useEffect(() => {
+    writeCache("explore:vibe", aiResult);
+  }, [aiResult]);
+
+  // A club sits beside the NYT top picks when the reader is in one. Shown from
+  // the cache at once, then checked again — joining or leaving happens
+  // elsewhere.
   useEffect(() => {
     if (status !== "authenticated") {
-      setMyClub(null);
+      if (status === "unauthenticated") setMyClub(null);
       return;
     }
     let cancelled = false;
@@ -159,6 +199,7 @@ export default function ExplorePage() {
       const res = await fetch("/api/clubs/me", { cache: "no-store" });
       if (!res.ok) return;
       const data = (await res.json()) as { club: ClubSummary | null };
+      writeCache("explore:my-club", data.club);
       if (!cancelled) setMyClub(data.club);
     })();
     return () => {
@@ -190,8 +231,19 @@ export default function ExplorePage() {
       if (sortVal !== "recent") params.set("sort", sortVal);
       params.set("limit", String(PAGE_SIZE));
       if (cursor && !reset) params.set("cursor", cursor);
+      const key = resultsKey(qVal, catVal, sortVal);
 
       if (reset) {
+        const cached = readCache<ResultsSnapshot>(key);
+        if (cached) {
+          loadedRef.current = { key, ...cached };
+          seenRef.current = new Set(cached.books.map((b) => b.id));
+          setBooks(cached.books);
+          setOlResults(cached.olResults);
+          setNextCursor(cached.nextCursor);
+          setInitialLoading(false);
+          return;
+        }
         setInitialLoading(true);
         setBooks([]);
         setNextCursor(null);
@@ -209,6 +261,23 @@ export default function ExplorePage() {
       };
       const fresh = (data.books ?? []).filter((b) => !seenRef.current.has(b.id));
       fresh.forEach((b) => seenRef.current.add(b.id));
+      const loaded = loadedRef.current;
+      const snapshot: ResultsSnapshot = reset
+        ? {
+            books: fresh,
+            olResults: data.openLibrary ?? [],
+            nextCursor: data.nextCursor ?? null,
+          }
+        : {
+            books: [...(loaded.key === key ? loaded.books : []), ...fresh],
+            olResults: loaded.key === key ? loaded.olResults : [],
+            nextCursor: data.nextCursor ?? null,
+          };
+      // A failed request is not an answer worth keeping.
+      if (res.ok) {
+        loadedRef.current = { key, ...snapshot };
+        writeCache(key, snapshot);
+      }
       if (reset) {
         setBooks(fresh);
         setOlResults(data.openLibrary ?? []);
@@ -229,25 +298,27 @@ export default function ExplorePage() {
   }
 
   useEffect(() => {
-    void fetchBooks({ reset: true });
-    void (async () => {
-      const res = await fetch("/api/books/categories", { cache: "no-store" });
-      if (res.ok) {
-        const d = (await res.json()) as { categories?: Category[] };
-        setCategories(d.categories ?? []);
-      }
-    })();
-    void (async () => {
-      setCommunitiesLoading(true);
-      const res = await fetch("/api/books/communities?limit=6", {
-        cache: "no-store",
-      });
-      if (res.ok) {
-        const d = (await res.json()) as { communities?: Community[] };
-        setCommunities(d.communities ?? []);
-      }
-      setCommunitiesLoading(false);
-    })();
+    if (!restored) void fetchBooks({ reset: true });
+    if (!readCache("explore:categories")) {
+      void (async () => {
+        const res = await fetch("/api/books/categories");
+        if (res.ok) {
+          const d = (await res.json()) as { categories?: Category[] };
+          writeCache("explore:categories", d.categories ?? []);
+          setCategories(d.categories ?? []);
+        }
+      })();
+    }
+    if (!readCache("explore:communities")) {
+      void (async () => {
+        const res = await fetch("/api/books/communities?limit=6");
+        const d = res.ok
+          ? ((await res.json()) as { communities?: Community[] })
+          : null;
+        if (d) writeCache("explore:communities", d.communities ?? []);
+        setCommunities(d?.communities ?? []);
+      })();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -255,12 +326,14 @@ export default function ExplorePage() {
   useEffect(() => {
     if (prevQRef.current === q) return;
     prevQRef.current = q;
-    if (q.trim()) setInitialLoading(true);
+    if (q.trim() && !readCache(resultsKey(q, category, sort))) {
+      setInitialLoading(true);
+    }
     const t = setTimeout(() => {
       void fetchBooks({ reset: true });
     }, 280);
     return () => clearTimeout(t);
-  }, [q, fetchBooks]);
+  }, [q, category, sort, fetchBooks]);
 
   // Category chips apply immediately.
   useEffect(() => {
@@ -363,7 +436,7 @@ export default function ExplorePage() {
       trackVibeRecommend(vibe, data.picks.length);
       setAiMode(false);
     } catch {
-      setAiError("Network hiccup ΓÇö try that once more.");
+      setAiError("Network hiccup - try that once more.");
     } finally {
       setAiLoading(false);
     }
@@ -410,7 +483,7 @@ export default function ExplorePage() {
   const featuredCategories = categories.slice(0, 12);
   const isSearching = q.trim().length > 0 || category.trim().length > 0;
 
-  // The "results" block ΓÇö books grid, OL fallback, and the section header.
+  // The "results" block - books grid, OL fallback, and the section header.
   // We render it conditionally at one of two positions depending on whether
   // the user is actively searching, without duplicating the JSX.
   const resultsSection = (
@@ -420,7 +493,7 @@ export default function ExplorePage() {
           {category
             ? `Books in ${category}`
             : q
-              ? `Results for ΓÇ£${q}ΓÇ¥`
+              ? `Results for “${q}”`
               : "Everything"}
         </p>
         <div className="flex flex-wrap items-center gap-2">
@@ -472,7 +545,7 @@ export default function ExplorePage() {
             <Sparkles size={20} aria-hidden className="mx-auto text-muted" />
             <p className="mt-3 text-base font-semibold">No matches</p>
             <p className="mt-1 text-sm text-muted">
-              Try a different word ΓÇö or be the first to add it.
+              Try a different word - or be the first to add it.
             </p>
             <button
               type="button"
@@ -597,14 +670,14 @@ export default function ExplorePage() {
       ) : null}
 
       {/* When the user is searching or has a category active, results jump
-          to the top ΓÇö communities + shelves slide below so the user doesn't
+          to the top - communities + shelves slide below so the user doesn't
           have to scroll past discovery content to see what they asked for. */}
       {isSearching ? resultsSection : null}
 
       <Reveal>
         <CommunitiesPanel
-          communities={communities}
-          loading={communitiesLoading}
+          communities={communities ?? []}
+          loading={communities === undefined}
           onOpen={(c) => router.push(`/book/${c.slug || c.id}`)}
         />
       </Reveal>
@@ -645,7 +718,7 @@ export default function ExplorePage() {
                     const next = active ? "" : c.label;
                     setCategory(next);
                     // Picking a shelf moves the results to the top of the
-                    // page ΓÇö carry the reader up there too.
+                    // page - carry the reader up there too.
                     if (next) window.scrollTo({ top: 0, behavior: "smooth" });
                   }}
                   className={`group inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
@@ -717,7 +790,7 @@ function OpenLibrarySection({
           </h2>
           <p className="mt-1 max-w-2xl text-sm text-muted">
             Not yet in {BRAND_NAME}. Tap one to pull it into our library and open
-            its book room ΓÇö we&apos;ll save the title, cover, and details for
+            its book room - we&apos;ll save the title, cover, and details for
             everyone.
           </p>
         </div>
@@ -790,7 +863,7 @@ function OpenLibraryCard({
         </span>
         {primaryCat ? (
           <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-background/90 px-2 py-0.5 text-[10px] font-semibold text-foreground/80 shadow">
-            {primaryCat.length > 16 ? `${primaryCat.slice(0, 16)}ΓÇª` : primaryCat}
+            {primaryCat.length > 16 ? `${primaryCat.slice(0, 16)}…` : primaryCat}
           </span>
         ) : null}
         {adopting ? (
@@ -810,12 +883,12 @@ function OpenLibraryCard({
           {result.publishedYear ? <span>{result.publishedYear}</span> : null}
           {result.averageRating ? (
             <span className="inline-flex items-center gap-1">
-              <span aria-hidden>Γÿà</span>
+              <span aria-hidden>★</span>
               {result.averageRating.toFixed(1)}
             </span>
           ) : null}
           <span className="ml-auto inline-flex items-center gap-0.5 font-semibold text-emerald-600 dark:text-emerald-300">
-            {adopting ? "AddingΓÇª" : "Open"}
+            {adopting ? "Adding…" : "Open"}
             <ExternalLink size={10} aria-hidden />
           </span>
         </div>
@@ -1029,7 +1102,7 @@ function BookCard({ book, onOpen }: { book: BookRow; onOpen: () => void }) {
           {book.publishedYear ? <span>{book.publishedYear}</span> : null}
           {book.averageRating ? (
             <span className="inline-flex items-center gap-1">
-              <span aria-hidden>Γÿà</span>
+              <span aria-hidden>★</span>
               {book.averageRating.toFixed(1)}
             </span>
           ) : null}
@@ -1159,7 +1232,7 @@ function NewBookInline({ onDone }: { onDone: () => void }) {
     <div
       className="rounded-[28px] border border-border bg-card p-5 shadow-[var(--shadow-soft)] sm:p-6"
     >
-      {saving ? <LoadingIndicator label="Saving bookΓÇª" /> : null}
+      {saving ? <LoadingIndicator label="Saving book…" /> : null}
       <form
         onSubmit={(e) => void submit(e)}
         className={`grid gap-4 sm:grid-cols-2 ${saving ? "pointer-events-none opacity-40" : ""}`}
@@ -1206,7 +1279,7 @@ function NewBookInline({ onDone }: { onDone: () => void }) {
             value={thumbnail}
             onChange={(e) => setThumbnail(e.target.value)}
             className={inputCls}
-            placeholder="https://ΓÇª"
+            placeholder="https://…"
           />
         </FormField>
         <FormField label="Synopsis" wide>

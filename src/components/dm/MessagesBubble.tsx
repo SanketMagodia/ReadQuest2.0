@@ -9,6 +9,7 @@ import {
 } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
   ArrowLeft,
@@ -112,6 +113,7 @@ function Avatar({ user, size = 36 }: { user: UserLite; size?: number }) {
 
 export function MessagesBubble() {
   const { data: session } = useSession();
+  const pathname = usePathname();
   const { open, setOpen, target, clearTarget } = useDm();
 
   const [unread, setUnread] = useState(0);
@@ -294,13 +296,12 @@ export function MessagesBubble() {
     [activeId, draft, sending, fetchInbox]
   );
 
-  // Unread badge polling while signed in.
+  // Refresh the unread badge on load and on every page change — no timer, so
+  // a tab left open costs nothing.
   useEffect(() => {
     if (!session?.user?.id) return;
     void fetchUnread();
-    const i = window.setInterval(fetchUnread, 30_000);
-    return () => window.clearInterval(i);
-  }, [session?.user?.id, fetchUnread]);
+  }, [session?.user?.id, fetchUnread, pathname]);
 
   // Load inbox + friends when panel opens.
   useEffect(() => {

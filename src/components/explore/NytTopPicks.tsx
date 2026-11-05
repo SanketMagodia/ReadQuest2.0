@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ExternalLink, Newspaper, RefreshCw } from "lucide-react";
+import { readCache, writeCache } from "@/lib/client-cache";
 import type { NytBook, NytList } from "@/lib/nyt";
 
 /**
@@ -17,16 +18,21 @@ import type { NytBook, NytList } from "@/lib/nyt";
  */
 
 const FLAGSHIP = "combined-print-and-e-book-fiction";
+const CACHE_KEY = "nyt:top-picks";
 
 export function NytTopPicks() {
   const router = useRouter();
-  const [books, setBooks] = useState<NytBook[]>([]);
-  const [displayName, setDisplayName] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [restored] = useState(() =>
+    readCache<{ books: NytBook[]; displayName: string }>(CACHE_KEY)
+  );
+  const [books, setBooks] = useState<NytBook[]>(restored?.books ?? []);
+  const [displayName, setDisplayName] = useState(restored?.displayName ?? "");
+  const [loading, setLoading] = useState(!restored);
   const [failed, setFailed] = useState(false);
   const [adoptingId, setAdoptingId] = useState<string | null>(null);
 
   useEffect(() => {
+    if (restored) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -49,6 +55,10 @@ export function NytTopPicks() {
         if (!list?.books.length) {
           setFailed(true);
         } else {
+          writeCache(CACHE_KEY, {
+            books: list.books,
+            displayName: list.displayName,
+          });
           setBooks(list.books);
           setDisplayName(list.displayName);
         }
@@ -61,7 +71,7 @@ export function NytTopPicks() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [restored]);
 
   async function adopt(book: NytBook) {
     if (adoptingId) return;

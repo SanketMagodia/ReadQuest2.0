@@ -36,7 +36,7 @@ except ImportError:
     raise SystemExit(1)
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-DEFAULT_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
+DEFAULT_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free"
 DEFAULT_BRIEF = (
     "Write a tight, distilled retelling of the book in the book's own voice "
     "— like a miniature edition of the book itself."
